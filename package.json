@@ -1,0 +1,24 @@
+{
+  "name": "pdf-suite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @pdf-suite/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r --if-present test",
+    "e2e": "playwright test",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "corpus": "node scripts/corpus-runner.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "typescript": "^5.6.0"
+  }
+}

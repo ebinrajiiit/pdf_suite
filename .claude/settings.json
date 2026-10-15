@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm build)",
+      "Bash(pnpm e2e:*)",
+      "Bash(pnpm check:licenses)",
+      "Bash(pnpm corpus)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Read(./corpus/**)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}

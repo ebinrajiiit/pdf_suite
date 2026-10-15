@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
+
+# Tauri
+apps/desktop/src-tauri/target/
+
+# Test corpus: real documents — NEVER commit
+corpus/*
+!corpus/README.md
+corpus-report/
+
+# Local env
+.env
+.env.*
+.claude/settings.local.json
