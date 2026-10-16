@@ -7,12 +7,20 @@
 
 export interface PickedFile {
   name: string;
+  /** MIME type as the browser reported it; empty for some drops. */
+  type?: string | undefined;
   bytes: ArrayBuffer;
   /** Present only via the File System Access API; lets Save write back in place. */
   handle?: FileSystemFileHandle | undefined;
 }
 
 const PDF_TYPES = [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }];
+
+/** Images we can turn into a PDF. HEIC is deliberately absent: pdf-lib cannot
+ *  embed it, and silently skipping a dropped file is worse than saying so. */
+export const IMAGE_TYPES = [
+  { description: "Image", accept: { "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"] } },
+];
 
 export const canUsePicker = (): boolean => "showOpenFilePicker" in globalThis;
 export const canUseSavePicker = (): boolean => "showSaveFilePicker" in globalThis;
@@ -29,14 +37,18 @@ export async function pickFiles(multiple: boolean): Promise<PickedFile[]> {
   return Promise.all(
     handles.map(async (handle) => {
       const file = await handle.getFile();
-      return { name: file.name, bytes: await file.arrayBuffer(), handle };
+      return { name: file.name, type: file.type, bytes: await file.arrayBuffer(), handle };
     }),
   );
 }
 
 export async function readFiles(files: FileList | File[]): Promise<PickedFile[]> {
   return Promise.all(
-    Array.from(files).map(async (file) => ({ name: file.name, bytes: await file.arrayBuffer() })),
+    Array.from(files).map(async (file) => ({
+      name: file.name,
+      type: file.type,
+      bytes: await file.arrayBuffer(),
+    })),
   );
 }
 
@@ -49,8 +61,9 @@ export async function saveBytes(
   bytes: ArrayBuffer,
   suggestedName: string,
   handle?: FileSystemFileHandle,
+  mime = "application/pdf",
 ): Promise<string | undefined> {
-  const blob = new Blob([bytes], { type: "application/pdf" });
+  const blob = new Blob([bytes], { type: mime });
 
   if (canUseSavePicker()) {
     let target: FileSystemFileHandle;
@@ -58,7 +71,10 @@ export async function saveBytes(
       target = handle;
     } else {
       try {
-        target = await window.showSaveFilePicker({ suggestedName, types: PDF_TYPES });
+        target = await window.showSaveFilePicker({
+          suggestedName,
+          types: mime === "application/pdf" ? PDF_TYPES : IMAGE_TYPES,
+        });
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return undefined;
         throw err;

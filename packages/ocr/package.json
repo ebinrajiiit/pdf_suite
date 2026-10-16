@@ -1,0 +1,17 @@
+{
+  "name": "@pdf-suite/ocr",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pdf-suite/engine": "workspace:*",
+    "tesseract.js": "^7.0.0"
+  }
+}

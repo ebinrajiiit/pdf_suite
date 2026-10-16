@@ -45,6 +45,24 @@
       "source": "https://github.com/madler/zlib",
       "distributedVia": "linked into qpdf.wasm and pdfium.wasm",
       "notes": "Flate compression. Already on the allow-list."
+    },
+    {
+      "name": "Tesseract (via tesseract.js-core)",
+      "version": "tesseract.js 7.0.0 / tesseract.js-core 6.1.2",
+      "licence": "Apache-2.0",
+      "licenceFile": "node_modules/tesseract.js/LICENSE.md",
+      "source": "https://github.com/naptha/tesseract.js",
+      "distributedVia": "npm packages tesseract.js and tesseract.js-core",
+      "notes": "OCR engine compiled to wasm. Defaults its worker, core and language data to jsDelivr; packages/ocr requires same-origin URLs for all three. See ADR 0004."
+    },
+    {
+      "name": "Tesseract language data (tessdata_fast)",
+      "version": "eng, mal, hin as fetched by scripts/fetch-tessdata.mjs",
+      "licence": "Apache-2.0",
+      "licenceFile": "https://github.com/tesseract-ocr/tessdata_fast/blob/main/LICENSE",
+      "source": "https://github.com/tesseract-ocr/tessdata_fast",
+      "distributedVia": "not committed; fetched into vendor/tessdata (git-ignored). A release must self-host these or offer them as an opt-in download from our own host (docs/PRIVACY.md)",
+      "notes": "Measured sizes: eng 3.9 MB, mal 5.0 MB, hin 1.1 MB \u2014 10.0 MB for the three, too much to bundle for every user."
     }
   ]
 }

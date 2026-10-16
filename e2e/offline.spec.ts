@@ -606,3 +606,88 @@ test("underline and strike-through reach the saved file", async ({ page }) => {
   expect(subtypes).toContain("/Underline");
   expect(subtypes).toContain("/StrikeOut");
 });
+
+/** A small valid PNG, built in the test so no binary fixture is needed. */
+function tinyPng(width: number, height: number): Buffer {
+  const crc = (bytes: number[]) => {
+    let c = ~0;
+    for (const byte of bytes) {
+      c ^= byte;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return ~c >>> 0;
+  };
+  const be32 = (v: number) => [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
+  const chunk = (type: string, data: number[]) => {
+    const typed = [...type].map((c) => c.charCodeAt(0));
+    return [...be32(data.length), ...typed, ...data, ...be32(crc([...typed, ...data]))];
+  };
+  const raw: number[] = [];
+  for (let y = 0; y < height; y++) {
+    raw.push(0);
+    for (let x = 0; x < width; x++) raw.push((x * 20) % 256, (y * 30) % 256, 128);
+  }
+  // One uncompressed deflate block, which needs no compressor.
+  let a = 1;
+  let b = 0;
+  for (const byte of raw) {
+    a = (a + byte) % 65521;
+    b = (b + a) % 65521;
+  }
+  const deflate = [
+    0x78,
+    0x01,
+    0x01,
+    raw.length & 255,
+    (raw.length >> 8) & 255,
+    ~raw.length & 255,
+    (~raw.length >> 8) & 255,
+    ...raw,
+    (b >>> 8) & 255,
+    b & 255,
+    (a >>> 8) & 255,
+    a & 255,
+  ];
+  return Buffer.from([
+    137,
+    80,
+    78,
+    71,
+    13,
+    10,
+    26,
+    10,
+    ...chunk("IHDR", [...be32(width), ...be32(height), 8, 2, 0, 0, 0]),
+    ...chunk("IDAT", deflate),
+    ...chunk("IEND", []),
+  ]);
+}
+
+test("turns images into a PDF and pages back into images", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await page.setInputFiles('[data-testid="image-input"]', [
+    { name: "scan-1.png", mimeType: "image/png", buffer: tinyPng(40, 30) },
+    { name: "scan-2.png", mimeType: "image/png", buffer: tinyPng(20, 40) },
+  ]);
+
+  // One page per image, each at the image's own aspect ratio.
+  await expect(page.getByText("2 pages")).toBeVisible({ timeout: 30_000 });
+  const sizes = await sizesOf(await saveAndRead(page, "Save"));
+  expect(sizes).toEqual([
+    [30, 23],
+    [15, 30],
+  ]);
+
+  // And back out again: the selected page renders to a PNG.
+  await page.getByTestId("select-0").click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("pages-to-images").click(),
+  ]);
+  const png = await readFile((await download.path())!);
+  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a"); // PNG signature
+  expect(download.suggestedFilename()).toMatch(/page 1\.png$/);
+});

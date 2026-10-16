@@ -9,7 +9,7 @@ import {
   type Highlight,
   type PlacedShape,
 } from "@pdf-suite/ui";
-import type { AnnotRect } from "@pdf-suite/core";
+import { isSupportedImage, type AnnotRect } from "@pdf-suite/core";
 import type { SearchHit } from "@pdf-suite/workers";
 import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
 import { useDocument } from "./use-document.js";
@@ -29,6 +29,8 @@ export function App() {
     extract,
     search,
     splitAt,
+    openImages,
+    exportImages,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -38,6 +40,7 @@ export function App() {
   const openInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const mergeInput = useRef<HTMLInputElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const [saved, setSaved] = useState<string | undefined>();
@@ -159,6 +162,11 @@ export function App() {
     await mergeIn(await pickFiles(true), at);
   }, [mergeIn, positions]);
 
+  const onImageInput = useCallback(
+    async (files: FileList | null) => openImages(await readFiles(files ?? [])),
+    [openImages],
+  );
+
   const onMergeInput = useCallback(
     async (files: FileList | null) => {
       const at = positions.length === 1 ? positions[0]! + 1 : undefined;
@@ -183,18 +191,27 @@ export function App() {
     async (event: React.DragEvent) => {
       event.preventDefault();
       setDropping(false);
-      const dropped = Array.from(event.dataTransfer.files).filter(
+      const files = Array.from(event.dataTransfer.files);
+      const pdfs = files.filter(
         (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
       );
-      if (dropped.length === 0) return;
-      const picked = await readFiles(dropped);
+      const images = files.filter((file) => isSupportedImage(file.type || file.name));
+
+      // Images become a document of their own; mixing the two in one drop is
+      // ambiguous, so PDFs win and the images are ignored rather than guessed at.
+      if (pdfs.length === 0 && images.length > 0) {
+        await openImages(await readFiles(images));
+        return;
+      }
+      if (pdfs.length === 0) return;
+      const picked = await readFiles(pdfs);
       if (!info) {
         if (picked[0]) await open(picked[0]);
         return;
       }
       await mergeIn(picked);
     },
-    [info, mergeIn, open],
+    [info, mergeIn, open, openImages],
   );
 
   const handleSave = useCallback(async () => {
@@ -233,6 +250,20 @@ export function App() {
     }
     setSaved(written > 0 ? `Saved ${written} of ${parts.length} parts` : undefined);
   }, [name0, positions, splitAt]);
+
+  /** Writes the selected pages, or the whole document, as PNG files. */
+  const handleExportImages = useCallback(async () => {
+    const wanted = positions.length > 0 ? positions : state.order.map((_, i) => i);
+    const rendered = await exportImages(wanted);
+    if (!rendered) return;
+    let written = 0;
+    for (const image of rendered) {
+      const name = `${stripPdf(name0)} page ${image.position + 1}.png`;
+      if (await saveBytes(image.bytes, name, undefined, "image/png")) written++;
+      else break;
+    }
+    setSaved(written > 0 ? `Saved ${written} image${written === 1 ? "" : "s"}` : undefined);
+  }, [exportImages, name0, positions, state.order]);
 
   const handleDelete = useCallback(() => {
     if (positions.length === 0 || positions.length === pageCount) return;
@@ -427,6 +458,27 @@ export function App() {
           </button>
         </span>
 
+        <span className="toolbar-group" role="group" aria-label="Images">
+          <button
+            type="button"
+            onClick={() => imageInput.current?.click()}
+            disabled={!ready}
+            data-testid="images-to-pdf"
+            title="Turn JPEG or PNG files into a PDF"
+          >
+            From images…
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExportImages()}
+            disabled={disabled}
+            data-testid="pages-to-images"
+            title="Save the selected pages, or all of them, as PNG"
+          >
+            To images…
+          </button>
+        </span>
+
         <span className="toolbar-group" role="group" aria-label="Annotate">
           {(["highlight", "underline", "strike", "note", "text"] as const).map((which) => (
             <button
@@ -561,6 +613,15 @@ export function App() {
         data-testid="open-input"
         className="visually-hidden"
         onChange={(event) => void onOpenInput(event.target.files)}
+      />
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+        multiple
+        data-testid="image-input"
+        className="visually-hidden"
+        onChange={(event) => void onImageInput(event.target.files)}
       />
       <input
         ref={mergeInput}
@@ -722,7 +783,7 @@ export function App() {
       )}
       {dropping ? (
         <div className="dropzone" data-testid="dropzone">
-          {info ? "Drop to merge into this document" : "Drop to open"}
+          {info ? "Drop a PDF to merge, or images to convert" : "Drop a PDF or images"}
         </div>
       ) : null}
     </div>
@@ -736,6 +797,10 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   note: "Note",
   text: "Add text",
 };
+
+function stripPdf(name: string): string {
+  return name.replace(/\.pdf$/i, "");
+}
 
 /** Zoom steps, in points per CSS pixel. */
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];

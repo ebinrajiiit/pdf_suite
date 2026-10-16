@@ -52,6 +52,8 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | **Protect…**, set a password, **Save** | The saved file needs that password to open. Reopen it to be asked |
 | **Compress** | Rewrites the document; object streams help on real files, not tiny ones |
 | Zoom − / + / **Fit** | Pages re-rasterise at the new scale. Ctrl/Cmd with `-`, `=`, `0` also work |
+| **From images…** or drop JPEG/PNG files | Builds a PDF, one page per image at its own aspect ratio |
+| Select pages, **To images…** | Saves those pages as PNG files |
 | **Save** | Native save dialog where available, a download otherwise |
 
 ### Testing the privacy claim
@@ -77,7 +79,10 @@ is what `pnpm e2e` asserts on every run.
   destroyed cross-reference table or a truncated file (ADR 0003).
 - **Indic text** has tested *matching* (normalisation forms) but no verified
   *extraction* from real Malayalam or Hindi documents — that needs the corpus.
-- No annotation, no form filling, no outline/bookmarks panel, no OCR yet.
+- **No OCR in the app yet.** The engine and language handling are proven
+  (`node scripts/fetch-tessdata.mjs && node scripts/ocr-spike.mjs`, ADR 0004),
+  but wiring it into the viewer is the next slice.
+- No form filling, no redaction, no desktop app yet.
 - Rendered pages are not cached between zoom levels, so zooming a 500-page
   scan re-rasterises as you scroll.
 

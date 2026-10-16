@@ -7,7 +7,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] CI: lint, typecheck, unit tests, `check:licenses`, offline e2e test
 - [x] Strict CSP (`connect-src 'self'`) and offline e2e test passing on an empty app
 - [ ] Engine spike: PDFium-WASM vs pdf.js on 100 corpus files (speed, fidelity, memory) → ADR 0002
-- [ ] OCR spike: Tesseract on Malayalam + Hindi scanned samples (accuracy, speed in WASM)
+- [x] OCR spike: Tesseract on generated Malayalam + Hindi samples → ADR 0004 (eng 100%, hin 100%, mal 89% which turned out to be a chillu spelling mismatch, now fixed in search). Real scans still needed
 - [ ] Corpus runner script (`pnpm corpus`)
 - [ ] Start collecting the 1,000-file test corpus (kept out of git)
 
@@ -37,11 +37,11 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 
 ## Phase 2 — OCR, forms, redaction, desktop (months 3–4) → Release 2 (desktop + web)
 - [ ] Tauri desktop app for macOS, Windows, Linux (same UI)
-- [ ] OCR to searchable PDF: eng, mal, hin (browser: WASM; desktop: native, batch folders)
+- [ ] OCR to searchable PDF in the app: wire packages/ocr into the worker, page by page, with the language-pack download — the spike (ADR 0004) proved the pieces work
 - [ ] Forms: fill and save AcroForms; basic form builder
 - [ ] True redaction (remove content, not just cover it) with verification
 - [ ] Office → PDF via LibreOffice (desktop only)
-- [ ] Images ↔ PDF
+- [x] Images → PDF (JPEG/PNG, one page per image or fitted to a page size) and PDF → PNG per page
 
 **Gate:** live in 3 offices at IIIT Kottayam.
 

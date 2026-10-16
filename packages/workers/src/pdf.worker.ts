@@ -4,6 +4,7 @@ import {
   createQpdf,
   merge,
   reorder,
+  imagesToPdf,
   rotate,
   split,
   type Annotation,
@@ -259,6 +260,43 @@ async function handle(request: WorkerRequest): Promise<void> {
       const parts = (await split(base, ranges)).map((bytes) => bytes.buffer as ArrayBuffer);
       throwIfCancelled(id);
       post({ id, kind: "parts", parts }, parts);
+      return;
+    }
+    case "fromImages": {
+      const built = await imagesToPdf(
+        request.images.map((image) => ({ bytes: new Uint8Array(image.bytes), type: image.type })),
+      );
+      throwIfCancelled(id);
+      // A document built from images has no protection and no prior annotations.
+      protection = null;
+      repaired = false;
+      post({ id, kind: "document", info: await openBytes(id, built) });
+      return;
+    }
+    case "toImages": {
+      if (!doc) throw new Error("no document is open");
+      const images: { position: number; bytes: ArrayBuffer }[] = [];
+      const transfer: Transferable[] = [];
+      for (const position of request.positions) {
+        throwIfCancelled(id);
+        const page = request.order[position];
+        if (page === undefined) continue;
+        const bitmap = await doc.renderPage(page, request.scale);
+        try {
+          const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("could not get a 2D context");
+          ctx.drawImage(bitmap, 0, 0);
+          const blob = await canvas.convertToBlob({ type: "image/png" });
+          const bytes = await blob.arrayBuffer();
+          images.push({ position, bytes });
+          transfer.push(bytes);
+        } finally {
+          bitmap.close();
+        }
+        post({ id, kind: "progress", done: images.length, total: request.positions.length });
+      }
+      post({ id, kind: "images", images }, transfer);
       return;
     }
     case "save": {

@@ -287,6 +287,39 @@ export function useDocument() {
     setState((s) => ({ ...s, annotations: [] }));
   }, []);
 
+  /** Builds a document from dropped or picked images and opens it. */
+  const openImages = useCallback(
+    async (files: PickedFile[]) => {
+      if (files.length === 0) return;
+      const info = await run("Converting images", (worker) =>
+        worker.fromImages(files.map((f) => ({ bytes: f.bytes, type: f.type ?? f.name }))),
+      );
+      if (!info) return;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        name: files.length === 1 ? `${stripExtension(files[0]!.name)}.pdf` : "images.pdf",
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        // Converted images are a new document with nowhere to write back to.
+        handle: undefined,
+      }));
+    },
+    [run],
+  );
+
+  /** Renders the given display positions to PNG. */
+  const exportImages = useCallback(
+    async (positions: number[], scale = 2) =>
+      run("Rendering images", (worker) =>
+        worker.toImages(positions, stateRef.current.order, scale, (done, total) =>
+          setState((s) => ({ ...s, busy: `Rendering page ${done} of ${total}` })),
+        ),
+      ),
+    [run],
+  );
+
   /**
    * Splits at the selected display positions and returns one document per part.
    * The open document is left alone, like extract.
@@ -343,12 +376,19 @@ export function useDocument() {
     extract,
     search,
     splitAt,
+    openImages,
+    exportImages,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
     pageText,
     setOrder,
   };
+}
+
+function stripExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
 }
 
 function message(err: unknown): string {

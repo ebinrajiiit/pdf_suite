@@ -66,3 +66,34 @@ test("finds a Malayalam word inside a longer line", () => {
   // A word that is not there must not match through over-eager folding.
   expect(findMatches([line], "ഇല്ല")).toEqual([]);
 });
+
+// Both of these come from the OCR spike (ADR 0004): Tesseract returned the ZWJ
+// spelling of a word whose atomic spelling is what a user types. Neither NFC nor
+// NFKC reconciles the two, so matching has to.
+test("matches Malayalam chillu letters in either spelling", () => {
+  const atomic = "സർവകലാശാല"; // ...U+0D7C...
+  const withZwj = "സര്‍വകലാശാല"; // ...U+0D30 U+0D4D U+200D...
+  expect(atomic).not.toBe(withZwj);
+  expect(atomic.normalize("NFKC")).not.toBe(withZwj.normalize("NFKC"));
+
+  expect(findMatches([run(withZwj)], atomic)).toHaveLength(1);
+  expect(findMatches([run(atomic)], withZwj)).toHaveLength(1);
+});
+
+test("matches every chillu letter in either spelling", () => {
+  const pairs: [string, string][] = [
+    ["ൺ", "ണ്‍"],
+    ["ൻ", "ന്‍"],
+    ["ർ", "ര്‍"],
+    ["ൽ", "ല്‍"],
+    ["ൾ", "ള്‍"],
+    ["ൿ", "ക്‍"],
+  ];
+  for (const [atomic, withZwj] of pairs) {
+    expect(findMatches([run(`വാ${withZwj}ക`)], `വാ${atomic}ക`)).toHaveLength(1);
+  }
+});
+
+test("a zero-width joiner in the query does not stop a match", () => {
+  expect(findMatches([run("പരീക്ഷാ")], "പരീ‍ക്ഷാ")).toHaveLength(1);
+});

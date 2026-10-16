@@ -20,3 +20,6 @@ corpus-report/
 .env
 .env.*
 .claude/settings.local.json
+
+# Tesseract language data: fetched by scripts/fetch-tessdata.mjs, never committed
+vendor/

@@ -86,6 +86,10 @@ export type WorkerRequest = { id: number } &
      * part. Returns one document per part, in order.
      */
     | { kind: "split"; at: number[]; order: number[]; annotations: Annotation[] }
+    /** Builds a document from images and opens it. */
+    | { kind: "fromImages"; images: { bytes: ArrayBuffer; type: string }[] }
+    /** Renders the given display positions to PNG, for export. */
+    | { kind: "toImages"; positions: number[]; order: number[]; scale: number }
     | { kind: "close" }
     | { kind: "cancel"; target: number }
   );
@@ -98,6 +102,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "hits"; hits: SearchHit[]; truncated: boolean }
   | { kind: "runs"; runs: TextRun[] }
   | { kind: "parts"; parts: ArrayBuffer[] }
+  | { kind: "images"; images: { position: number; bytes: ArrayBuffer }[] }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -116,6 +121,7 @@ export type TerminalResponse = Extract<
       | "hits"
       | "runs"
       | "parts"
+      | "images"
       | "closed"
       | "cancelled"
       | "error";

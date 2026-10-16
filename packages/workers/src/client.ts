@@ -52,6 +52,15 @@ export interface PdfWorkerClient {
   save(order: number[], annotations: Annotation[]): Promise<ArrayBuffer>;
   /** Splits into parts starting at the given display positions. */
   split(at: number[], order: number[], annotations: Annotation[]): Promise<ArrayBuffer[]>;
+  /** Builds a document from images and opens it. */
+  fromImages(images: { bytes: ArrayBuffer; type: string }[]): Promise<DocumentInfo>;
+  /** Renders the given display positions to PNG. */
+  toImages(
+    positions: number[],
+    order: number[],
+    scale: number,
+    onProgress?: OnProgress,
+  ): Promise<{ position: number; bytes: ArrayBuffer }[]>;
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
   cancel(id: number): void;
@@ -164,6 +173,21 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async save(order, annotations) {
       return expect(await send({ kind: "save", order, annotations }), "saved").bytes;
+    },
+    async fromImages(images) {
+      return expect(
+        await send(
+          { kind: "fromImages", images },
+          images.map((image) => image.bytes),
+        ),
+        "document",
+      ).info;
+    },
+    async toImages(positions, order, scale, onProgress) {
+      return expect(
+        await send({ kind: "toImages", positions, order, scale }, [], onProgress),
+        "images",
+      ).images;
     },
     async split(at, order, annotations) {
       return expect(await send({ kind: "split", at, order, annotations }), "parts").parts;
