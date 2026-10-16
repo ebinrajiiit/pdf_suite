@@ -33,7 +33,7 @@ That last point is the real reason. See below.
   PDFium's 4.4 MB wasm, which compiles under the Tauri CSP and leaves the app
   reporting "Ready". That was the failure this ADR most expected, and it did not
   happen.
-- Icons are generated from `apps/web/public/icon.svg`.
+- Icons are generated from the FACTS-H Lab roundel (`apps/web/public/brand/icon-512.png`, flattened onto white) with `tauri icon`; the generated `android/` and `ios/` sets are deleted, since neither is a target.
 
 Two things fixed while getting there:
 

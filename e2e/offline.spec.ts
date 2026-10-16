@@ -1072,6 +1072,11 @@ test("edits the text in the document itself, not a note over it", async ({ page 
   await expect(target).toBeVisible({ timeout: 30_000 });
   await target.click();
 
+  // The format bar says what you are typing into: face, size, colour.
+  const bar = page.getByTestId("editbar-0");
+  await expect(bar).toContainText("Helvetica");
+  await expect(bar).toContainText("12 pt");
+
   const box = page.getByTestId("editbox-0");
   await expect(box).toBeVisible();
   await box.fill("Dear Registrar");

@@ -581,10 +581,11 @@ export function App() {
     >
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            ◆
+          <BrandMark className="brand-mark" />
+          <span className="brand-words">
+            <span className="brand-name">PDF Suite</span>
+            <span className="brand-lab">FACTS-H Lab</span>
           </span>
-          <span className="brand-name">PDF Suite</span>
         </div>
 
         <div className="topbar-file">
@@ -1048,6 +1049,7 @@ export function App() {
       ) : (
         <main className="empty">
           <div className="empty-card">
+            <BrandMark className="empty-mark" lockup />
             <h1>Your files never leave this device</h1>
             <p>
               Open a PDF to read, mark up, reorganise, redact or sign it. Every operation runs here,
@@ -1171,6 +1173,21 @@ function stripPdf(name: string): string {
 
 /** Zoom steps, in points per CSS pixel. */
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+
+/**
+ * The FACTS-H Lab roundel. Two files rather than one: the artwork is line work
+ * with a transparent background, so a dark ink is needed on a light theme and a
+ * light one on a dark theme. Both are in the bundle — nothing is fetched.
+ */
+function BrandMark({ className, lockup = false }: { className: string; lockup?: boolean }) {
+  const size = lockup ? "lockup" : "mark";
+  return (
+    <picture className={className}>
+      <source srcSet={`/brand/${size}-light.png`} media="(prefers-color-scheme: dark)" />
+      <img src={`/brand/${size}-dark.png`} alt="FACTS-H Lab" width={lockup ? 72 : 26} />
+    </picture>
+  );
+}
 
 /**
  * What to tell the user after editing text. Substituted fonts and lines that did

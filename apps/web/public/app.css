@@ -81,10 +81,28 @@ body {
   letter-spacing: -0.01em;
 }
 .brand-mark {
-  color: var(--accent);
+  display: block;
+  flex: none;
+}
+.brand-mark img {
+  display: block;
+  width: 26px;
+  height: auto;
+}
+.brand-words {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
 }
 .brand-name {
   white-space: nowrap;
+}
+.brand-lab {
+  font-size: 0.62rem;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .topbar-file {
@@ -489,6 +507,42 @@ textarea:focus-visible,
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* The format bar over the block being edited: what Acrobat puts in its Format
+   panel, where the text actually is. */
+.editbar {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.editbar-swatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.editbar-face {
+  font-weight: 600;
+}
+.editbar-size,
+.editbar-lines {
+  color: var(--ink-soft);
+}
+.editbar-keys {
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--line);
+  color: var(--ink-soft);
+}
 .editbox {
   position: absolute;
   padding: 0 1px;
@@ -877,6 +931,15 @@ textarea:focus-visible,
   border-radius: 12px;
   box-shadow: var(--shadow);
   text-align: center;
+}
+.empty-mark {
+  display: block;
+  margin: 0 auto 1rem;
+}
+.empty-mark img {
+  display: block;
+  width: 72px;
+  height: auto;
 }
 .empty-card h1 {
   margin: 0 0 0.6rem;

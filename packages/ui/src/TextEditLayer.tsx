@@ -45,10 +45,17 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
 
   if (!runs) return <div className="editlayer editlayer-loading" data-testid={`edit-${page}`} />;
 
+  /** Embedded fonts carry a subset tag — "ABCDEF+Times" — which is noise here. */
+  const faceOf = (block: EditableText) =>
+    block.fontName.replace(/^[A-Z]{6}\+/, "") || "Embedded font";
+
   /** PDF points from the bottom to CSS pixels from the top. */
   const top = (block: EditableText) => (pageHeight - block.y - block.h) * scale;
   /** Blocks are addressed by their first run, which is stable for these bytes. */
   const key = (block: EditableText) => block.indices[0] ?? -1;
+  /** The format bar sits above the block, or below it at the top of a page. */
+  const barTop = (block: EditableText) =>
+    top(block) >= 26 ? top(block) - 26 : top(block) + block.h * scale + 4;
 
   const commit = (block: EditableText) => {
     setEditing(null);
@@ -59,34 +66,64 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
     <div className="editlayer" data-testid={`edit-${page}`}>
       {runs.map((block) =>
         editing === key(block) ? (
-          <textarea
-            key={key(block)}
-            ref={input}
-            className="editbox"
-            data-testid={`editbox-${key(block)}`}
-            value={draft}
-            spellCheck={false}
-            style={{
-              left: `${block.x * scale}px`,
-              top: `${top(block)}px`,
-              width: `${Math.max(block.w * scale, 60)}px`,
-              height: `${Math.max(block.h * scale, block.fontSize * scale * 1.4)}px`,
-              fontSize: `${block.fontSize * scale}px`,
-              lineHeight: 1.2,
-              color: `rgb(${block.colour.map((c) => Math.round(c * 255)).join(" ")})`,
-            }}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => commit(block)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commit(block);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                setEditing(null);
-              }
-            }}
-          />
+          <div key={key(block)}>
+            {/* What Acrobat shows in its Format panel: the face, the size and
+                the colour of the text being edited. Read-only for now — the
+                point is that the typeface you are typing into is not a
+                mystery. */}
+            <div
+              className="editbar"
+              data-testid={`editbar-${key(block)}`}
+              style={{
+                left: `${block.x * scale}px`,
+                top: `${barTop(block)}px`,
+              }}
+            >
+              <span
+                className="editbar-swatch"
+                style={{
+                  background: `rgb(${block.colour.map((c) => Math.round(c * 255)).join(" ")})`,
+                }}
+              />
+              <span className="editbar-face" title={block.fontName || undefined}>
+                {faceOf(block)}
+              </span>
+              <span className="editbar-size">
+                {block.fontSize.toFixed(block.fontSize % 1 ? 1 : 0)} pt
+              </span>
+              <span className="editbar-lines">
+                {block.indices.length === 1 ? "1 line" : `${block.indices.length} lines`}
+              </span>
+              <span className="editbar-keys">Enter to apply · Esc to cancel</span>
+            </div>
+            <textarea
+              ref={input}
+              className="editbox"
+              data-testid={`editbox-${key(block)}`}
+              value={draft}
+              spellCheck={false}
+              style={{
+                left: `${block.x * scale}px`,
+                top: `${top(block)}px`,
+                width: `${Math.max(block.w * scale, 60)}px`,
+                height: `${Math.max(block.h * scale, block.fontSize * scale * 1.4)}px`,
+                fontSize: `${block.fontSize * scale}px`,
+                lineHeight: 1.2,
+                color: `rgb(${block.colour.map((c) => Math.round(c * 255)).join(" ")})`,
+              }}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => commit(block)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commit(block);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setEditing(null);
+                }
+              }}
+            />
+          </div>
         ) : (
           <button
             key={key(block)}
@@ -94,9 +131,9 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
             className="edittarget"
             data-testid={`edittarget-${key(block)}`}
             title={
+              `${faceOf(block)} ${block.fontSize.toFixed(0)}pt, ` +
               `${block.indices.length > 1 ? `${block.indices.length} lines` : "1 line"}` +
-              `${block.fontName ? `, ${block.fontName}` : ""} ` +
-              `${block.fontSize.toFixed(0)}pt — click to edit, Enter to apply`
+              " — click to edit"
             }
             style={{
               left: `${block.x * scale}px`,

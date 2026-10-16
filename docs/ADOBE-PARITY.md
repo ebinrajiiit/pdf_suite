@@ -18,9 +18,13 @@ tools grouped by task, and zoom plus status along the bottom. Tools are a grid o
 labelled buttons with the active one held down, and the colour choice sits with
 them rather than in the top bar.
 
+Editing text shows a format bar over the block being edited — typeface, size,
+colour, how many lines — because the typeface you are typing into should not be a
+guess. It is read-only: changing the size or the face from there is not built.
+
 What is still cruder than Acrobat: no contextual toolbar on a selected mark, no
-properties panel, no right-click menus, and the tools panel hides below 980 px
-instead of collapsing to icons.
+properties panel for annotations, no right-click menus, and the tools panel hides
+below 980 px instead of collapsing to icons.
 
 ## Have, in English and already tested
 

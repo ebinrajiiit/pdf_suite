@@ -20,7 +20,7 @@ export default defineConfig({
         inlineWorkboxRuntime: true,
         // App assets only. No .pdf, no runtimeCaching: a user's document is
         // never fetched over HTTP and must never reach a cache (docs/PRIVACY.md).
-        globPatterns: ["**/*.{js,css,html,svg,woff2,wasm,traineddata}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,woff2,wasm,traineddata}"],
         // PDFium's wasm is 4.4 MB and workbox skips anything over 2 MB by
         // default, which would leave the engine missing offline.
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
@@ -30,14 +30,17 @@ export default defineConfig({
         navigateFallback: "index.html",
       },
       manifest: {
-        name: "PDF Suite",
+        name: "PDF Suite — FACTS-H Lab",
         short_name: "PDF Suite",
         description: "A complete PDF suite where your files never leave your computer.",
         start_url: "/",
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#0f172a",
-        icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
+        icons: [
+          { src: "brand/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "brand/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        ],
       },
     }),
   ],
