@@ -1,0 +1,23 @@
+{
+  "$comment": "Non-npm components shipped in the bundle: WASM builds and native binaries. docs/LICENSE-POLICY.md §2. Keep in sync with THIRD_PARTY_NOTICES.txt at release.",
+  "components": [
+    {
+      "name": "PDFium",
+      "version": "shipped inside @embedpdf/pdfium 2.15.1",
+      "licence": "BSD-3-Clause",
+      "licenceFile": "node_modules/@embedpdf/pdfium/LICENSE.pdfium",
+      "source": "https://pdfium.googlesource.com/pdfium/",
+      "distributedVia": "npm package @embedpdf/pdfium (MIT wrapper, LICENSE)",
+      "notes": "Precompiled wasm. We do not build it ourselves yet; before shipping a paid edition, either reproduce the build or pin and archive the artefact."
+    },
+    {
+      "name": "pdf.js wasm helpers (OpenJPEG, qcms)",
+      "version": "shipped inside pdfjs-dist 6.4.299",
+      "licence": "Apache-2.0 (pdf.js); OpenJPEG BSD-2-Clause, qcms MPL-2.0 upstream",
+      "licenceFile": "node_modules/pdfjs-dist/LICENSE",
+      "source": "https://github.com/mozilla/pdf.js",
+      "distributedVia": "npm package pdfjs-dist",
+      "notes": "Only loaded if the chosen engine is pdf.js. JPEG 2000 decoding and colour management."
+    }
+  ]
+}

@@ -9,5 +9,12 @@
   "scripts": {
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@embedpdf/pdfium": "^2.15.1",
+    "pdfjs-dist": "^6.4.299"
+  },
+  "devDependencies": {
+    "@types/emscripten": "^1.41.6"
   }
 }
