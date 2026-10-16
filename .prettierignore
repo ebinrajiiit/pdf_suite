@@ -1,0 +1,12 @@
+pnpm-lock.yaml
+dist/
+dev-dist/
+corpus/
+playwright-report/
+test-results/
+
+# Hand-written prose and tables
+*.md
+
+# User/editor config
+.claude/

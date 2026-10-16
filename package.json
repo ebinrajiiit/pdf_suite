@@ -9,16 +9,25 @@
   },
   "scripts": {
     "dev": "pnpm --filter @pdf-suite/web dev",
-    "build": "pnpm -r build",
+    "build": "pnpm -r --if-present build",
+    "preview": "pnpm --filter @pdf-suite/web preview",
     "test": "pnpm -r --if-present test",
     "e2e": "playwright test",
-    "lint": "eslint .",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
     "typecheck": "pnpm -r --if-present typecheck",
     "check:licenses": "node scripts/check-licenses.mjs",
     "corpus": "node scripts/corpus-runner.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^9.13.0",
     "@playwright/test": "^1.48.0",
-    "typescript": "^5.6.0"
+    "@types/node": "^22.7.0",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^2.1.0"
   }
 }

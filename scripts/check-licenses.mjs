@@ -4,8 +4,18 @@
 import { execSync } from "node:child_process";
 
 const ALLOWED = new Set([
-  "MIT", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "ISC", "0BSD", "Zlib",
-  "CC0-1.0", "Unlicense", "MPL-2.0", "BlueOak-1.0.0", "Python-2.0",
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Apache-2.0",
+  "ISC",
+  "0BSD",
+  "Zlib",
+  "CC0-1.0",
+  "Unlicense",
+  "MPL-2.0",
+  "BlueOak-1.0.0",
+  "Python-2.0",
 ]);
 const BANNED_NAMES = [/mupdf/i, /^pymupdf$/i, /^fitz$/i, /ghostscript/i, /pdf2docx/i];
 
@@ -19,7 +29,7 @@ function isAllowed(licence) {
 let report;
 try {
   report = JSON.parse(execSync("pnpm licenses list --prod --json", { encoding: "utf8" }));
-} catch (e) {
+} catch {
   console.error("Could not run `pnpm licenses list`. Run `pnpm install` first.");
   process.exit(2);
 }

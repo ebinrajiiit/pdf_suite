@@ -1,0 +1,17 @@
+{
+  "name": "@pdf-suite/workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@pdf-suite/core": "workspace:*",
+    "@pdf-suite/engine": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

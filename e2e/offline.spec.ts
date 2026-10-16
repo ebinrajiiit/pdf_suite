@@ -23,8 +23,34 @@ test("makes no requests to any non-self origin", async ({ page, baseURL }) => {
 test("works with the network cut after first load", async ({ page, context }) => {
   await page.goto("/");
   await page.waitForLoadState("networkidle");
+
+  // The service worker must have precached the app shell before we cut the network.
+  await page.waitForFunction(async () => {
+    const reg = await navigator.serviceWorker.getRegistration();
+    return Boolean(reg?.active) && Boolean(navigator.serviceWorker.controller);
+  });
+
   await context.setOffline(true);
   await page.reload();
   // TODO (Phase 1): assert the viewer UI renders from the service-worker cache.
-  await expect(page.locator("body")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PDF Suite" })).toBeVisible();
+});
+
+test("the service worker caches no documents", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(async () => {
+    const reg = await navigator.serviceWorker.getRegistration();
+    return Boolean(reg?.active);
+  });
+
+  const cached = await page.evaluate(async () => {
+    const names = await caches.keys();
+    const urls: string[] = [];
+    for (const name of names) {
+      for (const req of await (await caches.open(name)).keys()) urls.push(req.url);
+    }
+    return urls;
+  });
+
+  expect(cached.filter((u) => /\.pdf(\?|$)/i.test(u))).toEqual([]);
 });

@@ -3,9 +3,9 @@
 Each phase ships at least one usable release, keeping the lab's one-launch-per-month cadence. Tick items only when implemented **and** tested.
 
 ## Phase 0 — Foundations (weeks 1–4)
-- [ ] pnpm monorepo scaffold (apps/web, packages/engine, core, workers, ui)
-- [ ] CI: lint, typecheck, unit tests, `check:licenses`, offline e2e test
-- [ ] Strict CSP (`connect-src 'self'`) and offline e2e test passing on an empty app
+- [x] pnpm monorepo scaffold (apps/web, packages/engine, core, workers, ui)
+- [x] CI: lint, typecheck, unit tests, `check:licenses`, offline e2e test
+- [x] Strict CSP (`connect-src 'self'`) and offline e2e test passing on an empty app
 - [ ] Engine spike: PDFium-WASM vs pdf.js on 100 corpus files (speed, fidelity, memory) → ADR 0002
 - [ ] OCR spike: Tesseract on Malayalam + Hindi scanned samples (accuracy, speed in WASM)
 - [ ] Corpus runner script (`pnpm corpus`)

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Privacy invariant 5 (CLAUDE.md §1). Must stay byte-identical to the CSP
+         in docs/PRIVACY.md — apps/web/src/csp.test.ts fails if it drifts. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' blob: data:; worker-src 'self' blob:"
+    />
+    <title>PDF Suite</title>
+    <!-- Linked, not imported: Vite would inject imported CSS as an inline <style>. -->
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
