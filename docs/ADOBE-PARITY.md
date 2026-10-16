@@ -9,6 +9,19 @@ Acrobat-specific (cloud storage, Sign subscriptions, Document Cloud). Those are
 explicit non-goals in `docs/PRODUCT.md` — zero-upload is the point of this product
 — so they are listed as "will not do" rather than as gaps.
 
+## Interface
+
+Laid out the way Acrobat is, because that is what people arrive knowing: a
+minimal top bar (open, save, search, document name), a left sidebar with Pages,
+Marks, Form and Bookmarks tabs, the document in the middle, a right-hand panel of
+tools grouped by task, and zoom plus status along the bottom. Tools are a grid of
+labelled buttons with the active one held down, and the colour choice sits with
+them rather than in the top bar.
+
+What is still cruder than Acrobat: no contextual toolbar on a selected mark, no
+properties panel, no right-click menus, and the tools panel hides below 980 px
+instead of collapsing to icons.
+
 ## Have, in English and already tested
 
 | Acrobat feature | Here |

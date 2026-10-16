@@ -251,7 +251,8 @@ test("rotate, delete and extract act on the selected pages", async ({ page }) =>
   // Rotating the selection rewrites the document, so it reopens and the
   // selection is cleared — hence selecting again before each step.
   await page.getByTestId("select-0").click();
-  await expect(page.getByText("3 pages, 1 selected")).toBeVisible();
+  // Matched loosely: the separator between the two counts is presentation.
+  await expect(page.getByText(/3 pages.*1 selected/)).toBeVisible();
   await page.getByRole("button", { name: "Rotate right" }).click();
   await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
   expect(await rotationsOf(await saveAndRead(page, "Save"))).toEqual([90, 0, 0]);

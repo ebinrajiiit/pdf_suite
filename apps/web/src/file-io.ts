@@ -2,8 +2,14 @@
 // disk; nothing is uploaded and nothing is persisted unless the user saves
 // (privacy invariants 1 and 4, CLAUDE.md §1).
 //
-// The File System Access API is used where it exists, with an <input type=file>
-// and a download fallback elsewhere (Firefox and Safari have no picker).
+// Three routes, picked at runtime:
+//   * Inside the desktop shell, Tauri's native dialogs and filesystem. WKWebView
+//     has no File System Access API at all, so without this the desktop app
+//     would quietly use a hidden file input and "download" files — which is not
+//     what a native application should do.
+//   * In Chrome and Edge, the File System Access API, which can also write back
+//     to the file that was opened.
+//   * Everywhere else (Firefox, Safari), an <input type=file> and a download.
 
 export interface PickedFile {
   name: string;
@@ -12,6 +18,8 @@ export interface PickedFile {
   bytes: ArrayBuffer;
   /** Present only via the File System Access API; lets Save write back in place. */
   handle?: FileSystemFileHandle | undefined;
+  /** Present only in the desktop shell; same purpose as `handle`. */
+  path?: string | undefined;
 }
 
 const PDF_TYPES = [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }];
@@ -22,11 +30,63 @@ export const IMAGE_TYPES = [
   { description: "Image", accept: { "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"] } },
 ];
 
-export const canUsePicker = (): boolean => "showOpenFilePicker" in globalThis;
-export const canUseSavePicker = (): boolean => "showSaveFilePicker" in globalThis;
+/**
+ * True inside the Tauri shell. Tauri 2 puts this on the window; checking it
+ * rather than a user-agent string means the same bundle works in both places.
+ */
+export const isDesktop = (): boolean =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+export const canUsePicker = (): boolean => isDesktop() || "showOpenFilePicker" in globalThis;
+export const canUseSavePicker = (): boolean => isDesktop() || "showSaveFilePicker" in globalThis;
+
+/**
+ * Tauri's APIs are imported only when running inside it, so a browser build
+ * never loads them. They are a few kB, but a browser has no use for them.
+ */
+async function tauri() {
+  const [dialog, core] = await Promise.all([
+    import("@tauri-apps/plugin-dialog"),
+    import("@tauri-apps/api/core"),
+  ]);
+  return { dialog, invoke: core.invoke };
+}
+
+const PDF_FILTER = [{ name: "PDF document", extensions: ["pdf"] }];
+const IMAGE_FILTER = [{ name: "Image", extensions: ["jpg", "jpeg", "png"] }];
+
+/** Reads the files a native dialog returned. Paths, not handles. */
+async function readPaths(paths: string[]): Promise<PickedFile[]> {
+  const { invoke } = await tauri();
+  return Promise.all(
+    paths.map(async (path) => {
+      const bytes = new Uint8Array(await invoke<number[]>("read_document", { path }));
+      return {
+        name: path.split(/[\\/]/).pop() ?? path,
+        type: path.toLowerCase().endsWith(".pdf") ? "application/pdf" : "",
+        // A fresh buffer: the worker transfers what it is given.
+        bytes: bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) as ArrayBuffer,
+        path,
+      };
+    }),
+  );
+}
 
 /** Opens the native picker. Returns [] if the user cancels. */
-export async function pickFiles(multiple: boolean): Promise<PickedFile[]> {
+export async function pickFiles(multiple: boolean, images = false): Promise<PickedFile[]> {
+  if (isDesktop()) {
+    const { dialog } = await tauri();
+    const chosen = await dialog.open({
+      multiple,
+      filters: images ? IMAGE_FILTER : PDF_FILTER,
+    });
+    if (chosen === null) return [];
+    return readPaths(Array.isArray(chosen) ? chosen : [chosen]);
+  }
+
   const handles = await window
     .showOpenFilePicker({ multiple, types: PDF_TYPES, excludeAcceptAllOption: false })
     .catch((err: unknown) => {
@@ -62,7 +122,23 @@ export async function saveBytes(
   suggestedName: string,
   handle?: FileSystemFileHandle,
   mime = "application/pdf",
+  path?: string,
 ): Promise<string | undefined> {
+  if (isDesktop()) {
+    const { dialog, invoke } = await tauri();
+    // Writing back to the file that was opened needs no dialog, exactly as the
+    // File System Access path does with a handle.
+    const target =
+      path ??
+      (await dialog.save({
+        defaultPath: suggestedName,
+        filters: mime === "application/pdf" ? PDF_FILTER : IMAGE_FILTER,
+      }));
+    if (!target) return undefined;
+    await invoke("write_document", { path: target, bytes: [...new Uint8Array(bytes)] });
+    return target.split(/[\\/]/).pop() ?? target;
+  }
+
   const blob = new Blob([bytes], { type: mime });
 
   if (canUseSavePicker()) {

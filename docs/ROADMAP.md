@@ -31,6 +31,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Viewer: virtualised pages (only the visible window is mounted), fit-to-width, thumbnails
 - [x] Viewer: zoom controls (buttons and Ctrl/Cmd +/-/0), drag-and-drop open, Ctrl/Cmd+F to search
 - [x] Viewer: fit page, outline/bookmarks panel (sidebar tabs, click to jump)
+- [x] Interface: a minimal top bar, a sidebar with Pages/Marks/Form/Bookmarks, and a right-hand tools panel grouped by task, replacing the single row of 25 controls
 - [ ] Viewer: bitmap cache across zoom levels — deliberately not done: pages are
   transferred into the canvas zero-copy, and `transferFromImageBitmap` consumes
   the bitmap, so caching would cost a full copy of every page drawn. Revisit if
@@ -54,7 +55,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 
 ## Phase 2 — OCR, forms, redaction, desktop (months 3–4) → Release 2 (desktop + web)
 - [x] Tauri desktop app: **builds and runs** on macOS (23 MB binary, ~1 min). The window opens, the web UI loads, and PDFium's wasm compiles under the Tauri CSP — the failure most expected, which did not happen. Capability set is file dialogs and nothing else: **no HTTP permission, no updater**, so the shell cannot reach the network even by accident. ADR 0005
-- [ ] Desktop: Windows and Linux builds (CI job added, never run), bundled installers, and native file dialogs — WKWebView has no File System Access API, so inside the shell the app quietly uses the `<input type=file>` and download fallbacks
+- [x] Desktop: native open and save dialogs, with Save writing back to the file that was opened. Two audited Rust commands rather than the filesystem plugin, whose path scope would have to be most of the home directory
+- [ ] Desktop: Windows and Linux builds (CI job added, never run) and bundled installers
 - [ ] Desktop: build it, add the icon set, and replace the File System Access fallbacks with native dialogs — WKWebView has no FSA, so inside the shell the app would quietly use the `<input type=file>` and download paths
 - [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
 - [x] OCR preprocessing: despeckle (3×3 median), on by default — turns 8% speckle from 0% accuracy into 100% (ADR 0004)

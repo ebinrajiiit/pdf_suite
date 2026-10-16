@@ -18,7 +18,6 @@ tauri-build = { version = "2", features = [] }
 # network is a dependency that can break the claim by accident.
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
 
 [features]
 # Enabled by `tauri build`; keeps `cargo test` from needing a webview.

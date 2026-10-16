@@ -167,6 +167,14 @@ export function App() {
     if (picked[0]) await open(picked[0]);
   }, [open]);
 
+  const handleFromImages = useCallback(async () => {
+    if (!canUsePicker()) {
+      imageInput.current?.click();
+      return;
+    }
+    await openImages(await pickFiles(true, true));
+  }, [openImages]);
+
   const handleMerge = useCallback(async () => {
     if (!canUsePicker()) {
       mergeInput.current?.click();
@@ -239,9 +247,11 @@ export function App() {
       bytes,
       edited ? suffixName(name0, "edited") : name0,
       edited ? undefined : state.handle,
+      "application/pdf",
+      edited ? undefined : state.path,
     );
     setSaved(written ? `Saved ${written}` : undefined);
-  }, [info?.pageCount, name0, save, state.handle, state.order]);
+  }, [info?.pageCount, name0, save, state.handle, state.order, state.path]);
 
   const handleExtract = useCallback(async () => {
     const pages = pagesAt(state.order, positions);
@@ -475,6 +485,53 @@ export function App() {
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
+  /** One tool button in the right-hand panel. */
+  const toolButton = (which: AnnotationTool) => (
+    <button
+      key={which}
+      type="button"
+      className={tool === which ? "tool tool-on" : "tool"}
+      aria-pressed={tool === which}
+      disabled={disabled}
+      data-testid={`tool-${which}`}
+      title={TOOL_HINTS[which]}
+      onClick={() => {
+        setTool((current) => (current === which ? undefined : which));
+        setPendingPoint(null);
+      }}
+    >
+      <span className="tool-icon" aria-hidden="true">
+        {TOOL_ICONS[which]}
+      </span>
+      <span className="tool-name">{TOOL_LABELS[which]}</span>
+    </button>
+  );
+
+  const action = (
+    label: string,
+    onClick: () => void,
+    options: {
+      testId?: string;
+      hint?: string;
+      off?: boolean;
+      danger?: boolean;
+      /** When the visible label is a glyph, the name assistive tech reads. */
+      name?: string;
+    } = {},
+  ) => (
+    <button
+      type="button"
+      className={options.danger ? "action action-danger" : "action"}
+      onClick={onClick}
+      disabled={options.off ?? disabled}
+      {...(options.testId ? { "data-testid": options.testId } : {})}
+      {...(options.name ? { "aria-label": options.name } : {})}
+      title={options.hint ?? options.name ?? label}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div
       className="app"
@@ -488,294 +545,93 @@ export function App() {
       }}
       onDrop={(event) => void onDrop(event)}
     >
-      <header className="toolbar">
-        <strong>PDF Suite</strong>
-        <button type="button" onClick={handleOpen} disabled={!ready}>
-          Open
-        </button>
-        <button type="button" onClick={handleMerge} disabled={disabled}>
-          {positions.length === 1 ? "Insert after…" : "Merge…"}
-        </button>
-        <button type="button" onClick={handleSave} disabled={disabled}>
-          Save
-        </button>
-
-        <span className="toolbar-group" role="group" aria-label="Organize">
-          <button
-            type="button"
-            onClick={() => void rotatePages(target, 270)}
-            disabled={disabled}
-            aria-label="Rotate left"
-            title="Rotate left"
-          >
-            ↺
-          </button>
-          <button
-            type="button"
-            onClick={() => void rotatePages(target, 90)}
-            disabled={disabled}
-            aria-label="Rotate right"
-            title="Rotate right"
-          >
-            ↻
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={disabled || positions.length === 0 || positions.length === pageCount}
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            onClick={handleExtract}
-            disabled={disabled || positions.length === 0}
-          >
-            Extract…
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSplit()}
-            disabled={disabled || positions.length === 0}
-            title="Each selected page starts a new file"
-            data-testid="split"
-          >
-            Split…
-          </button>
-        </span>
-
-        <span className="toolbar-group" role="group" aria-label="Document">
-          <button type="button" onClick={() => void compress()} disabled={disabled}>
-            Compress
-          </button>
-          <button type="button" onClick={() => void handleProtect()} disabled={disabled}>
-            {info?.protected ? "Remove password" : "Protect…"}
-          </button>
-        </span>
-
-        <span className="toolbar-group" role="group" aria-label="Images">
-          <button
-            type="button"
-            onClick={() => imageInput.current?.click()}
-            disabled={!ready}
-            data-testid="images-to-pdf"
-            title="Turn JPEG or PNG files into a PDF"
-          >
-            From images…
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleExportImages()}
-            disabled={disabled}
-            data-testid="pages-to-images"
-            title="Save the selected pages, or all of them, as PNG"
-          >
-            To images…
-          </button>
-        </span>
-
-        <span className="toolbar-group" role="group" aria-label="Text recognition">
-          <label className="visually-hidden" htmlFor="ocr-lang">
-            OCR language
-          </label>
-          <select
-            id="ocr-lang"
-            value={ocrLang}
-            onChange={(event) => setOcrLang(event.target.value)}
-            disabled={disabled}
-            data-testid="ocr-lang"
-          >
-            <option value="eng">English</option>
-            <option value="mal">Malayalam</option>
-            <option value="hin">Hindi</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => void handleOcr()}
-            disabled={disabled}
-            data-testid="run-ocr"
-            title="Make scanned pages searchable. Downloads the language pack once."
-          >
-            Recognise text
-          </button>
-          <label
-            className="toolbar-check"
-            title="Removes scanner speckle before reading the page. Without it, a noisy scan can come back empty."
-          >
-            <input
-              type="checkbox"
-              checked={despeckle}
-              onChange={(event) => setDespeckle(event.target.checked)}
-              disabled={disabled}
-              data-testid="ocr-despeckle"
-            />
-            Clean up
-          </label>
-        </span>
-
-        <span className="toolbar-group" role="group" aria-label="Annotate">
-          {(
-            [
-              "highlight",
-              "underline",
-              "strike",
-              "note",
-              "text",
-              "square",
-              "circle",
-              "ink",
-              "redact",
-            ] as const
-          ).map((which) => (
-            <button
-              key={which}
-              type="button"
-              className={tool === which ? "tool tool-active" : "tool"}
-              aria-pressed={tool === which}
-              disabled={disabled}
-              data-testid={`tool-${which}`}
-              onClick={() => {
-                setTool((current) => (current === which ? undefined : which));
-                setPendingPoint(null);
-              }}
-            >
-              {TOOL_LABELS[which]}
-            </button>
-          ))}
-          <span className="swatches" role="group" aria-label="Colour">
-            {COLOURS.map((option) => (
-              <button
-                key={option.name}
-                type="button"
-                className={colour === option.value ? "swatch swatch-active" : "swatch"}
-                style={{
-                  background: `rgb(${option.value.map((c) => Math.round(c * 255)).join(" ")})`,
-                }}
-                aria-label={option.name}
-                aria-pressed={colour === option.value}
-                data-testid={`colour-${option.name}`}
-                disabled={disabled}
-                onClick={() => setColour(option.value)}
-              />
-            ))}
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            ◆
           </span>
-          {redactionCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => void handleRedact()}
-              disabled={disabled}
-              data-testid="apply-redaction"
-              title="Remove the marked content from the document, permanently"
-            >
-              Remove {redactionCount} area{redactionCount === 1 ? "" : "s"}
-            </button>
-          ) : null}
-          {state.annotations.length > 0 ? (
-            <button
-              type="button"
-              onClick={clearAnnotations}
-              data-testid="clear-annotations"
-              title="Remove every annotation not yet saved"
-            >
-              Clear {state.annotations.length}
-            </button>
-          ) : null}
-        </span>
+          <span className="brand-name">PDF Suite</span>
+        </div>
 
-        <span className="toolbar-group" role="group" aria-label="Zoom">
-          <button
-            type="button"
-            onClick={() => stepZoom(-1)}
-            disabled={disabled}
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <span className="zoom-level" data-testid="zoom-level">
-            {zoom === "fit" ? "Fit" : zoom === "page" ? "Page" : `${Math.round(zoom * 100)}%`}
-          </span>
-          <button
-            type="button"
-            onClick={() => stepZoom(1)}
-            disabled={disabled}
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          <button type="button" onClick={() => setZoom("fit")} disabled={disabled}>
-            Fit
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom("page")}
-            disabled={disabled}
-            data-testid="fit-page"
-          >
-            Page
-          </button>
-        </span>
+        <div className="topbar-file">
+          {action("Open", () => void handleOpen(), { off: !ready, hint: "Open a PDF" })}
+          {info
+            ? action(
+                positions.length === 1 ? "Insert after…" : "Merge…",
+                () => void handleMerge(),
+                {
+                  hint: "Add another PDF to this one",
+                },
+              )
+            : null}
+          {info ? action("Save", () => void handleSave(), { hint: "Save the document" }) : null}
+        </div>
 
-        <form
-          className="toolbar-group search"
-          role="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleSearch();
-          }}
-        >
-          <input
-            ref={searchInput}
-            type="search"
-            aria-label="Search the document"
-            placeholder="Search…"
-            value={query}
-            data-testid="search-input"
-            onChange={(event) => setQuery(event.target.value)}
-            disabled={disabled}
-          />
-          <button type="submit" disabled={disabled || query.trim() === ""}>
-            Find
-          </button>
-          {hits.length > 0 ? (
-            <>
-              <span data-testid="hit-count">
-                {hitIndex + 1} of {hits.length}
-                {truncated ? "+" : ""}
-              </span>
-              <button type="button" aria-label="Previous match" onClick={() => step(-1)}>
-                ‹
-              </button>
-              <button type="button" aria-label="Next match" onClick={() => step(1)}>
-                ›
-              </button>
-            </>
-          ) : null}
-        </form>
-
-        <span className="toolbar-name">{state.name ?? "No document open"}</span>
         {info ? (
-          <span className="toolbar-pages">
-            {pageCount} {pageCount === 1 ? "page" : "pages"}
-            {positions.length > 0 ? `, ${positions.length} selected` : ""}
-          </span>
+          <form
+            className="search"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSearch();
+            }}
+          >
+            <span className="search-icon" aria-hidden="true">
+              ⌕
+            </span>
+            <input
+              ref={searchInput}
+              type="search"
+              aria-label="Search the document"
+              placeholder="Search this document"
+              value={query}
+              data-testid="search-input"
+              onChange={(event) => setQuery(event.target.value)}
+              disabled={disabled}
+            />
+            <button type="submit" className="search-go" disabled={disabled || query.trim() === ""}>
+              Find
+            </button>
+            {hits.length > 0 ? (
+              <span className="search-nav">
+                <span data-testid="hit-count">
+                  {hitIndex + 1} of {hits.length}
+                  {truncated ? "+" : ""}
+                </span>
+                <button type="button" aria-label="Previous match" onClick={() => step(-1)}>
+                  ‹
+                </button>
+                <button type="button" aria-label="Next match" onClick={() => step(1)}>
+                  ›
+                </button>
+              </span>
+            ) : null}
+          </form>
         ) : null}
-        {info?.repaired ? (
-          <span className="badge" data-testid="repaired-badge" title="This file was damaged">
-            Repaired
-          </span>
-        ) : null}
-        {info?.protected ? (
-          <span className="badge" data-testid="protected-badge">
-            Password set
-          </span>
-        ) : null}
-        <span
-          className={state.error ? "status status-error" : "status"}
-          role="status"
-          data-testid="status"
-        >
-          {status ?? (ready ? "Ready" : "Starting engine…")}
-        </span>
+
+        <div className="topbar-doc">
+          <span className="doc-name">{state.name ?? "No document open"}</span>
+          {info ? (
+            <span className="doc-meta">
+              {pageCount} {pageCount === 1 ? "page" : "pages"}
+              {positions.length > 0 ? ` · ${positions.length} selected` : ""}
+            </span>
+          ) : null}
+          {info?.repaired ? (
+            <span
+              className="badge"
+              data-testid="repaired-badge"
+              title="This file was damaged and was rebuilt"
+            >
+              Repaired
+            </span>
+          ) : null}
+          {info?.protected ? (
+            <span className="badge badge-lock" data-testid="protected-badge">
+              Password set
+            </span>
+          ) : null}
+        </div>
       </header>
 
       {/* The pickers are unavailable in Firefox and Safari, and in tests; these
@@ -818,11 +674,13 @@ export function App() {
           }}
         >
           <label htmlFor="password">
-            <strong>{state.needsPassword}</strong> needs a password to open. It is used here on this
-            device only.
+            <strong>{state.needsPassword}</strong> needs a password. It is used here on this device
+            only.
           </label>
           <input id="password" name="password" type="password" autoFocus data-testid="password" />
-          <button type="submit">Unlock</button>
+          <button type="submit" className="action action-go">
+            Unlock
+          </button>
         </form>
       ) : null}
 
@@ -840,8 +698,10 @@ export function App() {
             {tool === "note" ? "Note text" : "Text to add to the page"}
           </label>
           <input id="contents" name="contents" autoFocus data-testid="annotation-text" />
-          <button type="submit">Place</button>
-          <button type="button" onClick={() => setPendingPoint(null)}>
+          <button type="submit" className="action action-go">
+            Place
+          </button>
+          <button type="button" className="action" onClick={() => setPendingPoint(null)}>
             Cancel
           </button>
         </form>
@@ -861,8 +721,7 @@ export function App() {
           }}
         >
           <label htmlFor="newPassword">
-            Password for the saved file. Keep it safe — a protected PDF cannot be recovered without
-            it.
+            Password for the saved file. Keep it safe — a protected PDF cannot be opened without it.
           </label>
           <input
             id="newPassword"
@@ -871,8 +730,10 @@ export function App() {
             autoFocus
             data-testid="new-password"
           />
-          <button type="submit">Set password</button>
-          <button type="button" onClick={() => setAskProtect(false)}>
+          <button type="submit" className="action action-go">
+            Set password
+          </button>
+          <button type="button" className="action" onClick={() => setAskProtect(false)}>
             Cancel
           </button>
         </form>
@@ -880,48 +741,31 @@ export function App() {
 
       {info ? (
         <div className="workspace">
-          <div className="sidebar">
+          <aside className="sidebar">
             <div className="sidebar-tabs" role="tablist" aria-label="Sidebar">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebar === "pages"}
-                className={sidebar === "pages" ? "tab tab-active" : "tab"}
-                onClick={() => setSidebar("pages")}
-              >
-                Pages
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebar === "comments"}
-                className={sidebar === "comments" ? "tab tab-active" : "tab"}
-                data-testid="tab-comments"
-                onClick={() => setSidebar("comments")}
-              >
-                Marks{state.annotations.length > 0 ? ` (${state.annotations.length})` : ""}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebar === "form"}
-                className={sidebar === "form" ? "tab tab-active" : "tab"}
-                data-testid="tab-form"
-                onClick={() => setSidebar("form")}
-              >
-                Form{info.form.fields.length > 0 ? ` (${info.form.fields.length})` : ""}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebar === "outline"}
-                className={sidebar === "outline" ? "tab tab-active" : "tab"}
-                data-testid="tab-outline"
-                onClick={() => setSidebar("outline")}
-              >
-                Bookmarks{info.outline.length > 0 ? ` (${info.outline.length})` : ""}
-              </button>
+              {(
+                [
+                  ["pages", "Pages", undefined],
+                  ["comments", "Marks", state.annotations.length],
+                  ["form", "Form", info.form.fields.length],
+                  ["outline", "Marks", info.outline.length],
+                ] as const
+              ).map(([key, label, count], index) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebar === key}
+                  className={sidebar === key ? "tab tab-on" : "tab"}
+                  {...(key === "pages" ? {} : { "data-testid": `tab-${key}` })}
+                  onClick={() => setSidebar(key)}
+                >
+                  {index === 3 ? "Bookmarks" : label}
+                  {count ? <span className="tab-count">{count}</span> : null}
+                </button>
+              ))}
             </div>
+
             {sidebar === "comments" ? (
               <div className="sidebar-scroll">
                 <CommentList
@@ -951,28 +795,27 @@ export function App() {
                   }}
                 />
                 {info.form.fields.length > 0 ? (
-                  <div className="form-actions">
-                    <button
-                      type="button"
-                      onClick={() => void handleForm(false)}
-                      disabled={disabled || Object.keys(fieldValues).length === 0}
-                      data-testid="apply-form"
-                    >
-                      Write values
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleForm(true)}
-                      disabled={disabled}
-                      data-testid="flatten-form"
-                      title="Write the values in and remove the fields, so they cannot be changed"
-                    >
-                      Flatten
-                    </button>
+                  <div className="panel-actions">
+                    {action("Write values", () => void handleForm(false), {
+                      testId: "apply-form",
+                      off: disabled || Object.keys(fieldValues).length === 0,
+                    })}
+                    {action("Flatten", () => void handleForm(true), {
+                      testId: "flatten-form",
+                      hint: "Write the values in and remove the fields",
+                    })}
                   </div>
                 ) : null}
               </div>
-            ) : sidebar === "pages" ? (
+            ) : sidebar === "outline" ? (
+              <Outline
+                items={info.outline}
+                onGo={(page) => {
+                  const position = state.order.indexOf(page);
+                  if (position >= 0) setGoTo(position);
+                }}
+              />
+            ) : (
               <Thumbnails
                 order={state.order}
                 pageSizes={info.pageSizes}
@@ -981,17 +824,9 @@ export function App() {
                 selected={selected}
                 onSelect={onSelect}
               />
-            ) : (
-              <Outline
-                items={info.outline}
-                onGo={(page) => {
-                  // Bookmarks name source pages; the viewer scrolls by position.
-                  const position = state.order.indexOf(page);
-                  if (position >= 0) setGoTo(position);
-                }}
-              />
             )}
-          </div>
+          </aside>
+
           <div className="main" ref={main}>
             <Viewer
               order={state.order}
@@ -1011,21 +846,200 @@ export function App() {
               onRemoveAnnotation={tool === undefined ? removeAnnotation : undefined}
             />
           </div>
+
+          <aside className="tools" aria-label="Tools">
+            <section className="tool-group">
+              <h2>Annotate</h2>
+              <div className="tool-grid">
+                {(["highlight", "underline", "strike", "note", "text"] as const).map(toolButton)}
+              </div>
+              <div className="tool-grid">
+                {(["square", "circle", "ink"] as const).map(toolButton)}
+              </div>
+              <div className="tool-options">
+                <span className="tool-options-label">Colour</span>
+                <span className="swatches" role="group" aria-label="Colour">
+                  {COLOURS.map((option) => (
+                    <button
+                      key={option.name}
+                      type="button"
+                      className={colour === option.value ? "swatch swatch-on" : "swatch"}
+                      style={{
+                        background: `rgb(${option.value.map((c) => Math.round(c * 255)).join(" ")})`,
+                      }}
+                      aria-label={option.name}
+                      aria-pressed={colour === option.value}
+                      data-testid={`colour-${option.name}`}
+                      onClick={() => setColour(option.value)}
+                    />
+                  ))}
+                </span>
+              </div>
+              {state.annotations.length > 0
+                ? action(`Clear ${state.annotations.length} marks`, clearAnnotations, {
+                    testId: "clear-annotations",
+                    danger: true,
+                  })
+                : null}
+            </section>
+
+            <section className="tool-group">
+              <h2>Pages</h2>
+              <p className="tool-hint">
+                {positions.length > 0
+                  ? `${positions.length} selected`
+                  : "Nothing selected — acts on the whole document"}
+              </p>
+              <div className="tool-grid">{toolButton("redact")}</div>
+              {redactionCount > 0
+                ? action(
+                    `Remove ${redactionCount} area${redactionCount === 1 ? "" : "s"}`,
+                    () => void handleRedact(),
+                    {
+                      testId: "apply-redaction",
+                      danger: true,
+                      hint: "Delete the marked content permanently",
+                    },
+                  )
+                : null}
+              <div className="action-row">
+                {action("↺ Left", () => void rotatePages(target, 270), { name: "Rotate left" })}
+                {action("↻ Right", () => void rotatePages(target, 90), { name: "Rotate right" })}
+              </div>
+              <div className="action-row">
+                {action("Delete", handleDelete, {
+                  off: disabled || positions.length === 0 || positions.length === pageCount,
+                  danger: true,
+                })}
+                {action("Extract…", () => void handleExtract(), {
+                  off: disabled || positions.length === 0,
+                })}
+                {action("Split…", () => void handleSplit(), {
+                  testId: "split",
+                  off: disabled || positions.length === 0,
+                  hint: "Each selected page starts a new file",
+                })}
+              </div>
+            </section>
+
+            <section className="tool-group">
+              <h2>Recognise text</h2>
+              <p className="tool-hint">Makes a scanned page searchable.</p>
+              <div className="action-row">
+                <select
+                  aria-label="OCR language"
+                  value={ocrLang}
+                  onChange={(event) => setOcrLang(event.target.value)}
+                  disabled={disabled}
+                  data-testid="ocr-lang"
+                >
+                  <option value="eng">English</option>
+                  <option value="mal">Malayalam</option>
+                  <option value="hin">Hindi</option>
+                </select>
+                {action("Run", () => void handleOcr(), { testId: "run-ocr" })}
+              </div>
+              <label
+                className="check"
+                title="Removes scanner speckle first. Without it a noisy scan can come back empty."
+              >
+                <input
+                  type="checkbox"
+                  checked={despeckle}
+                  onChange={(event) => setDespeckle(event.target.checked)}
+                  disabled={disabled}
+                  data-testid="ocr-despeckle"
+                />
+                Clean up the scan first
+              </label>
+            </section>
+
+            <section className="tool-group">
+              <h2>Convert &amp; protect</h2>
+              <div className="action-row">
+                {action("From images…", () => void handleFromImages(), {
+                  testId: "images-to-pdf",
+                  off: !ready,
+                  hint: "Turn JPEG or PNG files into a PDF",
+                })}
+                {action("To images…", () => void handleExportImages(), {
+                  testId: "pages-to-images",
+                  hint: "Save pages as PNG",
+                })}
+              </div>
+              <div className="action-row">
+                {action("Compress", () => void compress())}
+                {action(
+                  info.protected ? "Remove password" : "Protect…",
+                  () => void handleProtect(),
+                )}
+              </div>
+            </section>
+          </aside>
         </div>
       ) : (
         <main className="empty">
-          <h1>Your files never leave this device</h1>
-          <p>
-            Open a PDF to view, reorder and merge it. Every operation runs here, on your computer —
-            switch off your network and it keeps working.
-          </p>
-          <p className="empty-hint">Drop a PDF anywhere on this window, or use Open.</p>
-          <p className="empty-hint">
-            Click a page thumbnail to select it; shift-click to select more. Rotate, delete and
-            extract act on the selection, or on the whole document when nothing is selected.
-          </p>
+          <div className="empty-card">
+            <h1>Your files never leave this device</h1>
+            <p>
+              Open a PDF to read, mark up, reorganise, redact or sign it. Every operation runs here,
+              on your computer — switch off your network and it keeps working.
+            </p>
+            <div className="empty-actions">
+              {action("Open a PDF", () => void handleOpen(), { off: !ready })}
+              {action("From images…", () => void handleFromImages(), { off: !ready })}
+            </div>
+            <p className="empty-hint">or drop a file anywhere on this window</p>
+          </div>
         </main>
       )}
+
+      <footer className="statusbar">
+        {info ? (
+          <div className="zoom" role="group" aria-label="Zoom">
+            <button
+              type="button"
+              onClick={() => stepZoom(-1)}
+              disabled={disabled}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <span className="zoom-level" data-testid="zoom-level">
+              {zoom === "fit" ? "Fit" : zoom === "page" ? "Page" : `${Math.round(zoom * 100)}%`}
+            </span>
+            <button
+              type="button"
+              onClick={() => stepZoom(1)}
+              disabled={disabled}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button type="button" onClick={() => setZoom("fit")} disabled={disabled}>
+              Fit
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom("page")}
+              disabled={disabled}
+              data-testid="fit-page"
+            >
+              Page
+            </button>
+          </div>
+        ) : (
+          <span />
+        )}
+        <span
+          className={state.error ? "status status-error" : "status"}
+          role="status"
+          data-testid="status"
+        >
+          {status ?? (ready ? "Ready" : "Starting engine…")}
+        </span>
+      </footer>
+
       {dropping ? (
         <div className="dropzone" data-testid="dropzone">
           {info ? "Drop a PDF to merge, or images to convert" : "Drop a PDF or images"}
@@ -1034,6 +1048,34 @@ export function App() {
     </div>
   );
 }
+
+/**
+ * Simple glyphs rather than an icon library. A dependency for nine marks is not
+ * worth it, and these read at any size without a sprite sheet.
+ */
+const TOOL_ICONS: Record<AnnotationTool, string> = {
+  highlight: "▬",
+  underline: "U̲",
+  strike: "S̶",
+  note: "●",
+  text: "T",
+  square: "▭",
+  circle: "◯",
+  ink: "✎",
+  redact: "█",
+};
+
+const TOOL_HINTS: Record<AnnotationTool, string> = {
+  highlight: "Drag across text to highlight it",
+  underline: "Drag across text to underline it",
+  strike: "Drag across text to strike it through",
+  note: "Click a page to leave a note",
+  text: "Click a page to type on it",
+  square: "Drag to draw a box",
+  circle: "Drag to draw an oval",
+  ink: "Draw freehand",
+  redact: "Drag over content to delete it permanently",
+};
 
 const TOOL_LABELS: Record<AnnotationTool, string> = {
   highlight: "Highlight",

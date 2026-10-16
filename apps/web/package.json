@@ -17,6 +17,8 @@
     "@pdf-suite/engine": "workspace:*",
     "@pdf-suite/ui": "workspace:*",
     "@pdf-suite/workers": "workspace:*",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

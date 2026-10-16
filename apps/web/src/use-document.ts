@@ -20,6 +20,8 @@ export interface DocumentState {
   /** Source page indices in display order; reordering only rewrites this. */
   order: number[];
   handle?: FileSystemFileHandle | undefined;
+  /** Where it came from in the desktop shell, so Save can write back there. */
+  path?: string | undefined;
   /** Name of the document waiting on a password; the worker holds its bytes. */
   needsPassword?: string | undefined;
   /**
@@ -147,6 +149,7 @@ export function useDocument() {
         error: undefined,
         // A decrypted copy is a new document; it must not overwrite the original.
         handle: undefined,
+        path: undefined,
       }));
     } catch (err) {
       const wrong = err instanceof Error && err.name === "WrongPasswordError";
@@ -189,6 +192,7 @@ export function useDocument() {
         annotations: [],
         // A merged document is a different document: never write back in place.
         handle: undefined,
+        path: undefined,
       }));
     },
     [run],
@@ -211,6 +215,7 @@ export function useDocument() {
         order: info.pageSizes.map((_, i) => i),
         annotations: [],
         handle: undefined,
+        path: undefined,
       }));
     },
     [run],
@@ -247,6 +252,7 @@ export function useDocument() {
       order: info.pageSizes.map((_, i) => i),
       annotations: [],
       handle: undefined,
+      path: undefined,
     }));
   }, [run]);
 
@@ -306,6 +312,7 @@ export function useDocument() {
         annotations: [],
         // Redaction rewrites the document; it must not overwrite the original.
         handle: undefined,
+        path: undefined,
       }));
       return result;
     },
@@ -326,6 +333,7 @@ export function useDocument() {
         order: info.pageSizes.map((_, i) => i),
         annotations: [],
         handle: undefined,
+        path: undefined,
       }));
       return true;
     },
@@ -349,6 +357,7 @@ export function useDocument() {
         annotations: [],
         // Converted images are a new document with nowhere to write back to.
         handle: undefined,
+        path: undefined,
       }));
     },
     [run],
@@ -388,6 +397,7 @@ export function useDocument() {
         annotations: [],
         // Recognised pages are re-encoded images, so this is a new document.
         handle: undefined,
+        path: undefined,
       }));
       return result;
     },

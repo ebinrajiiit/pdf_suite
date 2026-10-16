@@ -1,15 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the window may do. Deliberately short: file dialogs and the files the user picks through them, and nothing else. There is no HTTP permission, because docs/PRIVACY.md allows four network calls and none of them exist yet — adding one needs an ADR and a line in that table.",
+  "description": "What the window may do. Deliberately short: native file dialogs, and the two commands that read and write the file the user picked in one. No filesystem plugin (its path scope would have to be most of the home directory), no HTTP permission and no updater \u2014 docs/PRIVACY.md allows four network calls and none exist yet, so adding one needs an ADR and a line in that table.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "dialog:allow-open",
-    "dialog:allow-save",
-    "dialog:allow-message",
-    "fs:allow-read-file",
-    "fs:allow-write-file",
-    "fs:default"
-  ]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save", "dialog:allow-message"]
 }

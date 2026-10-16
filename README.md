@@ -139,9 +139,9 @@ pnpm desktop:info    # needs Rust: curl https://sh.rustup.rs -sSf | sh
 pnpm desktop         # the same UI in a native window
 ```
 
-Scaffolded but **never compiled** — Rust was not installed where it was written.
-`apps/desktop/README.md` lists what to check on the first build. The shell has no
+Builds and runs on macOS, with native open and save dialogs. The shell has no
 HTTP permission at all, so it cannot make a network call even by accident.
+Windows and Linux have a CI job but have not been built yet.
 
 ## Licences
 
