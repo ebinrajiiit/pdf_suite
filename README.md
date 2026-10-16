@@ -45,6 +45,7 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | Turn the tool off, click a mark | Removes it. **Clear N** removes every unsaved mark |
 | **Save** after annotating | Marks become real PDF annotations — highlights, notes and free text that Acrobat and Chrome can edit, with the text under a highlight intact |
 | **Underline** / **Strike**, then drag | The same snapping, written as real `/Underline` and `/StrikeOut` marks |
+| **Form** tab in the sidebar | Lists the document's fields; fill them in and **Write values**. **Flatten** bakes them in so they cannot be changed. `p1` jumps to the field's page |
 | **Bookmarks** tab in the sidebar | The document's outline, click an entry to jump. Says so plainly when a file has none |
 | Select pages, **Split…** | Each selected page starts a new file; you get one save dialog per part |
 | Zoom **Page** | Fits a whole page in the window |
@@ -89,7 +90,10 @@ is what `pnpm e2e` asserts on every run.
 - OCR accuracy on real scans is unmeasured — ADR 0004's numbers come from
   generated images. No deskew or despeckle yet, which is where scanned accuracy
   is usually won.
-- No form filling, no redaction, no desktop app yet.
+- **Forms are filled from the side panel**, not by clicking the fields on the
+  page — the widget geometry is available, so overlaying the inputs is a
+  follow-up. XFA-only forms are not supported and say so.
+- No redaction and no desktop app yet.
 - Rendered pages are not cached between zoom levels, so zooming a 500-page
   scan re-rasterises as you scroll.
 

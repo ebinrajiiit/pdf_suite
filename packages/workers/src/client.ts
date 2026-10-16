@@ -2,6 +2,7 @@ import {
   CancelledError,
   type Annotation,
   type DocumentInfo,
+  type FieldValues,
   type OcrAssets,
   type SearchHit,
   type TextRun,
@@ -42,6 +43,13 @@ export interface PdfWorkerClient {
   ): Promise<DocumentInfo>;
   /** Recompresses the document, which reopens it. */
   compress(order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
+  /** Writes form values, optionally flattening them, and reopens the document. */
+  fillForm(
+    values: FieldValues,
+    flatten: boolean,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
   /** Sets the password applied when saving, or null to remove protection. */
   protect(password: string | null): Promise<DocumentInfo>;
   /** Searches the given display order, reporting progress per page. */
@@ -176,6 +184,12 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async compress(order, annotations) {
       return expect(await send({ kind: "compress", order, annotations }), "document").info;
+    },
+    async fillForm(values, flatten, order, annotations) {
+      return expect(
+        await send({ kind: "fillForm", values, flatten, order, annotations }),
+        "document",
+      ).info;
     },
     async protect(password) {
       return expect(await send({ kind: "protect", password }), "document").info;

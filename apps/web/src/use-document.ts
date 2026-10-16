@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Annotation } from "@pdf-suite/core";
+import type { Annotation, FieldValues } from "@pdf-suite/core";
 import {
   createPdfWorkerClient,
   type DocumentInfo,
@@ -287,6 +287,26 @@ export function useDocument() {
     setState((s) => ({ ...s, annotations: [] }));
   }, []);
 
+  /** Writes form values, optionally flattening them so they cannot be edited. */
+  const applyForm = useCallback(
+    async (values: FieldValues, flatten: boolean) => {
+      const info = await run(flatten ? "Flattening form" : "Saving form values", (worker) =>
+        worker.fillForm(values, flatten, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!info) return false;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+      }));
+      return true;
+    },
+    [run],
+  );
+
   /** Builds a document from dropped or picked images and opens it. */
   const openImages = useCallback(
     async (files: PickedFile[]) => {
@@ -418,6 +438,7 @@ export function useDocument() {
     openImages,
     exportImages,
     runOcr,
+    applyForm,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

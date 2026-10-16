@@ -39,7 +39,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [ ] Tauri desktop app for macOS, Windows, Linux (same UI)
 - [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
 - [ ] OCR: desktop native Tesseract and batch folders; preprocessing (deskew, despeckle); per-page language detection
-- [ ] Forms: fill and save AcroForms; basic form builder
+- [x] Forms: fill and save AcroForms (text, multiline, checkbox, radio, dropdown, option list), with flattening; read-only fields respected, XFA-only forms reported rather than shown empty
+- [ ] Forms: a builder for creating fields, and filling by clicking the widgets on the page instead of the side panel
 - [ ] True redaction (remove content, not just cover it) with verification
 - [ ] Office → PDF via LibreOffice (desktop only)
 - [x] Images → PDF (JPEG/PNG, one page per image or fitted to a page size) and PDF → PNG per page

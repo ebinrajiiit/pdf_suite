@@ -3,6 +3,9 @@ export type { OnProgress, PdfWorkerClient } from "./client.js";
 export { CancelledError } from "./protocol.js";
 export type {
   DocumentInfo,
+  FieldValues,
+  FormField,
+  FormInfo,
   OcrAssets,
   SearchHit,
   WorkerRequest,

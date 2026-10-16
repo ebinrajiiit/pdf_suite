@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  FormPanel,
   Outline,
   pagesAt,
   removePages,
@@ -32,6 +33,7 @@ export function App() {
     openImages,
     exportImages,
     runOcr,
+    applyForm,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -48,7 +50,8 @@ export function App() {
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
-  const [sidebar, setSidebar] = useState<"pages" | "outline">("pages");
+  const [sidebar, setSidebar] = useState<"pages" | "outline" | "form">("pages");
+  const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
   const [ocrLang, setOcrLang] = useState("eng");
   const [height, setHeight] = useState(600);
   /** A placed point waiting for its text, for the note and text tools. */
@@ -121,6 +124,7 @@ export function App() {
   // Positions move when pages are added, removed or reordered, so a stale
   // selection or a stale set of hits would point at the wrong pages.
   useEffect(() => {
+    setFieldValues({});
     setSelected(new Set());
     setHits([]);
     setHitIndex(0);
@@ -252,6 +256,17 @@ export function App() {
     }
     setSaved(written > 0 ? `Saved ${written} of ${parts.length} parts` : undefined);
   }, [name0, positions, splitAt]);
+
+  const handleForm = useCallback(
+    async (flatten: boolean) => {
+      if (Object.keys(fieldValues).length === 0 && !flatten) return;
+      if (await applyForm(fieldValues, flatten)) {
+        setFieldValues({});
+        setSaved(flatten ? "Form flattened" : "Form values written");
+      }
+    },
+    [applyForm, fieldValues],
+  );
 
   /** Runs OCR over the selection, or the whole document when nothing is selected. */
   const handleOcr = useCallback(async () => {
@@ -761,6 +776,16 @@ export function App() {
               <button
                 type="button"
                 role="tab"
+                aria-selected={sidebar === "form"}
+                className={sidebar === "form" ? "tab tab-active" : "tab"}
+                data-testid="tab-form"
+                onClick={() => setSidebar("form")}
+              >
+                Form{info.form.fields.length > 0 ? ` (${info.form.fields.length})` : ""}
+              </button>
+              <button
+                type="button"
+                role="tab"
                 aria-selected={sidebar === "outline"}
                 className={sidebar === "outline" ? "tab tab-active" : "tab"}
                 data-testid="tab-outline"
@@ -769,7 +794,42 @@ export function App() {
                 Bookmarks{info.outline.length > 0 ? ` (${info.outline.length})` : ""}
               </button>
             </div>
-            {sidebar === "pages" ? (
+            {sidebar === "form" ? (
+              <div className="sidebar-scroll">
+                <FormPanel
+                  form={info.form}
+                  values={fieldValues}
+                  onChange={(name, value) =>
+                    setFieldValues((current) => ({ ...current, [name]: value }))
+                  }
+                  onGo={(page) => {
+                    const position = state.order.indexOf(page);
+                    if (position >= 0) setGoTo(position);
+                  }}
+                />
+                {info.form.fields.length > 0 ? (
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      onClick={() => void handleForm(false)}
+                      disabled={disabled || Object.keys(fieldValues).length === 0}
+                      data-testid="apply-form"
+                    >
+                      Write values
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleForm(true)}
+                      disabled={disabled}
+                      data-testid="flatten-form"
+                      title="Write the values in and remove the fields, so they cannot be changed"
+                    >
+                      Flatten
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : sidebar === "pages" ? (
               <Thumbnails
                 order={state.order}
                 pageSizes={info.pageSizes}

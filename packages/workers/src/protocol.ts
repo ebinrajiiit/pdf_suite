@@ -4,7 +4,7 @@
 // The worker owns the document bytes: a 200 MB file is posted in once and never
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
-import type { Annotation } from "@pdf-suite/core";
+import type { Annotation, FieldValues, FormInfo } from "@pdf-suite/core";
 import type { OutlineItem, TextRun } from "@pdf-suite/engine";
 import type { OcrAssets } from "@pdf-suite/ocr";
 /**
@@ -22,6 +22,8 @@ export interface DocumentInfo {
   protected?: boolean;
   /** The document's bookmarks, empty when it has none. */
   outline: OutlineItem[];
+  /** The document's form fields, if it has an AcroForm. */
+  form: FormInfo;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface DocumentInfo {
  * `order` does, and are applied *before* the order is materialised: they are
  * keyed by source page index, which reordering would otherwise invalidate.
  */
-export type { Annotation, AnnotRect } from "@pdf-suite/core";
+export type { Annotation, AnnotRect, FieldValues, FormField, FormInfo } from "@pdf-suite/core";
 export type { OutlineItem, TextRun } from "@pdf-suite/engine";
 export type { OcrAssets } from "@pdf-suite/ocr";
 
@@ -74,6 +76,17 @@ export type WorkerRequest = { id: number } &
       }
     /** Recompresses the document, reopening the result. */
     | { kind: "compress"; order: number[]; annotations: Annotation[] }
+    /**
+     * Writes form field values, optionally flattening them so they can no longer
+     * be edited, then reopens the result.
+     */
+    | {
+        kind: "fillForm";
+        values: FieldValues;
+        flatten: boolean;
+        order: number[];
+        annotations: Annotation[];
+      }
     /** Sets the password the document is saved with, or null to remove protection. */
     | { kind: "protect"; password: string | null }
     /**

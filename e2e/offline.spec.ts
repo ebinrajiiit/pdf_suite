@@ -19,6 +19,43 @@ async function sizesOf(bytes: Buffer | Uint8Array): Promise<Size[]> {
   return doc.getPages().map((p) => [Math.round(p.getWidth()), Math.round(p.getHeight())]);
 }
 
+/** A document with one field of each kind, for the form panel. */
+async function formFixture(): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([400, 400]);
+  const form = doc.getForm();
+
+  const name = form.createTextField("student.name");
+  name.setText("");
+  name.addToPage(page, { x: 40, y: 340, width: 220, height: 20, font });
+
+  const passed = form.createCheckBox("student.passed");
+  passed.addToPage(page, { x: 40, y: 300, width: 16, height: 16 });
+
+  const grade = form.createDropdown("student.grade");
+  grade.setOptions(["A", "B", "C"]);
+  grade.addToPage(page, { x: 40, y: 250, width: 80, height: 20, font });
+
+  return Buffer.from(await doc.save());
+}
+
+/** Field values of a saved document, for checking what was written. */
+async function formValuesOf(bytes: Buffer | Uint8Array): Promise<Record<string, unknown>> {
+  const form = (await PDFDocument.load(bytes)).getForm();
+  const out: Record<string, unknown> = {};
+  for (const field of form.getFields()) {
+    const name = field.getName();
+    const any = field as unknown as {
+      getText?: () => string | undefined;
+      isChecked?: () => boolean;
+      getSelected?: () => string | string[];
+    };
+    out[name] = any.getText ? any.getText() : any.isChecked ? any.isChecked() : any.getSelected?.();
+  }
+  return out;
+}
+
 /** A document with bookmarks pointing at pages, for the outline panel. */
 async function outlineFixture(): Promise<Buffer> {
   const doc = await PDFDocument.create();
@@ -755,4 +792,62 @@ test("leaves pages that already have text alone", async ({ page }) => {
   await expect(page.getByTestId("status")).toHaveText(/skipped 1 that already had text/, {
     timeout: 180_000,
   });
+});
+
+test("fills in a form and writes the values into the file", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "application.pdf", await formFixture());
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("tab-form").click();
+  await expect(page.getByTestId("form-panel")).toBeVisible();
+
+  await page.getByTestId("field-student.name").fill("A. Student");
+  await page.getByTestId("field-student.passed").check();
+  await page.getByTestId("field-student.grade").selectOption("B");
+  await page.getByTestId("apply-form").click();
+  await expect(page.getByTestId("status")).toHaveText("Form values written", { timeout: 30_000 });
+
+  // The values are in the document, in its fields, still editable elsewhere.
+  expect(await formValuesOf(await saveAndRead(page, "Save"))).toEqual({
+    "student.name": "A. Student",
+    "student.passed": true,
+    "student.grade": ["B"],
+  });
+});
+
+test("flattening a form keeps the values and removes the fields", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "application.pdf", await formFixture());
+  await page.getByTestId("tab-form").click();
+  await page.getByTestId("field-student.name").fill("Final answer");
+  await page.getByTestId("apply-form").click();
+  await expect(page.getByTestId("status")).toHaveText("Form values written", { timeout: 30_000 });
+
+  await page.getByTestId("flatten-form").click();
+  await expect(page.getByTestId("status")).toHaveText("Form flattened", { timeout: 30_000 });
+  // No fields left to edit, and the panel says so.
+  await expect(page.getByTestId("form-empty")).toBeVisible();
+
+  const saved = await saveAndRead(page, "Save");
+  expect(await formValuesOf(saved)).toEqual({});
+  // The value survives as drawn content, which is what flattening is for.
+  const doc = await PDFDocument.load(saved);
+  expect(doc.getPageCount()).toBe(1);
+});
+
+test("a document with no form says so", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "plain.pdf", await fixture([PORTRAIT]));
+
+  await page.getByTestId("tab-form").click();
+  await expect(page.getByTestId("form-empty")).toBeVisible();
 });

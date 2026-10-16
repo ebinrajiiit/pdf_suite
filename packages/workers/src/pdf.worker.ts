@@ -2,6 +2,8 @@
 import {
   annotate,
   createQpdf,
+  fillForm,
+  readForm,
   merge,
   reorder,
   imagesToPdf,
@@ -55,14 +57,19 @@ function qpdf(): Promise<Qpdf> {
   return qpdfInstance;
 }
 
-async function info(handle: DocHandle): Promise<DocumentInfo> {
+async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<DocumentInfo> {
   const pageCount = handle.pageCount();
   const pageSizes = [];
   for (let i = 0; i < pageCount; i++) pageSizes.push(handle.pageSize(i));
   // The outline is read once per open: it is small, and the panel needs it
   // immediately rather than after another round trip.
   const outline = await handle.outline().catch(() => []);
-  return { pageCount, pageSizes, outline, repaired, protected: protection !== null };
+  // Form fields come from the bytes rather than the engine, and a document
+  // without a form reads as an empty field list rather than an error.
+  const form = bytesForForm
+    ? await readForm(bytesForForm).catch(() => ({ fields: [], hasXfa: false }))
+    : { fields: [], hasXfa: false };
+  return { pageCount, pageSizes, outline, form, repaired, protected: protection !== null };
 }
 
 function post(message: WorkerResponse, transfer: Transferable[] = []): void {
@@ -84,7 +91,7 @@ async function openBytes(id: number, next: Uint8Array): Promise<DocumentInfo> {
   throwIfCancelled(id);
   doc = handle;
   bytes = next;
-  return info(handle);
+  return info(handle, next);
 }
 
 /**
@@ -225,7 +232,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       // readable by pdf-lib for every other operation.
       protection = request.password;
       if (!doc) throw new Error("no document is open");
-      post({ id, kind: "document", info: await info(doc) });
+      post({ id, kind: "document", info: await info(doc, bytes) });
       return;
     }
     case "search": {
@@ -371,6 +378,13 @@ async function handle(request: WorkerRequest): Promise<void> {
       } finally {
         await ocr.terminate();
       }
+      return;
+    }
+    case "fillForm": {
+      const base = await materialise(id, request.order, request.annotations);
+      const filled = await fillForm(base, request.values, { flatten: request.flatten });
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, filled) });
       return;
     }
     case "save": {
