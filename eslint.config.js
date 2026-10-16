@@ -7,7 +7,10 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/dev-dist/**",
+      // Rust build output: generated JS that is not ours to lint.
+      "**/target/**",
       "corpus/**",
+      "vendor/**",
       "playwright-report/**",
       "test-results/**",
     ],

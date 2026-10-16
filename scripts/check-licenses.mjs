@@ -4,22 +4,9 @@
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const ALLOWED = new Set([
-  "MIT",
-  "BSD-2-Clause",
-  "BSD-3-Clause",
-  "Apache-2.0",
-  "ISC",
-  "0BSD",
-  "Zlib",
-  "CC0-1.0",
-  "Unlicense",
-  "MPL-2.0",
-  "BlueOak-1.0.0",
-  "Python-2.0",
-  // Bundled binaries only (libjpeg-turbo inside qpdf.wasm) — see ADR 0003.
-  "IJG",
-]);
+const ALLOWED = new Set(
+  JSON.parse(readFileSync(new URL("./allowed-licences.json", import.meta.url), "utf8")).allowed,
+);
 const BANNED_NAMES = [/mupdf/i, /^pymupdf$/i, /^fitz$/i, /ghostscript/i, /pdf2docx/i];
 
 // Evaluate simple SPDX expressions. AND binds tighter than OR, so "(MIT AND

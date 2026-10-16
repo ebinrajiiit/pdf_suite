@@ -29,3 +29,37 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # The desktop shell is a separate job: it needs a Rust toolchain and platform
+  # libraries, takes minutes rather than seconds, and nothing else depends on it.
+  # A broken web app should fail in `check` within a minute, not behind a Rust
+  # compile.
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Linux webview dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      # cargo check, not a full bundle: this answers "does the shell still
+      # compile" on every platform without spending minutes on installers.
+      # Every crate here ships inside the binary a customer installs, so it
+      # needs the same allow-list as the npm and wasm dependencies.
+      - run: pnpm check:licenses:rust
+      - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked

@@ -1,0 +1,25 @@
+{
+  "$comment": "The single allow-list, read by scripts/check-licenses.mjs (npm + the bundled wasm components in third-party.json) and scripts/check-licenses-rust.mjs (crates compiled into the desktop binary). Policy and reasoning live in docs/LICENSE-POLICY.md; a new entry here needs an ADR.",
+  "allowed": [
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Apache-2.0",
+    "ISC",
+    "0BSD",
+    "Zlib",
+    "CC0-1.0",
+    "Unlicense",
+    "MPL-2.0",
+    "BlueOak-1.0.0",
+    "Python-2.0",
+    "IJG",
+    "Unicode-3.0"
+  ],
+  "notes": {
+    "IJG": "Bundled binaries only: libjpeg-turbo, linked into qpdf.wasm. Accepted by ADR 0003 on 2026-10-16.",
+    "Unicode-3.0": "The ICU crates (icu_collections, icu_normalizer, icu_properties and siblings) that Tauri pulls in transitively. Permissive and attribution-only. PENDING: ADR 0005 proposes it and is not yet accepted.",
+    "MIT-0": "MIT with the attribution clause removed; strictly more permissive than MIT."
+  }
+}

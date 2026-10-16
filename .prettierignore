@@ -10,3 +10,6 @@ test-results/
 
 # User/editor config
 .claude/
+
+# Rust build output
+target/

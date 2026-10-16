@@ -4,13 +4,15 @@ The same web UI in a native window, so the suite can do what a browser cannot:
 native Tesseract for batch OCR, LibreOffice for Office conversion, and PKCS#11
 for USB signing tokens. None of those are wired up yet — this is the shell.
 
-## Status: scaffolded, not yet built
+## Status: builds and runs on macOS
 
-**This has never been compiled.** Rust is not installed on the machine it was
-written on, so the Rust side, the capability set and the bundle targets are
-unverified. `tauri info` does parse the config, so the JSON is at least valid.
-Treat the first `pnpm desktop` as part of the work, not as a smoke test that
-should pass.
+`cargo check` passes and `tauri build --no-bundle` produces a 23 MB binary in
+about a minute. The binary runs, the window opens, and the web UI loads inside
+it — including PDFium's 4.4 MB wasm, which compiles under the Tauri CSP and
+leaves the app reporting "Ready".
+
+Not yet done: Windows and Linux (the CI job exists but has never run), bundled
+installers (`--no-bundle` was used), and native file dialogs.
 
 The scripts are called `tauri:dev` and `tauri:build`, not `dev` and `build`, on
 purpose: the root `pnpm build` is recursive, and a `build` script here would make
@@ -59,14 +61,11 @@ worse than none.
 
 ## What to do first, when the toolchain is there
 
-1. `pnpm --filter @pdf-suite/desktop info` and fix whatever it reports.
-2. Add an icon: `src-tauri/icons/icon.png` is referenced and does not exist yet.
-   `tauri icon path/to/source.png` generates the full set.
-3. Check that the window loads the built UI (`frontendDist` points at
-   `apps/web/dist`) and that the engine wasm loads under the Tauri CSP — that is
-   the most likely first failure, since the web app fetches its wasm from its own
-   origin and Tauri serves the app from a custom protocol.
-4. Native file dialogs, as above.
-5. Then the work that justifies the shell: native Tesseract for batch folders,
+1. Native file dialogs, as above.
+2. Windows and Linux: the CI job runs `cargo check` on all three, but nothing has
+   built a bundle on either.
+3. `THIRD_PARTY_NOTICES.txt` does not cover the Rust crates yet. It must before a
+   release — see ADR 0005.
+4. Then the work that justifies the shell: native Tesseract for batch folders,
    LibreOffice for Office conversion, PKCS#11 for USB signing tokens — in that
    order of institutional value.
