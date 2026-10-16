@@ -1,4 +1,5 @@
 import { createWorker, type ImageLike, type Worker } from "tesseract.js";
+import { despeckleCanvas } from "./preprocess.js";
 
 /**
  * Tesseract OCR, with every asset served from our own origin.
@@ -32,6 +33,16 @@ export interface OcrOptions extends OcrAssets {
    * the caller asks.
    */
   cache?: "none" | "write";
+  /**
+   * Clean the page before recognising it. Speckle is the measured failure mode
+   * — 8% salt-and-pepper noise took English from 100% to 0% accuracy — so this
+   * is the one preprocessing step that pays (ADR 0004).
+   *
+   * Note that it also changes the image Tesseract embeds in a searchable PDF:
+   * the result is the cleaned scan, not the original. That is usually what a
+   * scanned document wants, but it is a change to the page, so it is opt-in.
+   */
+  despeckle?: boolean;
   onProgress?: ((status: string, progress: number) => void) | undefined;
 }
 
@@ -89,6 +100,9 @@ function sameOriginOnly(urls: string[]): void {
   }
 }
 
+export { despeckleCanvas, despeckleRgba, medianFilter3x3 } from "./preprocess.js";
+export type { Gray } from "./preprocess.js";
+
 export async function createOcr(options: OcrOptions): Promise<Ocr> {
   if (options.languages.length === 0) throw new Error("at least one language is required");
   sameOriginOnly([options.workerPath, options.corePath, options.langPath]);
@@ -106,11 +120,35 @@ export async function createOcr(options: OcrOptions): Promise<Ocr> {
       : {}),
   });
 
+  /** Decodes whatever the caller gave us into a canvas, then cleans it. */
+  async function prepared(image: OcrInput): Promise<ImageLike> {
+    if (!options.despeckle) return asImageLike(image);
+    const bitmap =
+      typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap
+        ? image
+        : await createImageBitmap(
+            image instanceof Uint8Array
+              ? // A Uint8Array may be backed by a SharedArrayBuffer as far as the
+                // types know; Blob only takes a plain one, so copy into one.
+                new Blob([new Uint8Array(image).buffer as ArrayBuffer])
+              : (image as Blob | OffscreenCanvas),
+          );
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("could not get a 2D context");
+    ctx.drawImage(bitmap, 0, 0);
+    return despeckleCanvas(canvas) as unknown as ImageLike;
+  }
+
   return {
     async recognise(image) {
       // Word boxes live inside the block tree, which only comes back when asked
       // for; the flat `text` is always there.
-      const { data } = await worker.recognize(asImageLike(image), {}, { text: true, blocks: true });
+      const { data } = await worker.recognize(
+        await prepared(image),
+        {},
+        { text: true, blocks: true },
+      );
       const words: OcrWord[] = [];
       for (const block of data.blocks ?? []) {
         for (const paragraph of block.paragraphs) {
@@ -125,7 +163,7 @@ export async function createOcr(options: OcrOptions): Promise<Ocr> {
     },
 
     async recogniseToPdf(image) {
-      const { data } = await worker.recognize(asImageLike(image), {}, { pdf: true });
+      const { data } = await worker.recognize(await prepared(image), {}, { pdf: true });
       if (!data.pdf) throw new Error("Tesseract produced no PDF output");
       return new Uint8Array(data.pdf);
     },

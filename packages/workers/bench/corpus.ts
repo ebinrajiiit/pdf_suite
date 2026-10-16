@@ -128,7 +128,8 @@ window.runCorpus = async (files, config) => {
       // the only way to see what Tesseract does with real Malayalam.
       if (config.ocr && result.textRuns === 0) {
         const t3 = performance.now();
-        await client.ocr([0], [0], [], config.ocr.languages, config.ocr.assets);
+        // Despeckled, since that is what the app does by default (ADR 0004).
+        await client.ocr([0], [0], [], config.ocr.languages, config.ocr.assets, true);
         const ocrRuns = await client.pageText(0);
         const text = ocrRuns.map((r) => r.text).join("");
         result.ocr = {

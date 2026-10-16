@@ -56,6 +56,7 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | Zoom − / + / **Fit** | Pages re-rasterise at the new scale. Ctrl/Cmd with `-`, `=`, `0` also work |
 | **From images…** or drop JPEG/PNG files | Builds a PDF, one page per image at its own aspect ratio |
 | Select pages, **To images…** | Saves those pages as PNG files |
+| **Clean up** checkbox next to OCR | Removes scanner speckle before reading the page. On by default: without it a noisy scan can come back completely empty. It does mean the saved page holds the cleaned image |
 | Pick a language, **Recognise text** | OCRs scanned pages into searchable text. Pages that already have text are skipped. The language pack (1–5 MB) downloads from this app's own origin on first use |
 | **Save** | Native save dialog where available, a download otherwise |
 

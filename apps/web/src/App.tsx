@@ -56,6 +56,9 @@ export function App() {
   /** Areas marked for redaction, by source page, before they are applied. */
   const [redactions, setRedactions] = useState<Map<number, AnnotRect[]>>(new Map());
   const [ocrLang, setOcrLang] = useState("eng");
+  // On by default: speckle is the one degradation that destroys recognition, and
+  // cleaning it costs about twice the time (ADR 0004).
+  const [despeckle, setDespeckle] = useState(true);
   const [height, setHeight] = useState(600);
   /** A placed point waiting for its text, for the note and text tools. */
   const [pendingPoint, setPendingPoint] = useState<{ page: number; x: number; y: number } | null>(
@@ -303,13 +306,13 @@ export function App() {
     const wanted = positions.length > 0 ? positions : state.order.map((_, i) => i);
     // Indic pages usually carry English too, so pair the script with eng.
     const languages = ocrLang === "eng" ? ["eng"] : [ocrLang, "eng"];
-    const result = await runOcr(wanted, languages);
+    const result = await runOcr(wanted, languages, despeckle);
     if (!result) return;
     setSaved(
       `Read ${result.recognised} page${result.recognised === 1 ? "" : "s"}` +
         (result.skipped > 0 ? `, skipped ${result.skipped} that already had text` : ""),
     );
-  }, [ocrLang, positions, runOcr, state.order]);
+  }, [despeckle, ocrLang, positions, runOcr, state.order]);
 
   /** Writes the selected pages, or the whole document, as PNG files. */
   const handleExportImages = useCallback(async () => {
@@ -571,6 +574,19 @@ export function App() {
           >
             Recognise text
           </button>
+          <label
+            className="toolbar-check"
+            title="Removes scanner speckle before reading the page. Without it, a noisy scan can come back empty."
+          >
+            <input
+              type="checkbox"
+              checked={despeckle}
+              onChange={(event) => setDespeckle(event.target.checked)}
+              disabled={disabled}
+              data-testid="ocr-despeckle"
+            />
+            Clean up
+          </label>
         </span>
 
         <span className="toolbar-group" role="group" aria-label="Annotate">

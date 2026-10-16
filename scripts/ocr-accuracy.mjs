@@ -7,7 +7,7 @@
 // blur, speckle, JPEG quality and resolution, one at a time.
 //
 //   node scripts/fetch-tessdata.mjs        # once
-//   node scripts/ocr-accuracy.mjs [--lang eng]
+//   node scripts/ocr-accuracy.mjs [--lang eng] [--despeckle]
 import { chromium } from "@playwright/test";
 import { createServer } from "vite";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -19,6 +19,7 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const benchRoot = join(repoRoot, "packages/ocr/bench");
 const argv = process.argv.slice(2);
 const lang = argv.includes("--lang") ? argv[argv.indexOf("--lang") + 1] : "eng";
+const despeckle = argv.includes("--despeckle");
 const langDir = join(repoRoot, "vendor/tessdata/fast");
 
 if (!existsSync(langDir)) {
@@ -97,7 +98,7 @@ try {
   await page.waitForFunction("typeof window.runOcrAccuracy === 'function'");
   results = await page.evaluate(
     // eslint-disable-next-line no-undef -- this arrow runs in the page, not in node
-    ([assets, s, levels]) => window.runOcrAccuracy(assets, s, levels),
+    ([assets, s, levels, clean]) => window.runOcrAccuracy(assets, s, levels, clean),
     [
       {
         workerPath: fsUrl(join(tesseractDir, "dist/worker.min.js")),
@@ -106,6 +107,7 @@ try {
       },
       sample,
       LEVELS,
+      despeckle,
     ],
   );
 } finally {
@@ -115,11 +117,14 @@ try {
 
 mkdirSync(join(repoRoot, "corpus-report"), { recursive: true });
 writeFileSync(
-  join(repoRoot, "corpus-report", `ocr-accuracy-${lang}.json`),
+  join(repoRoot, "corpus-report", `ocr-accuracy-${lang}${despeckle ? "-despeckled" : ""}.json`),
   JSON.stringify({ generatedAt: new Date().toISOString(), sample, results }, null, 2),
 );
 
-console.log(`\n${sample.label} (${sample.lang}), ground truth known\n`);
+console.log(
+  `\n${sample.label} (${sample.lang}), ground truth known` +
+    `${despeckle ? ", despeckled before OCR" : ""}\n`,
+);
 console.log("degradation        accuracy  confidence   time");
 for (const r of results) {
   const bar = "#".repeat(Math.round(r.accuracy * 20)).padEnd(20, ".");

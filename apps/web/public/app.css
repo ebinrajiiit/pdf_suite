@@ -55,6 +55,14 @@ body {
   font-weight: 600;
 }
 
+.toolbar-check {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
 .zoom-level {
   min-width: 3.2rem;
   text-align: center;

@@ -63,6 +63,7 @@ declare global {
       assets: OcrAssets,
       sample: Sample,
       levels: Degradation[],
+      despeckle?: boolean,
     ): Promise<AccuracyResult[]>;
   }
 }
@@ -157,10 +158,10 @@ async function scanLike(text: string, font: string, level: Degradation): Promise
   return canvas.convertToBlob({ type: "image/jpeg", quality: level.jpeg });
 }
 
-window.runOcrAccuracy = async (assets, sample, levels) => {
+window.runOcrAccuracy = async (assets, sample, levels, despeckle = false) => {
   const status = document.getElementById("status")!;
   const results: AccuracyResult[] = [];
-  const ocr = await createOcr({ ...assets, languages: [sample.lang] });
+  const ocr = await createOcr({ ...assets, languages: [sample.lang], despeckle });
   try {
     for (const level of levels) {
       status.textContent = `${sample.label} / ${level.label}`;

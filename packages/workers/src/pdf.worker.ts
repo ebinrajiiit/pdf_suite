@@ -321,6 +321,7 @@ async function handle(request: WorkerRequest): Promise<void> {
         // and makes OCR work offline. docs/PRIVACY.md allows this for language
         // packs, never for documents.
         cache: "write",
+        despeckle: request.despeckle ?? false,
       });
       try {
         // 72 points to the inch, so this is the usual 300 dpi floor.

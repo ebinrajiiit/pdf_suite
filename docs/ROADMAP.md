@@ -53,7 +53,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 ## Phase 2 — OCR, forms, redaction, desktop (months 3–4) → Release 2 (desktop + web)
 - [ ] Tauri desktop app for macOS, Windows, Linux (same UI)
 - [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
-- [ ] OCR: desktop native Tesseract and batch folders; preprocessing (deskew, despeckle); per-page language detection
+- [x] OCR preprocessing: despeckle (3×3 median), on by default — turns 8% speckle from 0% accuracy into 100% (ADR 0004)
+- [ ] OCR: desktop native Tesseract and batch folders; deskew (would recover the 4 points despeckling costs on a 5° skew); per-page language detection
 - [x] Forms: fill and save AcroForms (text, multiline, checkbox, radio, dropdown, option list), with flattening; read-only fields respected, XFA-only forms reported rather than shown empty
 - [ ] Forms: a builder for creating fields, and filling by clicking the widgets on the page instead of the side panel
 - [x] True redaction: page objects touching the area are removed via PDFium and the result is re-read to prove no text survives. Granularity is per text run, so an overlapping run goes whole — the safe direction, and the count is reported

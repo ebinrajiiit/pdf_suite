@@ -359,7 +359,7 @@ export function useDocument() {
    * the ocrAssets() Vite plugin — tesseract.js would otherwise use a CDN.
    */
   const runOcr = useCallback(
-    async (positions: number[], languages: string[]) => {
+    async (positions: number[], languages: string[], despeckle: boolean) => {
       const result = await run("Reading text", (worker) =>
         worker.ocr(
           positions,
@@ -374,6 +374,7 @@ export function useDocument() {
             corePath: new URL("/ocr/core/", location.href).href,
             langPath: new URL("/ocr/lang/", location.href).href,
           },
+          despeckle,
           (done, total) =>
             setState((s) => ({ ...s, busy: `Reading text, page ${done} of ${total}` })),
         ),

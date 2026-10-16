@@ -122,6 +122,12 @@ export type WorkerRequest = { id: number } &
         assets: OcrAssets;
         /** Rasterisation DPI; 300 is the usual floor for OCR. */
         dpi?: number;
+        /**
+         * Clean speckle off the page before recognising it. Measured to turn 8%
+         * salt-and-pepper noise from 0% accuracy into 100% (ADR 0004), at the
+         * cost of embedding the cleaned image rather than the original.
+         */
+        despeckle?: boolean;
       }
     | { kind: "close" }
     | { kind: "cancel"; target: number }

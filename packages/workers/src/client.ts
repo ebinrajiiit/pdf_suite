@@ -90,6 +90,7 @@ export interface PdfWorkerClient {
     annotations: Annotation[],
     languages: string[],
     assets: OcrAssets,
+    despeckle: boolean,
     onProgress?: OnProgress,
   ): Promise<{ info: DocumentInfo; recognised: number; skipped: number }>;
   /** Renders the given display positions to PNG. */
@@ -236,10 +237,10 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         "document",
       ).info;
     },
-    async ocr(positions, order, annotations, languages, assets, onProgress) {
+    async ocr(positions, order, annotations, languages, assets, despeckle, onProgress) {
       const reply = expect(
         await send(
-          { kind: "ocr", positions, order, annotations, languages, assets },
+          { kind: "ocr", positions, order, annotations, languages, assets, despeckle },
           [],
           onProgress,
         ),
