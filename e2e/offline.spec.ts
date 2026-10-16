@@ -901,3 +901,74 @@ test("redaction removes the text from the file, not just covers it", async ({ pa
   await page.getByRole("button", { name: "Find" }).click();
   await expect(page.getByTestId("hit-count")).toHaveText(/of \d+/, { timeout: 30_000 });
 });
+
+test("shapes and freehand reach the file, and the Marks panel lists them", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "shapes.pdf", await textFixture([["A page to mark up"]]));
+
+  const box = (await page.getByTestId("annots-0").boundingBox())!;
+
+  // A box, in blue.
+  await page.getByTestId("colour-blue").click();
+  await page.getByTestId("tool-square").click();
+  await page.mouse.move(box.x + 30, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 160, box.y + 130, { steps: 6 });
+  await page.mouse.up();
+
+  // An oval.
+  await page.getByTestId("tool-circle").click();
+  await page.mouse.move(box.x + 200, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 300, box.y + 140, { steps: 6 });
+  await page.mouse.up();
+
+  // A freehand squiggle: several moves so it is a real path, not a click.
+  await page.getByTestId("tool-ink").click();
+  await page.mouse.move(box.x + 40, box.y + 200);
+  await page.mouse.down();
+  for (const [dx, dy] of [
+    [30, 20],
+    [60, -10],
+    [90, 25],
+    [120, 0],
+  ]) {
+    await page.mouse.move(box.x + 40 + dx, box.y + 200 + dy);
+  }
+  await page.mouse.up();
+
+  // All three are listed where a reviewer can work through them.
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comments")).toBeVisible();
+  await expect(page.getByTestId("comment-0")).toContainText("Box");
+  await expect(page.getByTestId("comment-1")).toContainText("Oval");
+  await expect(page.getByTestId("comment-2")).toContainText("Freehand");
+
+  const subtypes = (await annotationsOf(await saveAndRead(page, "Save")))[0]!;
+  expect(subtypes).toContain("/Square");
+  expect(subtypes).toContain("/Circle");
+  expect(subtypes).toContain("/Ink");
+});
+
+test("a mark can be removed from the Marks panel", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "one.pdf", await textFixture([["A line"]]));
+
+  const box = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-square").click();
+  await page.mouse.move(box.x + 20, box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 120, box.y + 90, { steps: 4 });
+  await page.mouse.up();
+
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comment-0")).toBeVisible();
+  await page.getByRole("button", { name: /^Remove Box/ }).click();
+  await expect(page.getByTestId("comments-empty")).toBeVisible();
+
+  expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
+});

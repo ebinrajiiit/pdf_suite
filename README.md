@@ -42,6 +42,8 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | **Highlight**, then drag across a line | A highlight snapped to the text lines you crossed. On a scan with no text layer it stays as you drew it |
 | **Note**, then click a page | Asks for the text, then drops a sticky note. Hover it to read the note |
 | **Add text**, then click a page | Asks for the words, then places them on the page |
+| **Box**, **Oval**, **Draw**, and the colour dots | Shapes and freehand, in the chosen colour, written as real `/Square`, `/Circle` and `/Ink` annotations |
+| **Marks** tab in the sidebar | Every annotation with its page; click to jump to it or remove it |
 | Turn the tool off, click a mark | Removes it. **Clear N** removes every unsaved mark |
 | **Save** after annotating | Marks become real PDF annotations — highlights, notes and free text that Acrobat and Chrome can edit, with the text under a highlight intact |
 | **Underline** / **Strike**, then drag | The same snapping, written as real `/Underline` and `/StrikeOut` marks |

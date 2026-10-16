@@ -19,6 +19,8 @@ explicit non-goals in `docs/PRODUCT.md` — zero-upload is the point of this pro
 | Combine files | Merge, and insert at a chosen position |
 | Organize pages | Reorder (drag or keyboard), rotate, delete, extract, split |
 | Comment: highlight, underline, strike-through, sticky note, text box | All five, written as real PDF annotations |
+| Drawing markup: freehand, rectangle, oval | Ink, Square and Circle, with a colour palette |
+| Comments list | Marks panel: every annotation with its page, click to jump or remove |
 | Protect with a password | AES-256 via qpdf; protection survives editing and saving |
 | Reduce file size | Recompress via qpdf |
 | Scan to searchable PDF | Tesseract OCR with an invisible text layer |
@@ -35,10 +37,13 @@ explicit non-goals in `docs/PRODUCT.md` — zero-upload is the point of this pro
    roadmap explicitly contemplates licensing an SDK rather than building it.
 2. **Digital signatures** — sign, certify, and a validation panel. Phase 3; needs
    the signing-library ADR and, on desktop, PKCS#11 for USB tokens.
-3. **Comment workflow** — reply to a comment, mark resolved, a comments list,
-   author colours, and import/export of annotations (XFDF).
-4. **Freehand, shapes and stamps** — ink, lines, arrows, boxes, callouts, and a
-   stamp palette. Partly done: the annotation plumbing exists, these are new kinds.
+3. **Comment workflow** — the list and colours are done; what remains is reply
+   threads and a resolved state (`/IRT` and `/RT` on the annotation), plus
+   import/export of annotations (XFDF).
+4. **Lines, arrows, callouts and stamps** — freehand, boxes and ovals are done.
+   Lines and arrows wait on `/AP` generation, because PDFium does not synthesise
+   an appearance for `/Line`: the annotation would be in the file and invisible
+   in our own viewer.
 5. **Form builder** — create and name fields, set tab order, validation; today
    only existing fields can be filled.
 6. **Export to Word, Excel, PowerPoint** — Phase 4 lists PDF → Word/Excel as beta.

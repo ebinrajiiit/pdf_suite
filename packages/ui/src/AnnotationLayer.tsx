@@ -7,12 +7,34 @@ export type AnnotationTool =
   | "strike"
   | "note"
   | "text"
+  | "square"
+  | "circle"
+  | "ink"
   /** Marks an area whose content will be removed. Not a PDF annotation. */
   | "redact";
 
+/** Tools that are drawn by dragging a box. */
+const BOX_TOOLS = new Set<AnnotationTool>([
+  "highlight",
+  "underline",
+  "strike",
+  "square",
+  "circle",
+  "redact",
+]);
+
+/** A CSS colour from an annotation's 0-1 RGB triple. */
+function rgb(color?: [number, number, number]): string {
+  const [r, g, b] = color ?? [0.85, 0.15, 0.15];
+  return `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
+}
+
 /** What the user drew, in PDF points with the origin at the page bottom-left. */
 export type PlacedShape =
-  { kind: "rect"; rect: AnnotRect } | { kind: "point"; x: number; y: number };
+  | { kind: "rect"; rect: AnnotRect }
+  | { kind: "point"; x: number; y: number }
+  /** A freehand stroke, in PDF points. */
+  | { kind: "stroke"; points: { x: number; y: number }[] };
 
 export interface AnnotationLayerProps {
   /** Source page index. */
@@ -48,6 +70,8 @@ export function AnnotationLayer({
 }: AnnotationLayerProps) {
   const layer = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  /** Freehand points in CSS pixels while the pen is down. */
+  const [stroke, setStroke] = useState<{ x: number; y: number }[] | null>(null);
 
   /** Pointer position in CSS pixels relative to the page. */
   const positionIn = (event: React.PointerEvent) => {
@@ -86,25 +110,45 @@ export function AnnotationLayer({
       className={tool ? `annots annots-${tool}` : "annots"}
       data-testid={`annots-${page}`}
       onPointerDown={(event) => {
-        if (
-          tool !== "highlight" &&
-          tool !== "underline" &&
-          tool !== "strike" &&
-          tool !== "redact"
-        ) {
+        const { x, y } = positionIn(event);
+        if (tool === "ink") {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setStroke([{ x, y }]);
           return;
         }
-        const { x, y } = positionIn(event);
+        if (!tool || !BOX_TOOLS.has(tool)) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         setDrag({ x1: x, y1: y, x2: x, y2: y });
       }}
       onPointerMove={(event) => {
-        if (!drag) return;
         const { x, y } = positionIn(event);
+        if (stroke) {
+          // Drop points closer than a pixel: a pen emits far more than the shape
+          // needs, and every one of them ends up in the PDF.
+          const last = stroke[stroke.length - 1];
+          if (!last || Math.hypot(x - last.x, y - last.y) >= 1.5) {
+            setStroke((current) => (current ? [...current, { x, y }] : current));
+          }
+          return;
+        }
+        if (!drag) return;
         setDrag((current) => (current ? { ...current, x2: x, y2: y } : null));
       }}
-      onPointerUp={finishDrag}
-      onPointerCancel={() => setDrag(null)}
+      onPointerUp={() => {
+        if (stroke) {
+          const points = stroke;
+          setStroke(null);
+          if (points.length >= 2) {
+            onPlace?.(page, { kind: "stroke", points: points.map((p) => toPdf(p.x, p.y)) });
+          }
+          return;
+        }
+        finishDrag();
+      }}
+      onPointerCancel={() => {
+        setDrag(null);
+        setStroke(null);
+      }}
       onClick={(event) => {
         if (tool !== "note" && tool !== "text") return;
         const box = layer.current?.getBoundingClientRect();
@@ -144,6 +188,60 @@ export function AnnotationLayer({
           ));
         }
 
+        if (annotation.kind === "square" || annotation.kind === "circle") {
+          return (
+            <div
+              {...common}
+              className={`annot annot-${annotation.kind}`}
+              data-testid={`annot-${index}`}
+              style={{
+                left: `${annotation.x * scale}px`,
+                top: `${top(annotation.y + annotation.h, 0)}px`,
+                width: `${annotation.w * scale}px`,
+                height: `${annotation.h * scale}px`,
+                borderColor: rgb(annotation.color),
+              }}
+            />
+          );
+        }
+
+        if (annotation.kind === "ink") {
+          // One SVG per annotation, positioned over the page in CSS pixels.
+          const points = annotation.strokes.flat();
+          const xs = points.map((p) => p.x);
+          const ys = points.map((p) => p.y);
+          const left = Math.min(...xs);
+          const bottom = Math.min(...ys);
+          const wide = Math.max(...xs) - left || 1;
+          const tall = Math.max(...ys) - bottom || 1;
+          return (
+            <svg
+              {...common}
+              className="annot annot-ink"
+              data-testid={`annot-${index}`}
+              style={{
+                left: `${left * scale}px`,
+                top: `${top(bottom + tall, 0)}px`,
+                width: `${wide * scale}px`,
+                height: `${tall * scale}px`,
+              }}
+              viewBox={`0 0 ${wide} ${tall}`}
+              preserveAspectRatio="none"
+            >
+              {annotation.strokes.map((s, n) => (
+                <polyline
+                  key={n}
+                  points={s.map((p) => `${p.x - left},${tall - (p.y - bottom)}`).join(" ")}
+                  fill="none"
+                  stroke={rgb(annotation.color)}
+                  strokeWidth={annotation.width ?? 2}
+                  strokeLinecap="round"
+                />
+              ))}
+            </svg>
+          );
+        }
+
         if (annotation.kind === "note") {
           const size = 24 * scale;
           return (
@@ -181,6 +279,18 @@ export function AnnotationLayer({
           </div>
         );
       })}
+
+      {stroke && stroke.length > 1 ? (
+        <svg className="annot annot-ink annot-dragging-ink" style={{ inset: 0 }}>
+          <polyline
+            points={stroke.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="none"
+            stroke="#d92626"
+            strokeWidth={2}
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : null}
 
       {(redactions ?? []).map((rect, index) => (
         <div

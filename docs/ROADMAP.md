@@ -40,7 +40,9 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [ ] Verify Indic extraction from *scanned* pages, and for Hindi — every real document collected so far is born-digital, so OCR on real Indic scans is still unmeasured
 - [x] Annotate: highlight (snapped to text lines), sticky note, free text — written as real PDF annotation objects, so the text underneath survives and other viewers can edit them
 - [x] Annotate: underline and strike-through (real `/Underline` and `/StrikeOut`, opaque where a highlight is a tint)
-- [ ] Annotate: freehand and stamps; colour choice; editing an annotation after placing it; generating `/AP` appearance streams for viewers that do not synthesise them
+- [x] Annotate: freehand (Ink), box (Square), oval (Circle), and a colour palette for every kind
+- [x] A Marks panel listing every annotation with its page, click to jump, click to remove
+- [ ] Annotate: stamps; reply/resolve threads (needs `/IRT` and `/RT`); editing a mark after placing it; lines and arrows — deliberately absent because PDFium does not synthesise an appearance for `/Line`, so one would be in the file and invisible in our own viewer. Lands with `/AP` generation
 - [x] Organize: merge, insert at a position, reorder (drag thumbnails or the keyboard controls), rotate, delete, extract selected pages, save via native dialog
 - [x] `packages/core`: merge, split, reorder and rotate on pdf-lib, unit-tested
 - [x] Organize: split into several files — each selected page starts a new part, one save dialog per part (a single archive would need a zip writer)

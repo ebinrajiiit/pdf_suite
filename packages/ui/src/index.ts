@@ -4,6 +4,7 @@ export {
   type AnnotationTool,
   type PlacedShape,
 } from "./AnnotationLayer.js";
+export { CommentList, type CommentListProps } from "./CommentList.js";
 export { FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { Outline, type OutlineProps } from "./Outline.js";
 export { PageCanvas, type PageCanvasProps } from "./PageCanvas.js";

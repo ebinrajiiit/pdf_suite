@@ -117,3 +117,64 @@ test("a line over text is opaque, a highlight is not", async () => {
   expect(opacityOf(highlight)).toBeLessThan(1);
   expect(opacityOf(strike)).toBe(1);
 });
+
+test("writes shapes and freehand as their own PDF subtypes", async () => {
+  const marked = await annotate(await makeDoc(1), [
+    { kind: "square", page: 0, x: 40, y: 300, w: 100, h: 50 },
+    { kind: "circle", page: 0, x: 40, y: 200, w: 80, h: 80 },
+    {
+      kind: "ink",
+      page: 0,
+      strokes: [
+        [
+          { x: 40, y: 100 },
+          { x: 60, y: 120 },
+          { x: 80, y: 100 },
+        ],
+      ],
+    },
+  ]);
+  expect((await subtypesOf(marked))[0]).toEqual(["/Square", "/Circle", "/Ink"]);
+});
+
+test("an ink rectangle contains the strokes plus the pen width", async () => {
+  // Too tight a rectangle and viewers clip the ends of the stroke.
+  const marked = await annotate(await makeDoc(1), [
+    {
+      kind: "ink",
+      page: 0,
+      width: 4,
+      strokes: [
+        [
+          { x: 100, y: 100 },
+          { x: 200, y: 150 },
+        ],
+      ],
+    },
+  ]);
+  const doc = await PDFDocument.load(marked);
+  const rect = doc.getPage(0).node.Annots()!.lookup(0, PDFDict).get(PDFName.of("Rect"));
+  const values = String(rect).replace(/[[\]]/g, "").trim().split(/\s+/).map(Number);
+  expect(values[0]).toBeLessThanOrEqual(96);
+  expect(values[1]).toBeLessThanOrEqual(96);
+  expect(values[2]).toBeGreaterThanOrEqual(204);
+  expect(values[3]).toBeGreaterThanOrEqual(154);
+});
+
+test("rejects ink with no strokes or no points", async () => {
+  await expect(annotate(await makeDoc(1), [{ kind: "ink", page: 0, strokes: [] }])).rejects.toThrow(
+    /at least one stroke/,
+  );
+  await expect(
+    annotate(await makeDoc(1), [{ kind: "ink", page: 0, strokes: [[]] }]),
+  ).rejects.toThrow(/at least one point/);
+});
+
+test("a colour given for a shape is the colour written", async () => {
+  const marked = await annotate(await makeDoc(1), [
+    { kind: "square", page: 0, x: 10, y: 10, w: 20, h: 20, color: [0, 0.5, 1] },
+  ]);
+  const doc = await PDFDocument.load(marked);
+  const colour = String(doc.getPage(0).node.Annots()!.lookup(0, PDFDict).get(PDFName.of("C")));
+  expect(colour).toContain("0.5");
+});

@@ -10,6 +10,11 @@ import type { PdfBytes } from "./ops.js";
  * appearances for these subtypes, which was verified by rendering with each
  * engine. A viewer that does neither will show nothing, which is the known
  * limitation to fix by generating `/AP` if it ever matters.
+ *
+ * That constraint is also why there is no Line or Arrow kind. PDFium synthesises
+ * appearances for Highlight, Underline, StrikeOut, Text, Square, Circle and Ink,
+ * but not for Line — a Line annotation would be in the file and invisible in our
+ * own viewer. Add it together with `/AP` generation.
  */
 
 /** A box in PDF points, origin at the page's bottom-left. */
@@ -41,10 +46,22 @@ interface Markup extends Common {
   opacity?: number;
 }
 
+/** A freehand stroke, as a list of points in PDF points. */
+export interface InkPoint {
+  x: number;
+  y: number;
+}
+
 export type Annotation =
   | (Markup & { kind: "highlight" })
   | (Markup & { kind: "underline" })
   | (Markup & { kind: "strike" })
+  /** A box drawn on the page. PDF calls it a Square. */
+  | (Common & { kind: "square"; x: number; y: number; w: number; h: number; width?: number })
+  /** An ellipse inscribed in the given box. PDF calls it a Circle. */
+  | (Common & { kind: "circle"; x: number; y: number; w: number; h: number; width?: number })
+  /** Freehand strokes; each inner array is one continuous stroke. */
+  | (Common & { kind: "ink"; strokes: InkPoint[][]; width?: number })
   | (Common & { kind: "note"; x: number; y: number; contents: string })
   | (Common & {
       kind: "text";
@@ -57,6 +74,9 @@ export type Annotation =
     });
 
 const HIGHLIGHT_YELLOW: AnnotColor = [1, 0.85, 0.2];
+const INK_RED: AnnotColor = [0.85, 0.15, 0.15];
+/** Default stroke width in points for shapes and ink. */
+const STROKE = 2;
 const LINE_RED: AnnotColor = [0.85, 0.15, 0.15];
 const SUBTYPES: Record<MarkupKind, string> = {
   highlight: "Highlight",
@@ -137,6 +157,61 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
           ),
         );
       }
+      continue;
+    }
+
+    if (annotation.kind === "square" || annotation.kind === "circle") {
+      const width = annotation.width ?? STROKE;
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: annotation.kind === "square" ? "Square" : "Circle",
+            Rect: [
+              annotation.x,
+              annotation.y,
+              annotation.x + annotation.w,
+              annotation.y + annotation.h,
+            ],
+            C: annotation.color ?? INK_RED,
+            // Border style: the stroke width a viewer draws the outline with.
+            BS: { W: width, S: "S" },
+            CA: 1,
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "ink") {
+      if (annotation.strokes.length === 0) throw new Error("ink needs at least one stroke");
+      const points = annotation.strokes.flat();
+      if (points.length === 0) throw new Error("ink needs at least one point");
+      const width = annotation.width ?? STROKE;
+      // The rectangle has to contain the strokes plus half the pen width, or
+      // viewers clip the ends.
+      const pad = width;
+      const xs = points.map((p) => p.x);
+      const ys = points.map((p) => p.y);
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "Ink",
+            Rect: [
+              Math.min(...xs) - pad,
+              Math.min(...ys) - pad,
+              Math.max(...xs) + pad,
+              Math.max(...ys) + pad,
+            ],
+            // InkList is one array of alternating x y per stroke.
+            InkList: annotation.strokes.map((stroke) => stroke.flatMap((p) => [p.x, p.y])),
+            C: annotation.color ?? INK_RED,
+            BS: { W: width, S: "S" },
+            CA: 1,
+          }),
+        ),
+      );
       continue;
     }
 

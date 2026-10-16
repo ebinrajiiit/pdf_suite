@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CommentList,
   FormPanel,
   Outline,
   pagesAt,
@@ -10,7 +11,7 @@ import {
   type Highlight,
   type PlacedShape,
 } from "@pdf-suite/ui";
-import { isSupportedImage, type AnnotRect } from "@pdf-suite/core";
+import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
 import type { SearchHit } from "@pdf-suite/workers";
 import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
 import { useDocument } from "./use-document.js";
@@ -51,7 +52,8 @@ export function App() {
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
-  const [sidebar, setSidebar] = useState<"pages" | "outline" | "form">("pages");
+  const [sidebar, setSidebar] = useState<"pages" | "outline" | "form" | "comments">("pages");
+  const [colour, setColour] = useState<AnnotColor>(COLOURS[0]!.value);
   const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
   /** Areas marked for redaction, by source page, before they are applied. */
   const [redactions, setRedactions] = useState<Map<number, AnnotRect[]>>(new Map());
@@ -396,14 +398,28 @@ export function App() {
             r.y + r.h > rect.y,
         )
         .map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
-      addAnnotation({ kind, page, rects: overlapping.length > 0 ? overlapping : [rect] });
+      addAnnotation({
+        kind,
+        page,
+        rects: overlapping.length > 0 ? overlapping : [rect],
+        // A highlight keeps its yellow tint; a line takes the chosen colour.
+        ...(kind === "highlight" ? {} : { color: colour }),
+      });
     },
-    [addAnnotation, pageText],
+    [addAnnotation, colour, pageText],
   );
 
   const onPlace = useCallback(
     (page: number, shape: PlacedShape) => {
+      if (shape.kind === "stroke") {
+        addAnnotation({ kind: "ink", page, strokes: [shape.points], color: colour });
+        return;
+      }
       if (shape.kind === "rect") {
+        if (tool === "square" || tool === "circle") {
+          addAnnotation({ kind: tool, page, ...shape.rect, color: colour });
+          return;
+        }
         if (tool === "redact") {
           setRedactions((current) => {
             const next = new Map(current);
@@ -420,7 +436,7 @@ export function App() {
       // A note or a text box needs its words before it is worth creating.
       setPendingPoint({ page, x: shape.x, y: shape.y });
     },
-    [placeMarkup, tool],
+    [addAnnotation, colour, placeMarkup, tool],
   );
 
   const commitPending = useCallback(
@@ -429,7 +445,14 @@ export function App() {
       setPendingPoint(null);
       if (!point || contents.trim() === "") return;
       if (tool === "note") {
-        addAnnotation({ kind: "note", page: point.page, x: point.x, y: point.y, contents });
+        addAnnotation({
+          kind: "note",
+          page: point.page,
+          x: point.x,
+          y: point.y,
+          contents,
+          color: colour,
+        });
         return;
       }
       // Roughly fit the box to the text; the viewer wraps what does not fit.
@@ -443,9 +466,10 @@ export function App() {
         h: size * 1.6 * Math.ceil(contents.length / 60),
         contents,
         size,
+        color: colour,
       });
     },
-    [addAnnotation, pendingPoint, tool],
+    [addAnnotation, colour, pendingPoint, tool],
   );
 
   const status = state.error ?? state.busy ?? saved;
@@ -590,24 +614,51 @@ export function App() {
         </span>
 
         <span className="toolbar-group" role="group" aria-label="Annotate">
-          {(["highlight", "underline", "strike", "note", "text", "redact"] as const).map(
-            (which) => (
+          {(
+            [
+              "highlight",
+              "underline",
+              "strike",
+              "note",
+              "text",
+              "square",
+              "circle",
+              "ink",
+              "redact",
+            ] as const
+          ).map((which) => (
+            <button
+              key={which}
+              type="button"
+              className={tool === which ? "tool tool-active" : "tool"}
+              aria-pressed={tool === which}
+              disabled={disabled}
+              data-testid={`tool-${which}`}
+              onClick={() => {
+                setTool((current) => (current === which ? undefined : which));
+                setPendingPoint(null);
+              }}
+            >
+              {TOOL_LABELS[which]}
+            </button>
+          ))}
+          <span className="swatches" role="group" aria-label="Colour">
+            {COLOURS.map((option) => (
               <button
-                key={which}
+                key={option.name}
                 type="button"
-                className={tool === which ? "tool tool-active" : "tool"}
-                aria-pressed={tool === which}
-                disabled={disabled}
-                data-testid={`tool-${which}`}
-                onClick={() => {
-                  setTool((current) => (current === which ? undefined : which));
-                  setPendingPoint(null);
+                className={colour === option.value ? "swatch swatch-active" : "swatch"}
+                style={{
+                  background: `rgb(${option.value.map((c) => Math.round(c * 255)).join(" ")})`,
                 }}
-              >
-                {TOOL_LABELS[which]}
-              </button>
-            ),
-          )}
+                aria-label={option.name}
+                aria-pressed={colour === option.value}
+                data-testid={`colour-${option.name}`}
+                disabled={disabled}
+                onClick={() => setColour(option.value)}
+              />
+            ))}
+          </span>
           {redactionCount > 0 ? (
             <button
               type="button"
@@ -843,6 +894,16 @@ export function App() {
               <button
                 type="button"
                 role="tab"
+                aria-selected={sidebar === "comments"}
+                className={sidebar === "comments" ? "tab tab-active" : "tab"}
+                data-testid="tab-comments"
+                onClick={() => setSidebar("comments")}
+              >
+                Marks{state.annotations.length > 0 ? ` (${state.annotations.length})` : ""}
+              </button>
+              <button
+                type="button"
+                role="tab"
                 aria-selected={sidebar === "form"}
                 className={sidebar === "form" ? "tab tab-active" : "tab"}
                 data-testid="tab-form"
@@ -861,7 +922,22 @@ export function App() {
                 Bookmarks{info.outline.length > 0 ? ` (${info.outline.length})` : ""}
               </button>
             </div>
-            {sidebar === "form" ? (
+            {sidebar === "comments" ? (
+              <div className="sidebar-scroll">
+                <CommentList
+                  annotations={state.annotations}
+                  positionOf={(page) => {
+                    const at = state.order.indexOf(page);
+                    return at >= 0 ? at : page;
+                  }}
+                  onGo={(page) => {
+                    const at = state.order.indexOf(page);
+                    if (at >= 0) setGoTo(at);
+                  }}
+                  onRemove={removeAnnotation}
+                />
+              </div>
+            ) : sidebar === "form" ? (
               <div className="sidebar-scroll">
                 <FormPanel
                   form={info.form}
@@ -965,8 +1041,19 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   strike: "Strike",
   note: "Note",
   text: "Add text",
+  square: "Box",
+  circle: "Oval",
+  ink: "Draw",
   redact: "Redact",
 };
+
+/** A small fixed palette: a full picker is a dialog nobody asked for. */
+const COLOURS: { name: string; value: AnnotColor }[] = [
+  { name: "red", value: [0.85, 0.15, 0.15] },
+  { name: "blue", value: [0.15, 0.35, 0.85] },
+  { name: "green", value: [0.1, 0.55, 0.25] },
+  { name: "black", value: [0, 0, 0] },
+];
 
 function stripPdf(name: string): string {
   return name.replace(/\.pdf$/i, "");
