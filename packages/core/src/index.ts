@@ -1,1 +1,2 @@
-export type { PdfBytes } from "./ops.js";
+export { merge, reorder, rotate, split } from "./ops.js";
+export type { PageRange, PdfBytes } from "./ops.js";

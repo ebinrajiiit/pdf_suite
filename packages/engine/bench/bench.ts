@@ -3,8 +3,9 @@
 // environment, so the numbers include wasm compilation and worker overhead.
 //
 // Corpus bytes are fetched from the local dev server and never leave the page.
-import { createPdfiumEngine, createPdfjsEngine } from "../src/index.js";
-import type { DocHandle, PdfEngine, PdfiumEngine } from "../src/index.js";
+import { createPdfiumEngine, type PdfiumEngine } from "../src/pdfium/index.js";
+import { createPdfjsEngine } from "../src/pdfjs/index.js";
+import type { DocHandle, PdfEngine } from "../src/index.js";
 
 export interface BenchConfig {
   /** Same-origin URLs for every engine asset; see scripts/bench-engines.mjs. */

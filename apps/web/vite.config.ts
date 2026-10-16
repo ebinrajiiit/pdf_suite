@@ -19,6 +19,9 @@ export default defineConfig({
         // App assets only. No .pdf, no runtimeCaching: a user's document is
         // never fetched over HTTP and must never reach a cache (docs/PRIVACY.md).
         globPatterns: ["**/*.{js,css,html,svg,woff2,wasm,traineddata}"],
+        // PDFium's wasm is 4.4 MB and workbox skips anything over 2 MB by
+        // default, which would leave the engine missing offline.
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         navigateFallback: "index.html",
       },
       manifest: {

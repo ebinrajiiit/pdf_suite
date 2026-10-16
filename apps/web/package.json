@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@embedpdf/pdfium": "^2.15.1",
     "@pdf-suite/core": "workspace:*",
     "@pdf-suite/engine": "workspace:*",
     "@pdf-suite/ui": "workspace:*",

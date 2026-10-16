@@ -19,11 +19,17 @@ const ALLOWED = new Set([
 ]);
 const BANNED_NAMES = [/mupdf/i, /^pymupdf$/i, /^fitz$/i, /ghostscript/i, /pdf2docx/i];
 
-// Accept simple SPDX expressions like "(MIT OR Apache-2.0)" if any alternative is allowed.
+// Evaluate simple SPDX expressions. AND binds tighter than OR, so "(MIT AND
+// Zlib) OR GPL-2.0" is allowed via its first operand: a choice needs one allowed
+// alternative, a conjunction needs every term allowed because all of them apply.
 function isAllowed(licence) {
   if (!licence) return false;
-  const parts = licence.replace(/[()]/g, "").split(/\s+OR\s+/i);
-  return parts.some((p) => ALLOWED.has(p.trim()));
+  return licence
+    .replace(/[()]/g, "")
+    .split(/\s+OR\s+/i)
+    .some((alternative) =>
+      alternative.split(/\s+AND\s+/i).every((term) => ALLOWED.has(term.trim())),
+    );
 }
 
 let report;

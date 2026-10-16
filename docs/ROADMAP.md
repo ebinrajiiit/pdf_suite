@@ -14,13 +14,16 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 **Gate:** engine chosen, ADR merged, offline test green.
 
 ## Phase 1 — View and organize (months 1–2) → Release 1 (web PWA)
-- [ ] Viewer: virtualised pages, zoom, fit modes, thumbnails, outline/bookmarks
+- [x] Viewer: virtualised pages (only the visible window is mounted), fit-to-width, thumbnails
+- [ ] Viewer: zoom controls, further fit modes, outline/bookmarks
 - [ ] Text search with highlights (incl. Indic text)
 - [ ] Annotate: highlight, underline, strike, sticky note, free text, freehand, stamps
-- [ ] Organize: merge, split, reorder (drag thumbnails), rotate, delete, insert pages
+- [x] Organize: merge, reorder (drag thumbnails or the keyboard controls), save via native dialog
+- [x] `packages/core`: merge, split, reorder and rotate on pdf-lib, unit-tested
+- [ ] Organize UI for split, rotate, delete and insert pages
 - [ ] Compress, password protect / remove password (qpdf.wasm)
 - [ ] Repair-on-open fallback for malformed files
-- [ ] Installable PWA, fully offline after first load
+- [x] Installable PWA, fully offline after first load (engine starts with the network cut)
 
 **Gate:** renders the corpus with no regressions.
 

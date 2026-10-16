@@ -9,5 +9,8 @@
   "scripts": {
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }

@@ -1,16 +1,136 @@
+/* Linked, not imported: Vite injects imported CSS as an inline <style>, which the
+   CSP in docs/PRIVACY.md forbids. */
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
+  --line: color-mix(in srgb, currentColor 18%, transparent);
+  --sunken: color-mix(in srgb, currentColor 6%, transparent);
+}
+* {
+  box-sizing: border-box;
 }
 body {
   margin: 0;
 }
-main {
-  max-width: 44rem;
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+.toolbar button {
+  font: inherit;
+  padding: 0.3rem 0.7rem;
+}
+.toolbar-name {
+  margin-left: 0.5rem;
+  opacity: 0.75;
+}
+.toolbar-pages {
+  opacity: 0.6;
+}
+.status {
+  margin-left: auto;
+  opacity: 0.7;
+}
+.status-error {
+  opacity: 1;
+  color: #b3261e;
+  font-weight: 600;
+}
+
+.workspace {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+/* Both scrollers mount only the pages in view; the inner element carries the
+   full scroll height so the scrollbar stays honest. */
+.viewer {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: var(--sunken);
+}
+.viewer-canvas,
+.thumbs-canvas {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.viewer-page {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+}
+.viewer-page canvas {
+  display: block;
+}
+
+.thumbs {
+  flex: 0 0 160px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  padding: 0.75rem 0 0.75rem 1.25rem;
+}
+.thumb {
+  position: absolute;
+}
+.thumb canvas {
+  display: block;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.thumb-dragging {
+  opacity: 0.4;
+}
+.thumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  height: 20px;
+  font-size: 0.75rem;
+}
+.thumb-bar span {
+  flex: 1 1 auto;
+  opacity: 0.7;
+}
+.thumb-bar button {
+  font: inherit;
+  line-height: 1;
+  padding: 0 0.25rem;
+  cursor: grab;
+}
+
+.empty {
+  max-width: 34rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 3rem 1.5rem;
   line-height: 1.5;
 }
-code {
-  font-family: ui-monospace, monospace;
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

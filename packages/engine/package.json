@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./pdfium": "./src/pdfium/index.ts",
+    "./pdfjs": "./src/pdfjs/index.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
