@@ -20,6 +20,7 @@
     "notices": "node scripts/third-party-notices.mjs",
     "check:notices": "node scripts/third-party-notices.mjs --check",
     "corpus": "node scripts/corpus-runner.mjs",
+    "corpus:samples": "node scripts/fetch-sample-corpus.mjs",
     "bench:engines": "node scripts/bench-engines.mjs"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 # ADR 0002 — Rendering engine: PDFium-WASM vs pdf.js
 
-- Status: **Proposed** — the numbers below come from 6 synthetic fixtures, not the institutional corpus. Do not accept this ADR until `pnpm bench:engines` has run over the real corpus (see "What must happen before this is accepted").
-- Date: 2026-10-16
+- Status: **Proposed** — now measured on 14 documents including real Malayalam and Hindi government PDFs, which changed the picture but is still far short of the 100 the gate asks for, and includes no image-only scans. See "First real-document run" and "What must happen before this is accepted".
+- Date: 2026-10-16 (updated the same day with the first real-document numbers)
 
 ## Context
 
@@ -72,6 +72,44 @@ These cost more than the timings did and are the durable part of this spike.
 5. **pdf.js v6 no longer needs `'unsafe-eval'`** (`isEvalSupported` is gone), and both engines run under the CSP in `docs/PRIVACY.md` unchanged — `'wasm-unsafe-eval'` covers both. Verified by the adapters running in the benchmark page.
 6. **No browser memory API covers both engines.** `performance.measureUserAgentSpecificMemory()` is unavailable in Playwright's Chromium build even cross-origin-isolated, and `usedJSHeapSize` misses PDFium's wasm memory and pdf.js's worker heap. Hence process-tree RSS, which is coarse but comparable.
 
+## First real-document run
+
+`node scripts/fetch-sample-corpus.mjs` pulls public-domain Indian government
+documents — Kerala Legislative Assembly proceedings in Malayalam, Rajya Sabha and
+eParlib debates in Hindi — alongside generated edge cases (mangled header, junk
+prefix, truncated body, every page rotation, 500 pages, AES-256 encrypted). 14
+files, 530 pages.
+
+| | pdf.js | PDFium |
+| --- | --- | --- |
+| Open, median / p95 | 92 ms / 397 ms | **0.1 ms / 2.6 ms** |
+| First-page render, median / p95 | 36 ms / 58 ms | **12 ms / 44 ms** |
+| Text extraction, median | 1.9 ms | **0.8 ms** |
+| Characters extracted (all files) | 12,044 | **12,500** |
+| Peak browser RSS (both engines in one run) | 11.7 MB | 14.9 MB |
+| Files it could not open | **2** | 3 |
+
+Raster agreement on real documents: 11 pages compared, median difference
+**0.98 %**, one file above 2 %, no page-size disagreements.
+
+### The finding that complicates the choice
+
+**PDFium is less tolerant of a damaged file than pdf.js.** The mangled-header
+document opens in pdf.js and not in PDFium — the one failure separating them,
+since both correctly refuse the truncated file and both correctly demand a
+password for the encrypted one.
+
+This matters less than it looks, because the app does not call the engine raw:
+`pnpm corpus` reports that same file as **repaired on open and then opened**, via
+the qpdf pass from ADR 0003. So the pipeline is at least as tolerant as pdf.js,
+while keeping PDFium's speed. It does mean the engine choice and the repair
+fallback are now coupled: dropping qpdf would make PDFium strictly worse than
+pdf.js on damaged input.
+
+The other change from the synthetic run: PDFium now extracts *more* text than
+pdf.js (12,500 vs 12,044 characters) on documents with real Indic text layers,
+where the synthetic fixtures had them exactly equal.
+
 ## Options
 
 1. **PDFium primary, pdf.js not shipped.** Fastest on every measured axis, one smaller download, and the same engine Chrome itself uses. Costs: a 4.4 MB indivisible wasm payload, a precompiled binary we do not build ourselves, and a C++ engine whose crashes are harder to diagnose from TypeScript.
@@ -88,7 +126,8 @@ Confidence is **low** until the corpus run happens. The fixtures exercise none o
 
 ## What must happen before this is accepted
 
-- [ ] Collect at least 100 corpus files spanning `scanned/`, `forms/`, `signed/`, `malformed/`, `large/` and `office/`, including Malayalam and Hindi.
+- [x] A starter corpus exists: 14 files, 8 of them real public-domain Malayalam and Hindi government documents (`pnpm corpus:samples`).
+- [ ] Reach at least 100 files spanning `scanned/`, `forms/`, `signed/`, `malformed/`, `large/` and `office/`. The starter set has **no image-only scans**, no forms, and nothing signed with a DSC — so fidelity on photocopies and on scanned Indic text is still unmeasured.
 - [ ] `pnpm bench:engines` over them, plus `--engine pdfjs` and `--engine pdfium` for attributable memory.
 - [ ] Confirm the 200 MB / 500-page target: open and show page 1 under 2 s.
 - [ ] Eyeball every page where the engines disagree by more than 2 %.

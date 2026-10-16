@@ -6,10 +6,10 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] pnpm monorepo scaffold (apps/web, packages/engine, core, workers, ui)
 - [x] CI: lint, typecheck, unit tests, `check:licenses`, offline e2e test
 - [x] Strict CSP (`connect-src 'self'`) and offline e2e test passing on an empty app
-- [ ] Engine spike: PDFium-WASM vs pdf.js on 100 corpus files (speed, fidelity, memory) → ADR 0002
+- [ ] Engine spike: PDFium-WASM vs pdf.js on 100 corpus files → ADR 0002. Run on 14 files so far (8 real Malayalam/Hindi government PDFs): PDFium is 3–900x faster and extracts more text, but fails on a damaged header that pdf.js opens — the qpdf repair pass covers that gap
 - [x] OCR spike: Tesseract on generated Malayalam + Hindi samples → ADR 0004 (eng 100%, hin 100%, mal 89% which turned out to be a chillu spelling mismatch, now fixed in search). Real scans still needed
 - [x] Corpus runner script (`pnpm corpus`) — drives the real worker pipeline (open with repair, render, round-trip, re-open), fails on any regression against the last clean run, and records no filenames
-- [ ] Start collecting the 1,000-file test corpus (kept out of git)
+- [ ] Reach the 1,000-file test corpus (kept out of git). `pnpm corpus:samples` fetches a 14-file starter set of public-domain Malayalam and Hindi government documents plus generated edge cases; the institutional material (grade cards, exam papers, DSC-signed letters, department forms) and any image-only scans still have to come from the lab
 
 **Gate:** engine chosen, ADR merged, offline test green.
 

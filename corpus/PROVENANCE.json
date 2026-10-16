@@ -1,0 +1,120 @@
+{
+  "$comment": "Where every file in corpus/ came from, and under what licence. Written by scripts/fetch-sample-corpus.mjs. corpus/ is git-ignored; this file records that the downloaded documents are openly licensed and that the rest are generated.",
+  "generatedAt": "2026-10-16T09:27:15.512Z",
+  "files": [
+    {
+      "file": "large/500-pages.pdf",
+      "bytes": 455178,
+      "sha256": "8655e80732df40c1a75d4d0646ddd9eb2c983e656c726fe04f93f06f46af1826",
+      "kind": "synthetic: 500 pages, for virtualisation and batch timing",
+      "licence": "n/a — generated"
+    },
+    {
+      "file": "malformed/header-mangled.pdf",
+      "bytes": 3420,
+      "sha256": "ee1609d7ee90a0074bc467e8ac4a8b6961cbc3fd33911cd91e484eda70a1a82c",
+      "kind": "synthetic: header destroyed (qpdf can repair this)",
+      "licence": "n/a — generated"
+    },
+    {
+      "file": "malformed/junk-before-header.pdf",
+      "bytes": 3840,
+      "sha256": "8b5b5146dc7449e163ee6b1edb9ff7202344f7be7844ddb58935a3e77b825ab5",
+      "kind": "synthetic: junk prepended (qpdf can repair this)",
+      "licence": "n/a — generated"
+    },
+    {
+      "file": "malformed/rotated-pages.pdf",
+      "bytes": 1533,
+      "sha256": "4022909a325600d9f1f4175a6c130b196d18cad21f551c6deee2fa74b4c504b4",
+      "kind": "synthetic: every page rotation, which page sizing gets wrong if mishandled",
+      "licence": "n/a — generated"
+    },
+    {
+      "file": "malformed/truncated.pdf",
+      "bytes": 2052,
+      "sha256": "970cdd149802d9c097ce9fc3d0fd09f3c1a559cc65cf61c5e9428e583c1db57b",
+      "kind": "synthetic: cut off mid-body (qpdf cannot repair this; it must fail cleanly)",
+      "licence": "n/a — generated"
+    },
+    {
+      "file": "scanned/eparlib.nic.in.462587.pdf",
+      "bytes": 25327,
+      "sha256": "71867e5e3c3b7ca0165455b0b863c3534267298dfc62a450efb6b074a7b54ffd",
+      "source": "https://archive.org/download/eparlib.nic.in.462587/75109.pdf",
+      "title": "TECHNICAL COMMITTEE FOR SANCTIONING CROP LOANS (25-Feb-2000)",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/eparlib.nic.in.532292.pdf",
+      "bytes": 18324,
+      "sha256": "e8e9b95e41534eb6c3e823b97456acd922c476c46dd69c2d367161d779835feb",
+      "source": "https://archive.org/download/eparlib.nic.in.532292/32647.pdf",
+      "title": "TRANSFER OF SURPLUS LAND (10-May-2005)",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/keralalegislativeassembly.proceedings.484099.pdf",
+      "bytes": 770485,
+      "sha256": "d76aa0b5137a7b2a30c50a60678384510808b6a21df0c05cf323a3ec6fa26e1c",
+      "source": "https://archive.org/download/keralalegislativeassembly.proceedings.484099/484099.pdf",
+      "title": "Working of Kerala Water Authority / കേരളാ വാട്ടര്‍ അതോറിറ്റിയുടെ പ്രവര്‍ത്തനം",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/keralalegislativeassembly.proceedings.485165.pdf",
+      "bytes": 202954,
+      "sha256": "cdc26ebd33122e6d978472ca917ae2ba0905748f62811fbdeba8aad2667ace6e",
+      "source": "https://archive.org/download/keralalegislativeassembly.proceedings.485165/485165.pdf",
+      "title": "E.S.I Benefits to Intermix Factory Labourers / ഇന്‍റര്‍മിക്സ് ഫാക്ടറി തൊഴിലാളികള്‍ക്ക് ഇ.എസ്.ഐ. ആനുകൂല്യം",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/keralalegislativeassembly.proceedings.494229.pdf",
+      "bytes": 223209,
+      "sha256": "c756717bf58b7dc6bc102d081155d673e1e6bfe2eaf6a3ea6f9d061a070e298f",
+      "source": "https://archive.org/download/keralalegislativeassembly.proceedings.494229/494229.pdf",
+      "title": "Adoor Engineering College / അടൂര്‍ എഞ്ചിനീയറിംഗ് കോളേജ്",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/keralalegislativeassembly.proceedings.519420.pdf",
+      "bytes": 119550,
+      "sha256": "a62cef2c6539a0563c06c1ddc35cc394177abed0c29b85c6c2ad46fc24e1fc46",
+      "source": "https://archive.org/download/keralalegislativeassembly.proceedings.519420/519420.pdf",
+      "title": "Service Distribution Unit of Revenue Departments / റവന്യൂ വകുപ്പില്‍ സേവന വിതരണ യൂണിറ്റ്",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/rsdebate.nic.in.31790.pdf",
+      "bytes": 61145,
+      "sha256": "7ae4b937ae9cead60076b58b44f3690270cbd2534c5cbbbcdca1b90d29d5fa9a",
+      "source": "https://archive.org/download/rsdebate.nic.in.31790/PQ_210_07052007_U3442_p156_p157.pdf",
+      "title": "Power shortage during summer months (7-May-2007)",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "scanned/rsdebate.nic.in.324336.pdf",
+      "bytes": 77303,
+      "sha256": "729d02fe2af7970cfc46400e8b9e3168f5fb3552826bfae23a9472bacc03f2dc",
+      "source": "https://archive.org/download/rsdebate.nic.in.324336/PQ_139_06081986_U1433_p78_p79.pdf",
+      "title": "Chief Executive of the various Indian Air Services (6-Aug-1986)",
+      "licence": "http://creativecommons.org/licenses/publicdomain/",
+      "kind": "real document, downloaded"
+    },
+    {
+      "file": "signed/password-corpus.pdf",
+      "bytes": 2863,
+      "sha256": "0d511164281cf5dd0da054423989c689f357aef5dbd396f631d63b32a0cdfc35",
+      "kind": "synthetic: AES-256 encrypted, password is `corpus`",
+      "licence": "n/a — generated"
+    }
+  ]
+}

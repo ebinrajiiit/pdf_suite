@@ -104,9 +104,15 @@ is what `pnpm e2e` asserts on every run.
 ## Testing against your own documents
 
 ```bash
-# Put real PDFs in corpus/ (never committed), then:
-pnpm corpus
+pnpm corpus:samples   # fetch a starter corpus: real public-domain Malayalam and
+                      # Hindi government PDFs, plus generated edge cases
+pnpm corpus           # open, render, round-trip and re-open every file
+pnpm bench:engines    # PDFium vs pdf.js over the same files (ADR 0002)
 ```
+
+Add your own documents to `corpus/` as well — that is what the gate is for.
+`corpus/PROVENANCE.json` records where each file came from and under what
+licence. Nothing in `corpus/` is ever committed.
 
 Each file is opened (with the repair fallback), page 1 rendered, text
 extracted, and the document round-tripped and re-opened. It prints counts,
