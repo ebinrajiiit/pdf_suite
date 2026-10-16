@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { ocrAssets } from "./ocr-assets.js";
 
 // No @vitejs/plugin-react on purpose: its dev Fast-Refresh preamble is an inline
 // <script>, which the CSP in docs/PRIVACY.md forbids. Vite's esbuild already
@@ -9,6 +10,7 @@ export default defineConfig({
   server: { port: 5173, strictPort: true },
   preview: { port: 4173, strictPort: true },
   plugins: [
+    ocrAssets(),
     VitePWA({
       registerType: "autoUpdate",
       // External script, not inline — the CSP has no 'unsafe-inline'.
@@ -22,6 +24,9 @@ export default defineConfig({
         // PDFium's wasm is 4.4 MB and workbox skips anything over 2 MB by
         // default, which would leave the engine missing offline.
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        // The OCR core and language data are ~16 MB and most users never run
+        // OCR, so they are fetched on first use instead of tripling first load.
+        globIgnores: ["**/ocr/**"],
         navigateFallback: "index.html",
       },
       manifest: {

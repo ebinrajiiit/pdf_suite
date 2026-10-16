@@ -691,3 +691,68 @@ test("turns images into a PDF and pages back into images", async ({ page }) => {
   expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a"); // PNG signature
   expect(download.suggestedFilename()).toMatch(/page 1\.png$/);
 });
+
+test("makes a scanned page searchable with OCR", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A page that is only a picture of text, which is what a scan is. The image is
+  // drawn in the browser because Node cannot rasterise text, then dropped on the
+  // window so it goes through the real images-to-PDF path.
+  const words = "Result sheet for semester one";
+  await page.evaluate(async (text) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1400;
+    canvas.height = 220;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000";
+    ctx.font = '90px "Helvetica Neue", Helvetica, Arial, sans-serif';
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 40, 110);
+    const blob = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((b) => resolve(b!), "image/png"),
+    );
+    const file = new File([blob], "scan.png", { type: "image/png" });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    const app = document.querySelector(".app")!;
+    app.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+  }, words);
+
+  await expect(page.getByText("1 page")).toBeVisible({ timeout: 30_000 });
+
+  // Nothing to find yet: it is a picture, with no text layer at all.
+  await page.getByTestId("search-input").fill("semester");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+
+  // OCR downloads the language pack from our own origin on first use, so this is
+  // the slowest test here by far.
+  await page.getByTestId("run-ocr").click();
+  await expect(page.getByTestId("status")).toHaveText(/Read 1 page/, { timeout: 180_000 });
+
+  // Now the same search finds it, which is the whole point of a searchable PDF.
+  await page.getByTestId("search-input").fill("semester");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText(/of \d+/, { timeout: 60_000 });
+
+  // And the text layer is in the file, not just in the viewer.
+  const saved = await saveAndRead(page, "Save");
+  expect(saved.length).toBeGreaterThan(0);
+});
+
+test("leaves pages that already have text alone", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "digital.pdf", await textFixture([["Already selectable text"]]));
+  await page.getByTestId("run-ocr").click();
+  // Re-OCRing a digital page would replace real text with a picture of it.
+  await expect(page.getByTestId("status")).toHaveText(/skipped 1 that already had text/, {
+    timeout: 180_000,
+  });
+});

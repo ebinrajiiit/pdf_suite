@@ -6,6 +6,7 @@
 
 import type { Annotation } from "@pdf-suite/core";
 import type { OutlineItem, TextRun } from "@pdf-suite/engine";
+import type { OcrAssets } from "@pdf-suite/ocr";
 /**
  * `order` on a request is source page indices in their display positions, with
  * omitted pages deleted. Every request that rewrites bytes applies it first, so
@@ -30,6 +31,7 @@ export interface DocumentInfo {
  */
 export type { Annotation, AnnotRect } from "@pdf-suite/core";
 export type { OutlineItem, TextRun } from "@pdf-suite/engine";
+export type { OcrAssets } from "@pdf-suite/ocr";
 
 /** One search hit, in the display position the user is looking at. */
 export interface SearchHit {
@@ -90,6 +92,20 @@ export type WorkerRequest = { id: number } &
     | { kind: "fromImages"; images: { bytes: ArrayBuffer; type: string }[] }
     /** Renders the given display positions to PNG, for export. */
     | { kind: "toImages"; positions: number[]; order: number[]; scale: number }
+    /**
+     * Makes the given display positions searchable with OCR. Pages that already
+     * have a text layer are left exactly as they are.
+     */
+    | {
+        kind: "ocr";
+        positions: number[];
+        order: number[];
+        annotations: Annotation[];
+        languages: string[];
+        assets: OcrAssets;
+        /** Rasterisation DPI; 300 is the usual floor for OCR. */
+        dpi?: number;
+      }
     | { kind: "close" }
     | { kind: "cancel"; target: number }
   );
@@ -103,6 +119,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "runs"; runs: TextRun[] }
   | { kind: "parts"; parts: ArrayBuffer[] }
   | { kind: "images"; images: { position: number; bytes: ArrayBuffer }[] }
+  | { kind: "ocrDone"; info: DocumentInfo; recognised: number; skipped: number }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -122,6 +139,7 @@ export type TerminalResponse = Extract<
       | "runs"
       | "parts"
       | "images"
+      | "ocrDone"
       | "closed"
       | "cancelled"
       | "error";

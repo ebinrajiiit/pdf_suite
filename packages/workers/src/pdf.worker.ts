@@ -17,6 +17,7 @@ import {
   type PdfEngine,
 } from "@pdf-suite/engine";
 import { createPdfiumEngine } from "@pdf-suite/engine/pdfium";
+import { createOcr } from "@pdf-suite/ocr";
 import {
   CancelledError,
   type DocumentInfo,
@@ -148,6 +149,13 @@ async function materialise(
   const applied = await reorder(marked, order);
   throwIfCancelled(id);
   return applied;
+}
+
+/** One page of a document as its own single-page document. */
+async function splitOne(bytes: Uint8Array, index: number): Promise<Uint8Array> {
+  const [only] = await split(bytes, [[index, index]]);
+  if (!only) throw new Error(`could not take page ${index}`);
+  return only;
 }
 
 async function handle(request: WorkerRequest): Promise<void> {
@@ -297,6 +305,72 @@ async function handle(request: WorkerRequest): Promise<void> {
         post({ id, kind: "progress", done: images.length, total: request.positions.length });
       }
       post({ id, kind: "images", images }, transfer);
+      return;
+    }
+    case "ocr": {
+      if (!doc) throw new Error("no document is open");
+      const base = await materialise(id, request.order, request.annotations);
+      throwIfCancelled(id);
+
+      const ocr = await createOcr({
+        ...request.assets,
+        languages: request.languages,
+        // Language data is big; keeping it lets a second run start immediately
+        // and makes OCR work offline. docs/PRIVACY.md allows this for language
+        // packs, never for documents.
+        cache: "write",
+      });
+      try {
+        // 72 points to the inch, so this is the usual 300 dpi floor.
+        const scale = (request.dpi ?? 300) / 72;
+        const wanted = new Set(request.positions);
+        const pages: Uint8Array[] = [];
+        let recognised = 0;
+        let skipped = 0;
+
+        for (const [position, page] of request.order.entries()) {
+          throwIfCancelled(id);
+          // Each page becomes its own document, then they are merged back. For a
+          // 500-page scan that is 500 merges — acceptable for now, but the
+          // obvious thing to optimise if batch OCR gets slow.
+          const single = await splitOne(base, position);
+
+          if (!wanted.has(position)) {
+            pages.push(single);
+            continue;
+          }
+          // A page that already has text is left alone: re-OCRing it would
+          // replace real text with a picture of it.
+          const existing = await doc.extractText(page);
+          if (existing.some((run) => run.text.trim() !== "")) {
+            pages.push(single);
+            skipped++;
+            post({ id, kind: "progress", done: position + 1, total: request.order.length });
+            continue;
+          }
+
+          const bitmap = await doc.renderPage(page, scale);
+          try {
+            pages.push(await ocr.recogniseToPdf(bitmap));
+            recognised++;
+          } finally {
+            bitmap.close();
+          }
+          post({ id, kind: "progress", done: position + 1, total: request.order.length });
+        }
+
+        const merged = pages.length === 1 ? pages[0]! : await merge(pages);
+        throwIfCancelled(id);
+        post({
+          id,
+          kind: "ocrDone",
+          info: await openBytes(id, merged),
+          recognised,
+          skipped,
+        });
+      } finally {
+        await ocr.terminate();
+      }
       return;
     }
     case "save": {

@@ -2,6 +2,7 @@ import {
   CancelledError,
   type Annotation,
   type DocumentInfo,
+  type OcrAssets,
   type SearchHit,
   type TextRun,
   type TerminalResponse,
@@ -54,6 +55,18 @@ export interface PdfWorkerClient {
   split(at: number[], order: number[], annotations: Annotation[]): Promise<ArrayBuffer[]>;
   /** Builds a document from images and opens it. */
   fromImages(images: { bytes: ArrayBuffer; type: string }[]): Promise<DocumentInfo>;
+  /**
+   * Makes the given display positions searchable. Pages that already have text
+   * are left alone and counted as skipped.
+   */
+  ocr(
+    positions: number[],
+    order: number[],
+    annotations: Annotation[],
+    languages: string[],
+    assets: OcrAssets,
+    onProgress?: OnProgress,
+  ): Promise<{ info: DocumentInfo; recognised: number; skipped: number }>;
   /** Renders the given display positions to PNG. */
   toImages(
     positions: number[],
@@ -182,6 +195,17 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         ),
         "document",
       ).info;
+    },
+    async ocr(positions, order, annotations, languages, assets, onProgress) {
+      const reply = expect(
+        await send(
+          { kind: "ocr", positions, order, annotations, languages, assets },
+          [],
+          onProgress,
+        ),
+        "ocrDone",
+      );
+      return { info: reply.info, recognised: reply.recognised, skipped: reply.skipped };
     },
     async toImages(positions, order, scale, onProgress) {
       return expect(

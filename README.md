@@ -54,6 +54,7 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | Zoom − / + / **Fit** | Pages re-rasterise at the new scale. Ctrl/Cmd with `-`, `=`, `0` also work |
 | **From images…** or drop JPEG/PNG files | Builds a PDF, one page per image at its own aspect ratio |
 | Select pages, **To images…** | Saves those pages as PNG files |
+| Pick a language, **Recognise text** | OCRs scanned pages into searchable text. Pages that already have text are skipped. The language pack (1–5 MB) downloads from this app's own origin on first use |
 | **Save** | Native save dialog where available, a download otherwise |
 
 ### Testing the privacy claim
@@ -79,9 +80,15 @@ is what `pnpm e2e` asserts on every run.
   destroyed cross-reference table or a truncated file (ADR 0003).
 - **Indic text** has tested *matching* (normalisation forms) but no verified
   *extraction* from real Malayalam or Hindi documents — that needs the corpus.
-- **No OCR in the app yet.** The engine and language handling are proven
-  (`node scripts/fetch-tessdata.mjs && node scripts/ocr-spike.mjs`, ADR 0004),
-  but wiring it into the viewer is the next slice.
+- **OCR needs language data present.** Run `node scripts/fetch-tessdata.mjs`
+  once; it lands in a git-ignored `vendor/` that dev, preview and builds serve
+  from. A release has to host these files (ADR 0004).
+- **OCR replaces a recognised page with an image plus an invisible text layer**
+  at 300 dpi, so a recognised page is re-encoded. Pages that already have text
+  are skipped untouched.
+- OCR accuracy on real scans is unmeasured — ADR 0004's numbers come from
+  generated images. No deskew or despeckle yet, which is where scanned accuracy
+  is usually won.
 - No form filling, no redaction, no desktop app yet.
 - Rendered pages are not cached between zoom levels, so zooming a 500-page
   scan re-rasterises as you scroll.

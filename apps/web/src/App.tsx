@@ -31,6 +31,7 @@ export function App() {
     splitAt,
     openImages,
     exportImages,
+    runOcr,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -48,6 +49,7 @@ export function App() {
   const [askProtect, setAskProtect] = useState(false);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
   const [sidebar, setSidebar] = useState<"pages" | "outline">("pages");
+  const [ocrLang, setOcrLang] = useState("eng");
   const [height, setHeight] = useState(600);
   /** A placed point waiting for its text, for the note and text tools. */
   const [pendingPoint, setPendingPoint] = useState<{ page: number; x: number; y: number } | null>(
@@ -250,6 +252,19 @@ export function App() {
     }
     setSaved(written > 0 ? `Saved ${written} of ${parts.length} parts` : undefined);
   }, [name0, positions, splitAt]);
+
+  /** Runs OCR over the selection, or the whole document when nothing is selected. */
+  const handleOcr = useCallback(async () => {
+    const wanted = positions.length > 0 ? positions : state.order.map((_, i) => i);
+    // Indic pages usually carry English too, so pair the script with eng.
+    const languages = ocrLang === "eng" ? ["eng"] : [ocrLang, "eng"];
+    const result = await runOcr(wanted, languages);
+    if (!result) return;
+    setSaved(
+      `Read ${result.recognised} page${result.recognised === 1 ? "" : "s"}` +
+        (result.skipped > 0 ? `, skipped ${result.skipped} that already had text` : ""),
+    );
+  }, [ocrLang, positions, runOcr, state.order]);
 
   /** Writes the selected pages, or the whole document, as PNG files. */
   const handleExportImages = useCallback(async () => {
@@ -476,6 +491,32 @@ export function App() {
             title="Save the selected pages, or all of them, as PNG"
           >
             To images…
+          </button>
+        </span>
+
+        <span className="toolbar-group" role="group" aria-label="Text recognition">
+          <label className="visually-hidden" htmlFor="ocr-lang">
+            OCR language
+          </label>
+          <select
+            id="ocr-lang"
+            value={ocrLang}
+            onChange={(event) => setOcrLang(event.target.value)}
+            disabled={disabled}
+            data-testid="ocr-lang"
+          >
+            <option value="eng">English</option>
+            <option value="mal">Malayalam</option>
+            <option value="hin">Hindi</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => void handleOcr()}
+            disabled={disabled}
+            data-testid="run-ocr"
+            title="Make scanned pages searchable. Downloads the language pack once."
+          >
+            Recognise text
           </button>
         </span>
 

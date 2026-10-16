@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@pdf-suite/core": "workspace:*",
-    "@pdf-suite/engine": "workspace:*"
+    "@pdf-suite/engine": "workspace:*",
+    "@pdf-suite/ocr": "workspace:*"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",

@@ -309,6 +309,45 @@ export function useDocument() {
     [run],
   );
 
+  /**
+   * Makes pages searchable with OCR. Assets come from our own origin, served by
+   * the ocrAssets() Vite plugin — tesseract.js would otherwise use a CDN.
+   */
+  const runOcr = useCallback(
+    async (positions: number[], languages: string[]) => {
+      const result = await run("Reading text", (worker) =>
+        worker.ocr(
+          positions,
+          stateRef.current.order,
+          stateRef.current.annotations,
+          languages,
+          // Absolute URLs, not root-relative: tesseract.js wraps its worker in
+          // a blob, and inside a blob worker importScripts has no base path to
+          // resolve "/ocr/..." against.
+          {
+            workerPath: new URL("/ocr/worker.min.js", location.href).href,
+            corePath: new URL("/ocr/core/", location.href).href,
+            langPath: new URL("/ocr/lang/", location.href).href,
+          },
+          (done, total) =>
+            setState((s) => ({ ...s, busy: `Reading text, page ${done} of ${total}` })),
+        ),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        // Recognised pages are re-encoded images, so this is a new document.
+        handle: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
   /** Renders the given display positions to PNG. */
   const exportImages = useCallback(
     async (positions: number[], scale = 2) =>
@@ -378,6 +417,7 @@ export function useDocument() {
     splitAt,
     openImages,
     exportImages,
+    runOcr,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

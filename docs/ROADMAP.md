@@ -37,7 +37,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 
 ## Phase 2 — OCR, forms, redaction, desktop (months 3–4) → Release 2 (desktop + web)
 - [ ] Tauri desktop app for macOS, Windows, Linux (same UI)
-- [ ] OCR to searchable PDF in the app: wire packages/ocr into the worker, page by page, with the language-pack download — the spike (ADR 0004) proved the pieces work
+- [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
+- [ ] OCR: desktop native Tesseract and batch folders; preprocessing (deskew, despeckle); per-page language detection
 - [ ] Forms: fill and save AcroForms; basic form builder
 - [ ] True redaction (remove content, not just cover it) with verification
 - [ ] Office → PDF via LibreOffice (desktop only)
