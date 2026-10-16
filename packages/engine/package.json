@@ -13,10 +13,10 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@embedpdf/pdfium": "^2.15.1",
-    "pdfjs-dist": "^6.4.299"
+    "@embedpdf/pdfium": "^2.15.1"
   },
   "devDependencies": {
-    "@types/emscripten": "^1.41.6"
+    "@types/emscripten": "^1.41.6",
+    "pdfjs-dist": "^6.4.299"
   }
 }

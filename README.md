@@ -117,6 +117,20 @@ baseline only moves on a clean run or with `--accept`.
 This is the Phase 1 gate, and the same corpus is what ADR 0002 (engine choice)
 and ADR 0004 (OCR accuracy) are waiting on.
 
+## Licences
+
+```bash
+pnpm check:licenses   # fails on a non-allow-listed licence, npm or bundled
+pnpm notices          # regenerates THIRD_PARTY_NOTICES.txt
+pnpm check:notices    # fails if that file is stale (runs in CI)
+```
+
+`THIRD_PARTY_NOTICES.txt` is generated and committed. It covers the npm
+production dependencies and the components compiled into our WebAssembly
+builds, which npm cannot see — qpdf, PDFium, libjpeg-turbo, zlib, Tesseract and
+its language data. Upstream texts that a package does not ship are committed
+under `notices/`, pinned to the version we link.
+
 ## Docs
 - `CLAUDE.md` — rules for Claude Code (privacy, licences, conventions)
 - `docs/PRODUCT.md` — who it's for and why it wins

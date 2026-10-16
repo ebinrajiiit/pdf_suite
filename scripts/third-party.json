@@ -1,11 +1,11 @@
 {
-  "$comment": "Non-npm components shipped in the bundle: WASM builds and native binaries. docs/LICENSE-POLICY.md \u00a72. `licence` must be an SPDX expression \u2014 scripts/check-licenses.mjs validates it against the allow-list. Keep in sync with THIRD_PARTY_NOTICES.txt at release.",
+  "$comment": "Non-npm components shipped in the bundle: WASM builds and native binaries. docs/LICENSE-POLICY.md \u00a72. `licence` must be an SPDX expression \u2014 scripts/check-licenses.mjs validates it against the allow-list. Keep in sync with THIRD_PARTY_NOTICES.txt at release. Components with \"shipped\": false are kept for the record but left out of THIRD_PARTY_NOTICES.txt, since we do not distribute them.",
   "components": [
     {
       "name": "PDFium",
       "version": "shipped inside @embedpdf/pdfium 2.15.1",
       "licence": "BSD-3-Clause",
-      "licenceFile": "node_modules/@embedpdf/pdfium/LICENSE.pdfium",
+      "licenceFile": "packages/engine/node_modules/@embedpdf/pdfium/LICENSE.pdfium",
       "source": "https://pdfium.googlesource.com/pdfium/",
       "distributedVia": "npm package @embedpdf/pdfium (MIT wrapper, LICENSE)",
       "notes": "Precompiled wasm. We do not build it ourselves yet; before shipping a paid edition, either reproduce the build or pin and archive the artefact."
@@ -17,13 +17,14 @@
       "licenceFile": "node_modules/pdfjs-dist/LICENSE",
       "source": "https://github.com/mozilla/pdf.js",
       "distributedVia": "npm package pdfjs-dist",
-      "notes": "Apache-2.0 for pdf.js itself, BSD-2-Clause for OpenJPEG, MPL-2.0 for qcms. Only loaded if the chosen engine is pdf.js. JPEG 2000 decoding and colour management."
+      "notes": "NOT SHIPPED: pdfjs-dist is a devDependency used by the engine benchmark and as a second opinion when a document renders oddly. Re-add to the notices if the pdf.js adapter is ever bundled.",
+      "shipped": false
     },
     {
       "name": "qpdf",
       "version": "12.2.0 (reported by --version), shipped inside @neslinesli93/qpdf-wasm 0.3.0",
       "licence": "Apache-2.0",
-      "licenceFile": "not shipped by the npm package; take it from the qpdf repository",
+      "licenceFile": "notices/qpdf-LICENSE.txt (fetched upstream; the npm package ships none)",
       "source": "https://github.com/qpdf/qpdf",
       "distributedVia": "npm package @neslinesli93/qpdf-wasm (ISC wrapper)",
       "notes": "Precompiled wasm. The package ships no upstream licence text, so THIRD_PARTY_NOTICES.txt must carry Apache-2.0 for qpdf. Repair, encryption and recompression; see ADR 0003."
@@ -32,7 +33,7 @@
       "name": "libjpeg-turbo",
       "version": "2.1.1 (string found in the qpdf wasm)",
       "licence": "IJG AND BSD-3-Clause AND Zlib",
-      "licenceFile": "not shipped by the npm package",
+      "licenceFile": "notices/libjpeg-turbo-LICENSE.md + README.ijg (fetched upstream)",
       "source": "https://github.com/libjpeg-turbo/libjpeg-turbo",
       "distributedVia": "linked into @neslinesli93/qpdf-wasm's qpdf.wasm",
       "notes": "IJG is not otherwise on the allow-list; ADR 0003 proposes allowing it for bundled binaries. Permissive, attribution only."
@@ -41,7 +42,7 @@
       "name": "zlib",
       "version": "linked into both the qpdf and PDFium wasm builds",
       "licence": "Zlib",
-      "licenceFile": "not shipped by the npm packages",
+      "licenceFile": "notices/zlib-LICENSE (fetched upstream)",
       "source": "https://github.com/madler/zlib",
       "distributedVia": "linked into qpdf.wasm and pdfium.wasm",
       "notes": "Flate compression. Already on the allow-list."
@@ -50,7 +51,7 @@
       "name": "Tesseract (via tesseract.js-core)",
       "version": "tesseract.js 7.0.0 / tesseract.js-core 6.1.2",
       "licence": "Apache-2.0",
-      "licenceFile": "node_modules/tesseract.js/LICENSE.md",
+      "licenceFile": "packages/ocr/node_modules/tesseract.js/LICENSE.md",
       "source": "https://github.com/naptha/tesseract.js",
       "distributedVia": "npm packages tesseract.js and tesseract.js-core",
       "notes": "OCR engine compiled to wasm. Defaults its worker, core and language data to jsDelivr; packages/ocr requires same-origin URLs for all three. See ADR 0004."
@@ -59,7 +60,7 @@
       "name": "Tesseract language data (tessdata_fast)",
       "version": "eng, mal, hin as fetched by scripts/fetch-tessdata.mjs",
       "licence": "Apache-2.0",
-      "licenceFile": "https://github.com/tesseract-ocr/tessdata_fast/blob/main/LICENSE",
+      "licenceFile": "notices/tesseract-language-data-LICENSE.txt (fetched upstream)",
       "source": "https://github.com/tesseract-ocr/tessdata_fast",
       "distributedVia": "not committed; fetched into vendor/tessdata (git-ignored). A release must self-host these or offer them as an opt-in download from our own host (docs/PRIVACY.md)",
       "notes": "Measured sizes: eng 3.9 MB, mal 5.0 MB, hin 1.1 MB \u2014 10.0 MB for the three, too much to bundle for every user."

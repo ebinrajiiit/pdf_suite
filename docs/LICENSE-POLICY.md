@@ -5,7 +5,7 @@ The paid editions are closed source, so every shipped dependency must have a per
 ## Allowed
 MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD, Zlib, CC0-1.0, Unlicense, MPL-2.0 (unmodified or with modified files published), BlueOak-1.0.0, Python-2.0.
 
-IJG — **bundled binaries only** (libjpeg-turbo, linked into qpdf.wasm). Permissive and attribution-only; added by ADR 0003, which is still Proposed. If the lab rejects it, the fix is a qpdf build without JPEG support.
+IJG — **bundled binaries only** (libjpeg-turbo, linked into qpdf.wasm). Permissive and attribution-only; accepted by ADR 0003 on 2026-10-16.
 
 ## Banned
 AGPL-*, GPL-*, LGPL-* (when bundled into WASM or statically linked), SSPL, BUSL, Elastic-2.0, Commons Clause, CC-BY-NC, missing or unknown licences.
@@ -33,4 +33,5 @@ AGPL-*, GPL-*, LGPL-* (when bundled into WASM or statically linked), SSPL, BUSL,
 1. Before adding a dependency: `pnpm check:licenses`.
 2. Non-npm components (WASM builds, native binaries) are listed in `scripts/third-party.json` with licence and source URL. `licence` must be an SPDX expression: `check:licenses` validates those entries against the allow-list too, because npm metadata cannot see code compiled into a wasm blob.
 3. A new licence category needs an ADR.
-4. Release builds ship a generated `THIRD_PARTY_NOTICES.txt`.
+4. Release builds ship a generated `THIRD_PARTY_NOTICES.txt`: `pnpm notices` writes it and `pnpm check:notices` (in CI) fails when it is stale. The generator refuses to write the file if any shipped component has no licence text, so a missing notice cannot slip into a release.
+5. Upstream licence texts that a package does not ship are fetched into `notices/` and committed, pinned to the version we link. A dependency whose upstream publishes no text at all is recorded in `notices/declared-only.json` with a reason and a date — an audited exception, never a silent pass.

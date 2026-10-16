@@ -1,6 +1,6 @@
 # ADR 0003 — qpdf in WebAssembly for repair, encryption and recompression
 
-- Status: **Proposed** — the engineering is done and tested, but it adds a licence category (see "The licence question"), which needs the lab's sign-off.
+- Status: **Accepted** — the lab accepted the IJG licence for bundled binaries on 2026-10-16.
 - Date: 2026-10-16
 
 ## Context
@@ -44,12 +44,19 @@ qpdf is Apache-2.0 ✅ and zlib is Zlib ✅, both already allowed. But this wasm
 
 The IJG licence is permissive and attribution-only: no copyleft, no field-of-use restriction, no advertising clause. It ships inside Chrome, Firefox and virtually every image pipeline. It requires that the origin of the software not be misrepresented and that the licence accompany the distribution.
 
-**Recommendation: allow IJG for bundled binaries.** The allow-list and the checker have been updated accordingly, so the repo is self-consistent; if the lab rejects it, the fix is a qpdf build without JPEG support (option 3) rather than dropping qpdf.
+**Decision: IJG is allowed for bundled binaries.** Accepted by the lab on 2026-10-16. The allow-list and the checker carry it, and `scripts/check-licenses.mjs` enforces it over `scripts/third-party.json` as well as over npm metadata.
 
-Two compliance obligations this creates, neither satisfied by the npm metadata:
+If this is ever revisited, the fallback is a qpdf build without JPEG support (option 3) rather than dropping qpdf.
 
-1. The package ships **no upstream licence text** for qpdf or libjpeg-turbo. `THIRD_PARTY_NOTICES.txt` must carry Apache-2.0 (qpdf), the IJG licence and BSD-3-Clause (libjpeg-turbo), and Zlib — generated at release, per the licence policy.
-2. Neither this package nor `@embedpdf/pdfium` declares the **version of the upstream project** it compiled. `scripts/third-party.json` now records what runtime probing found, which is evidence, not provenance.
+Two compliance obligations this created, neither satisfied by the npm metadata. Both are now discharged:
+
+1. The package ships **no upstream licence text** for qpdf or libjpeg-turbo. The texts are fetched from upstream into `notices/` and assembled into `THIRD_PARTY_NOTICES.txt` by `pnpm notices`; `pnpm check:notices` fails in CI when the file is out of date. The generator refuses to write the file at all if any shipped component has no licence text, which is the breach the file exists to prevent.
+
+   Getting the *version* right mattered: libjpeg-turbo's `main` branch says it is covered by **two** licences, while the **2.1.1** we actually link declares **three** (IJG, a modified BSD licence, and zlib). The notices carry the 2.1.1 texts.
+
+2. Neither this package nor `@embedpdf/pdfium` declares the **version of the upstream project** it compiled. `scripts/third-party.json` records what runtime probing found, which is evidence, not provenance. Reproducing the builds ourselves remains the answer if provenance has to be airtight for a paid release.
+
+One exception is recorded rather than papered over: `@neslinesli93/qpdf-wasm` itself publishes no licence file anywhere, only `"license": "ISC"` in its `package.json`. That declaration is the grant, and inventing a licence text with a copyright line we do not know would be worse than citing it, so the notices quote the declaration and `notices/declared-only.json` records the reason and the date it was checked. If a customer's legal review rejects a declaration-only dependency, `@jspawn/qpdf-wasm` ships qpdf's Apache-2.0 text and is the swap.
 
 ### A gap this closed
 

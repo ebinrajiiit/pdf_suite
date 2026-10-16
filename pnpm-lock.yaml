@@ -99,13 +99,13 @@ importers:
       '@embedpdf/pdfium':
         specifier: ^2.15.1
         version: 2.15.1
-      pdfjs-dist:
-        specifier: ^6.4.299
-        version: 6.4.299
     devDependencies:
       '@types/emscripten':
         specifier: ^1.41.6
         version: 1.41.6
+      pdfjs-dist:
+        specifier: ^6.4.299
+        version: 6.4.299
 
   packages/ocr:
     dependencies:

@@ -1,0 +1,11 @@
+{
+  "$comment": "Packages whose upstream publishes no licence text, only an SPDX identifier in package.json. That identifier is the grant, and there is no text to reproduce — inventing one would be worse than citing the declaration. Every entry needs a reason, so this stays an audited exception rather than a silent pass. scripts/third-party-notices.mjs reads this file.",
+  "packages": {
+    "@neslinesli93/qpdf-wasm": {
+      "reason": "Neither the published package nor its GitHub repository (checked on master and main) contains a licence file.",
+      "evidence": "package.json declares \"license\": \"ISC\".",
+      "checked": "2026-10-16",
+      "ifThisMatters": "@jspawn/qpdf-wasm ships qpdf's Apache-2.0 text, but its ESM wrapper mutates globalThis and fights the bundler — see ADR 0003. Switching is the fallback if a customer's legal review rejects a declaration-only dependency."
+    }
+  }
+}

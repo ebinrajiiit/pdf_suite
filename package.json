@@ -17,6 +17,8 @@
     "format": "prettier --write .",
     "typecheck": "pnpm -r --if-present typecheck",
     "check:licenses": "node scripts/check-licenses.mjs",
+    "notices": "node scripts/third-party-notices.mjs",
+    "check:notices": "node scripts/third-party-notices.mjs --check",
     "corpus": "node scripts/corpus-runner.mjs",
     "bench:engines": "node scripts/bench-engines.mjs"
   },
