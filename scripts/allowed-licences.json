@@ -19,7 +19,7 @@
   ],
   "notes": {
     "IJG": "Bundled binaries only: libjpeg-turbo, linked into qpdf.wasm. Accepted by ADR 0003 on 2026-10-16.",
-    "Unicode-3.0": "The ICU crates (icu_collections, icu_normalizer, icu_properties and siblings) that Tauri pulls in transitively. Permissive and attribution-only. PENDING: ADR 0005 proposes it and is not yet accepted.",
+    "Unicode-3.0": "The ICU crates (icu_collections, icu_normalizer, icu_properties and siblings) that Tauri pulls in transitively. Permissive and attribution-only. Accepted by ADR 0005 on 2026-10-16.",
     "MIT-0": "MIT with the attribution clause removed; strictly more permissive than MIT."
   }
 }

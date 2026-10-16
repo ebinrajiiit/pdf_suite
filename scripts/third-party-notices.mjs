@@ -2,11 +2,12 @@
 // Generates THIRD_PARTY_NOTICES.txt, which release builds must ship
 // (docs/LICENSE-POLICY.md §4).
 //
-// It covers two populations: npm production dependencies, whose licence text
-// comes from the installed package, and the components compiled into our wasm
-// blobs, which npm knows nothing about. Those are listed in
-// scripts/third-party.json and their licence texts live in notices/, fetched
-// from upstream because the npm packages do not ship them.
+// It covers three populations: npm production dependencies, whose licence text
+// comes from the installed package; the components compiled into our wasm blobs,
+// which npm knows nothing about, listed in scripts/third-party.json with their
+// texts in notices/; and the Rust crates linked into the desktop binary, read
+// from scripts/rust-licences.json so that generating notices needs no Rust
+// toolchain (run `pnpm licences:rust:snapshot` to refresh that, which does).
 //
 // Licence text is never invented. A component with no text available is a hard
 // failure, because shipping without it is the licence breach this file exists to
@@ -194,6 +195,44 @@ for (const pkg of npmPackages) {
   );
 }
 
+// ---- Rust crates in the desktop binary ----
+const rustFile = join(repoRoot, "scripts/rust-licences.json");
+let rustCrates = 0;
+if (existsSync(rustFile)) {
+  const rust = JSON.parse(readFileSync(rustFile, "utf8"));
+  rustCrates = rust.crates.length;
+  sections.push(
+    [
+      "=".repeat(78),
+      `Rust crates linked into the desktop application (${rust.crates.length})`,
+      "=".repeat(78),
+      "",
+      "Snapshotted from Cargo. Licence texts follow, deduplicated: a crate's entry",
+      "names the texts that apply to it, and each distinct text is printed once in",
+      "the section below.",
+    ].join("\n"),
+  );
+
+  for (const crate of rust.crates) {
+    const declaredOnlyNote =
+      crate.texts.length === 0
+        ? `\n  This crate ships no licence file; the declaration above is the grant.`
+        : `\n  Licence text: ${crate.texts.join(", ")}`;
+    sections.push(
+      `  ${crate.name} ${crate.version} — ${crate.licence ?? "no licence declared"}` +
+        declaredOnlyNote,
+    );
+    if (!crate.licence && crate.texts.length === 0) {
+      missing.push(`${crate.name} ${crate.version} (Rust crate: no licence and no text)`);
+    }
+  }
+
+  sections.push(["=".repeat(78), "Licence texts referenced above", "=".repeat(78)].join("\n"));
+  for (const [hash, text] of Object.entries(rust.texts)) {
+    sections.push([`${"-".repeat(78)}`, `Text ${hash}`, "", text].join("\n"));
+  }
+}
+
 const content = `${sections.join("\n\n")}\n`;
 
 if (missing.length > 0) {
@@ -211,12 +250,13 @@ if (check) {
   }
   console.log(
     `THIRD_PARTY_NOTICES.txt is current: ${shipped.length} bundled components, ` +
-      `${npmPackages.length} npm packages.`,
+      `${npmPackages.length} npm packages, ${rustCrates} Rust crates.`,
   );
 } else {
   writeFileSync(outFile, content);
   console.log(
     `Wrote THIRD_PARTY_NOTICES.txt: ${shipped.length} bundled components, ` +
-      `${npmPackages.length} npm packages, ${(content.length / 1024).toFixed(0)} kB.`,
+      `${npmPackages.length} npm packages, ${rustCrates} Rust crates, ` +
+      `${(content.length / 1024).toFixed(0)} kB.`,
   );
 }

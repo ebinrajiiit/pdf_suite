@@ -1,6 +1,6 @@
 # ADR 0005 — Tauri 2 for the desktop shell
 
-- Status: **Proposed** — the shell builds and runs; what needs sign-off is the licence question in "A new licence category" below.
+- Status: **Accepted** — the shell builds and runs, and the lab accepted the Unicode-3.0 licence on 2026-10-16.
 - Date: 2026-10-16
 
 ## Context
@@ -76,11 +76,11 @@ The Unicode License v3 is permissive and attribution-only: no copyleft, no
 field-of-use restriction. It is the standard licence for Unicode's own data
 tables and ships in effectively every modern browser and operating system.
 
-**Recommendation: allow `Unicode-3.0`.** It is in
-`scripts/allowed-licences.json` so the repo is self-consistent and CI is
-meaningful, marked as pending this ADR. If the lab rejects it, the fallback is
-unpleasant — the ICU crates come in through Tauri's own dependency tree, so
-removing them means patching or forking that tree, not swapping one package.
+**Decision: `Unicode-3.0` is allowed.** Accepted by the lab on 2026-10-16 and
+recorded in `scripts/allowed-licences.json` and `docs/LICENSE-POLICY.md`. The
+fallback, had it been rejected, would have been unpleasant: the ICU crates come
+in through Tauri's own dependency tree, so removing them means patching or
+forking that tree rather than swapping one package.
 
 Two smaller things the same run established, both fine: one crate is
 `Apache-2.0 WITH LLVM-exception` (the exception only widens the grant), and
@@ -95,9 +95,16 @@ a desktop build reproducible, and CI's `cargo check --locked` requires it.
 - A second CI job, on macOS, Ubuntu and Windows, running the crate licence check
   and `cargo check`. It is separate from `check` so a broken web app still fails
   in under a minute instead of behind a Rust compile.
-- `THIRD_PARTY_NOTICES.txt` does **not** yet cover the Rust crates. It must
-  before a desktop release; the generator needs a Cargo pass alongside its npm
-  and wasm ones.
+- `THIRD_PARTY_NOTICES.txt` now covers all three populations: npm packages, the
+  wasm components, and **421 Rust crates**. The crate licences are snapshotted by
+  `pnpm licences:rust:snapshot` into `scripts/rust-licences.json` — deliberately
+  a snapshot, so that generating and checking the notices needs no Rust
+  toolchain, which the web CI job does not have. The desktop job proves the
+  snapshot is current. Licence texts are deduplicated by hash: Apache-2.0 alone
+  is 11 kB and appears in hundreds of crates, so storing it per crate would make
+  the file megabytes. 37 crates ship no licence file at all, and their entries
+  cite the SPDX declaration instead — the same treatment, and the same reasoning,
+  as `@neslinesli93/qpdf-wasm` in ADR 0003.
 - The web app's File System Access calls do not exist in WKWebView, so inside the
   shell it silently falls back to a hidden file input and downloads. Native
   dialogs via the Tauri plugins are the next desktop task, and they need the

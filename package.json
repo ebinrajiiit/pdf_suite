@@ -21,6 +21,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:licenses:rust": "node scripts/check-licenses-rust.mjs",
+    "licences:rust:snapshot": "node scripts/snapshot-rust-licences.mjs",
     "notices": "node scripts/third-party-notices.mjs",
     "check:notices": "node scripts/third-party-notices.mjs --check",
     "corpus": "node scripts/corpus-runner.mjs",

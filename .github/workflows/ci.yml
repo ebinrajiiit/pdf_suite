@@ -62,4 +62,11 @@ jobs:
       # Every crate here ships inside the binary a customer installs, so it
       # needs the same allow-list as the npm and wasm dependencies.
       - run: pnpm check:licenses:rust
+      # The notices file lists every crate, generated from a snapshot so the web
+      # job needs no Rust. This is where the snapshot is proved current.
+      - name: Crate licence snapshot is current
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          pnpm licences:rust:snapshot
+          git diff --exit-code --stat scripts/rust-licences.json             || (echo "scripts/rust-licences.json is stale. Run: pnpm licences:rust:snapshot" && exit 1)
       - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked

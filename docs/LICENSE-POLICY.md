@@ -7,7 +7,7 @@ MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD, Zlib, CC0-1.0, Unlicense
 
 IJG — **bundled binaries only** (libjpeg-turbo, linked into qpdf.wasm). Permissive and attribution-only; accepted by ADR 0003 on 2026-10-16.
 
-Unicode-3.0 — the ICU crates Tauri links into the desktop binary. Permissive and attribution-only. **Proposed by ADR 0005, not yet accepted.**
+Unicode-3.0 — the ICU crates Tauri links into the desktop binary. Permissive and attribution-only; accepted by ADR 0005 on 2026-10-16.
 
 The allow-list is `scripts/allowed-licences.json`, read by both checkers. This file is the reasoning; that file is what runs.
 
@@ -37,5 +37,5 @@ AGPL-*, GPL-*, LGPL-* (when bundled into WASM or statically linked), SSPL, BUSL,
 1. Before adding a dependency: `pnpm check:licenses` for npm and the bundled wasm components, and `pnpm check:licenses:rust` for the crates compiled into the desktop binary. The second needs a Rust toolchain and runs in the desktop CI job.
 2. Non-npm components (WASM builds, native binaries) are listed in `scripts/third-party.json` with licence and source URL. `licence` must be an SPDX expression: `check:licenses` validates those entries against the allow-list too, because npm metadata cannot see code compiled into a wasm blob.
 3. A new licence category needs an ADR.
-4. Release builds ship a generated `THIRD_PARTY_NOTICES.txt`: `pnpm notices` writes it and `pnpm check:notices` (in CI) fails when it is stale. The generator refuses to write the file if any shipped component has no licence text, so a missing notice cannot slip into a release.
+4. Release builds ship a generated `THIRD_PARTY_NOTICES.txt` covering npm packages, the bundled wasm components and the Rust crates in the desktop binary: `pnpm notices` writes it and `pnpm check:notices` (in CI) fails when it is stale. The generator refuses to write the file if any shipped component has no licence text, so a missing notice cannot slip into a release.
 5. Upstream licence texts that a package does not ship are fetched into `notices/` and committed, pinned to the version we link. A dependency whose upstream publishes no text at all is recorded in `notices/declared-only.json` with a reason and a date — an audited exception, never a silent pass.
