@@ -4,6 +4,8 @@ import {
   type DocumentInfo,
   type FieldValues,
   type OcrAssets,
+  type RedactArea,
+  type RedactionResult,
   type SearchHit,
   type TextRun,
   type TerminalResponse,
@@ -50,6 +52,21 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /**
+   * Removes the content inside the given areas. The reply says how many page
+   * objects went and whether re-reading the result found any text left inside
+   * them — a false `verified` must be shown to the user, not swallowed.
+   */
+  redact(
+    areas: RedactArea[],
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{
+    info: DocumentInfo;
+    removed: Record<number, number>;
+    verified: boolean;
+    leftovers: RedactionResult["leftovers"];
+  }>;
   /** Sets the password applied when saving, or null to remove protection. */
   protect(password: string | null): Promise<DocumentInfo>;
   /** Searches the given display order, reporting progress per page. */
@@ -190,6 +207,15 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async redact(areas, order, annotations) {
+      const reply = expect(await send({ kind: "redact", areas, order, annotations }), "redacted");
+      return {
+        info: reply.info,
+        removed: reply.removed,
+        verified: reply.verified,
+        leftovers: reply.leftovers,
+      };
     },
     async protect(password) {
       return expect(await send({ kind: "protect", password }), "document").info;

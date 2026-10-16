@@ -1,4 +1,5 @@
 import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
+import { redactWithPdfium, type RedactArea, type RedactionResult } from "./redact.js";
 import {
   PasswordRequiredError,
   type DocHandle,
@@ -241,9 +242,19 @@ function lastError(m: WrappedPdfiumModule): string {
   return ERR.get(code) ?? `error code ${code}`;
 }
 
+export type { RedactArea, RedactionResult, RedactRect } from "./redact.js";
+
 /** PDFium's linear memory is its real footprint, and no browser memory API
  *  attributes it reliably, so the engine reports it for ADR 0002's benchmark. */
-export type PdfiumEngine = PdfEngine & { wasmHeapBytes(): number };
+export type PdfiumEngine = PdfEngine & {
+  wasmHeapBytes(): number;
+  /**
+   * Removes content inside the given areas and returns the new document, with a
+   * verification pass. Lives on the engine rather than in packages/core because
+   * only PDFium can edit page objects; pdf-lib cannot.
+   */
+  redact(bytes: Uint8Array, areas: RedactArea[]): Promise<RedactionResult>;
+};
 
 export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<PdfiumEngine> {
   const t0 = performance.now();
@@ -258,8 +269,20 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
   m.PDFiumExt_Init();
   opts.onTiming?.("parse", performance.now() - t0);
 
-  return {
+  /** Opens bytes just long enough to read one page's text, for verification. */
+  async function textOf(bytes: Uint8Array, page: number) {
+    const handle = await engine.open(bytes.buffer as ArrayBuffer);
+    try {
+      return await handle.extractText(page);
+    } finally {
+      handle.close();
+    }
+  }
+
+  const engine: PdfiumEngine = {
     wasmHeapBytes: () => m.pdfium.HEAPU8.byteLength,
+
+    redact: (bytes, areas) => redactWithPdfium(m, bytes, areas, textOf),
 
     async open(bytes, openOpts) {
       // Documents are immutable inputs (CLAUDE.md §4), and PDFium reads from this
@@ -279,6 +302,8 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
       return new PdfiumDocHandle(m, doc, ptr);
     },
   };
+
+  return engine;
 }
 
 async function resolveWasm(opts: PdfiumEngineOptions): Promise<ArrayBuffer> {

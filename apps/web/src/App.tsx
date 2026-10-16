@@ -34,6 +34,7 @@ export function App() {
     exportImages,
     runOcr,
     applyForm,
+    redact,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -52,6 +53,8 @@ export function App() {
   const [tool, setTool] = useState<AnnotationTool | undefined>();
   const [sidebar, setSidebar] = useState<"pages" | "outline" | "form">("pages");
   const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
+  /** Areas marked for redaction, by source page, before they are applied. */
+  const [redactions, setRedactions] = useState<Map<number, AnnotRect[]>>(new Map());
   const [ocrLang, setOcrLang] = useState("eng");
   const [height, setHeight] = useState(600);
   /** A placed point waiting for its text, for the note and text tools. */
@@ -125,6 +128,7 @@ export function App() {
   // selection or a stale set of hits would point at the wrong pages.
   useEffect(() => {
     setFieldValues({});
+    setRedactions(new Map());
     setSelected(new Set());
     setHits([]);
     setHitIndex(0);
@@ -268,6 +272,32 @@ export function App() {
     [applyForm, fieldValues],
   );
 
+  const redactionCount = useMemo(
+    () => [...redactions.values()].reduce((n, rects) => n + rects.length, 0),
+    [redactions],
+  );
+
+  /**
+   * Applies the marked redactions. The result is reported in full, including a
+   * failed verification — a redaction the user believes happened but did not is
+   * the worst possible outcome.
+   */
+  const handleRedact = useCallback(async () => {
+    const areas = [...redactions.entries()].map(([page, rects]) => ({ page, rects }));
+    if (areas.length === 0) return;
+    const result = await redact(areas);
+    if (!result) return;
+    setRedactions(new Map());
+    const removed = Object.values(result.removed).reduce((n, c) => n + c, 0);
+    setSaved(
+      result.verified
+        ? `Removed ${removed} object${removed === 1 ? "" : "s"}; no text left in the redacted areas`
+        : `WARNING: text is still present after redacting (${result.leftovers.length} run${
+            result.leftovers.length === 1 ? "" : "s"
+          }). Do not share this file.`,
+    );
+  }, [redact, redactions]);
+
   /** Runs OCR over the selection, or the whole document when nothing is selected. */
   const handleOcr = useCallback(async () => {
     const wanted = positions.length > 0 ? positions : state.order.map((_, i) => i);
@@ -371,6 +401,14 @@ export function App() {
   const onPlace = useCallback(
     (page: number, shape: PlacedShape) => {
       if (shape.kind === "rect") {
+        if (tool === "redact") {
+          setRedactions((current) => {
+            const next = new Map(current);
+            next.set(page, [...(next.get(page) ?? []), shape.rect]);
+            return next;
+          });
+          return;
+        }
         if (tool === "highlight" || tool === "underline" || tool === "strike") {
           void placeMarkup(page, shape.rect, tool);
         }
@@ -536,22 +574,35 @@ export function App() {
         </span>
 
         <span className="toolbar-group" role="group" aria-label="Annotate">
-          {(["highlight", "underline", "strike", "note", "text"] as const).map((which) => (
+          {(["highlight", "underline", "strike", "note", "text", "redact"] as const).map(
+            (which) => (
+              <button
+                key={which}
+                type="button"
+                className={tool === which ? "tool tool-active" : "tool"}
+                aria-pressed={tool === which}
+                disabled={disabled}
+                data-testid={`tool-${which}`}
+                onClick={() => {
+                  setTool((current) => (current === which ? undefined : which));
+                  setPendingPoint(null);
+                }}
+              >
+                {TOOL_LABELS[which]}
+              </button>
+            ),
+          )}
+          {redactionCount > 0 ? (
             <button
-              key={which}
               type="button"
-              className={tool === which ? "tool tool-active" : "tool"}
-              aria-pressed={tool === which}
+              onClick={() => void handleRedact()}
               disabled={disabled}
-              data-testid={`tool-${which}`}
-              onClick={() => {
-                setTool((current) => (current === which ? undefined : which));
-                setPendingPoint(null);
-              }}
+              data-testid="apply-redaction"
+              title="Remove the marked content from the document, permanently"
             >
-              {TOOL_LABELS[which]}
+              Remove {redactionCount} area{redactionCount === 1 ? "" : "s"}
             </button>
-          ))}
+          ) : null}
           {state.annotations.length > 0 ? (
             <button
               type="button"
@@ -863,6 +914,7 @@ export function App() {
               scrollTo={goTo ?? hits[hitIndex]?.position}
               annotations={state.annotations}
               tool={tool}
+              redactions={redactions}
               onPlace={onPlace}
               onRemoveAnnotation={tool === undefined ? removeAnnotation : undefined}
             />
@@ -897,6 +949,7 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   strike: "Strike",
   note: "Note",
   text: "Add text",
+  redact: "Redact",
 };
 
 function stripPdf(name: string): string {

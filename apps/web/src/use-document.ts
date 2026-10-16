@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
+import type { RedactArea } from "@pdf-suite/workers";
 import {
   createPdfWorkerClient,
   type DocumentInfo,
@@ -287,6 +288,30 @@ export function useDocument() {
     setState((s) => ({ ...s, annotations: [] }));
   }, []);
 
+  /**
+   * Removes the content inside the given areas. Returns the verification result,
+   * which the caller must show: an unverified redaction is not a redaction.
+   */
+  const redact = useCallback(
+    async (areas: RedactArea[]) => {
+      const result = await run("Redacting", (worker) =>
+        worker.redact(areas, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        // Redaction rewrites the document; it must not overwrite the original.
+        handle: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
   /** Writes form values, optionally flattening them so they cannot be edited. */
   const applyForm = useCallback(
     async (values: FieldValues, flatten: boolean) => {
@@ -439,6 +464,7 @@ export function useDocument() {
     exportImages,
     runOcr,
     applyForm,
+    redact,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

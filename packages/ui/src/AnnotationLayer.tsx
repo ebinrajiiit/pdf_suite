@@ -1,7 +1,14 @@
 import { useRef, useState } from "react";
 import type { Annotation, AnnotRect } from "@pdf-suite/core";
 
-export type AnnotationTool = "highlight" | "underline" | "strike" | "note" | "text";
+export type AnnotationTool =
+  | "highlight"
+  | "underline"
+  | "strike"
+  | "note"
+  | "text"
+  /** Marks an area whose content will be removed. Not a PDF annotation. */
+  | "redact";
 
 /** What the user drew, in PDF points with the origin at the page bottom-left. */
 export type PlacedShape =
@@ -17,6 +24,8 @@ export interface AnnotationLayerProps {
   tool?: AnnotationTool | undefined;
   /** Pending annotations for this page, with their index in the whole list. */
   annotations: { annotation: Annotation; index: number }[];
+  /** Areas marked for redaction on this page, drawn opaque. */
+  redactions?: AnnotRect[];
   onPlace?: ((page: number, shape: PlacedShape) => void) | undefined;
   /** Removing by list index, so the caller does not have to identify by geometry. */
   onRemove?: ((index: number) => void) | undefined;
@@ -33,6 +42,7 @@ export function AnnotationLayer({
   scale,
   tool,
   annotations,
+  redactions,
   onPlace,
   onRemove,
 }: AnnotationLayerProps) {
@@ -76,7 +86,14 @@ export function AnnotationLayer({
       className={tool ? `annots annots-${tool}` : "annots"}
       data-testid={`annots-${page}`}
       onPointerDown={(event) => {
-        if (tool !== "highlight" && tool !== "underline" && tool !== "strike") return;
+        if (
+          tool !== "highlight" &&
+          tool !== "underline" &&
+          tool !== "strike" &&
+          tool !== "redact"
+        ) {
+          return;
+        }
         const { x, y } = positionIn(event);
         event.currentTarget.setPointerCapture(event.pointerId);
         setDrag({ x1: x, y1: y, x2: x, y2: y });
@@ -165,9 +182,25 @@ export function AnnotationLayer({
         );
       })}
 
+      {(redactions ?? []).map((rect, index) => (
+        <div
+          key={`redact:${index}`}
+          className="annot annot-redact"
+          data-testid={`redact-${page}-${index}`}
+          style={{
+            left: `${rect.x * scale}px`,
+            top: `${(pageHeight - rect.y - rect.h) * scale}px`,
+            width: `${rect.w * scale}px`,
+            height: `${rect.h * scale}px`,
+          }}
+        />
+      ))}
+
       {drag ? (
         <div
-          className="annot annot-dragging"
+          className={
+            tool === "redact" ? "annot annot-dragging annot-redact" : "annot annot-dragging"
+          }
           style={{
             left: `${Math.min(drag.x1, drag.x2)}px`,
             top: `${Math.min(drag.y1, drag.y2)}px`,

@@ -45,6 +45,7 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | Turn the tool off, click a mark | Removes it. **Clear N** removes every unsaved mark |
 | **Save** after annotating | Marks become real PDF annotations — highlights, notes and free text that Acrobat and Chrome can edit, with the text under a highlight intact |
 | **Underline** / **Strike**, then drag | The same snapping, written as real `/Underline` and `/StrikeOut` marks |
+| **Redact**, drag over text, **Remove N areas** | Deletes the content, then re-reads the file to prove no text is left in those areas. The status line says so, or warns loudly if anything survived |
 | **Form** tab in the sidebar | Lists the document's fields; fill them in and **Write values**. **Flatten** bakes them in so they cannot be changed. `p1` jumps to the field's page |
 | **Bookmarks** tab in the sidebar | The document's outline, click an entry to jump. Says so plainly when a file has none |
 | Select pages, **Split…** | Each selected page starts a new file; you get one save dialog per part |
@@ -93,9 +94,28 @@ is what `pnpm e2e` asserts on every run.
 - **Forms are filled from the side panel**, not by clicking the fields on the
   page — the widget geometry is available, so overlaying the inputs is a
   follow-up. XFA-only forms are not supported and say so.
-- No redaction and no desktop app yet.
+- **Redaction removes whole text runs** that overlap the area, not just the
+  characters inside it — safer, but it can take neighbouring words with it. The
+  object count is reported so you can see what happened.
+- No desktop app, and no Office→PDF, yet.
 - Rendered pages are not cached between zoom levels, so zooming a 500-page
   scan re-rasterises as you scroll.
+
+## Testing against your own documents
+
+```bash
+# Put real PDFs in corpus/ (never committed), then:
+pnpm corpus
+```
+
+Each file is opened (with the repair fallback), page 1 rendered, text
+extracted, and the document round-tripped and re-opened. It prints counts,
+timings and failure messages — never a filename, and never document content.
+A second run fails if a file that previously worked no longer does, and the
+baseline only moves on a clean run or with `--accept`.
+
+This is the Phase 1 gate, and the same corpus is what ADR 0002 (engine choice)
+and ADR 0004 (OCR accuracy) are waiting on.
 
 ## Docs
 - `CLAUDE.md` — rules for Claude Code (privacy, licences, conventions)

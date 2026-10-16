@@ -851,3 +851,53 @@ test("a document with no form says so", async ({ page }) => {
   await page.getByTestId("tab-form").click();
   await expect(page.getByTestId("form-empty")).toBeVisible();
 });
+
+test("redaction removes the text from the file, not just covers it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // Two lines: the first gets redacted, the second must survive untouched.
+  await openFixture(
+    page,
+    "confidential.pdf",
+    await textFixture([["Aadhaar 1234 5678 9012", "Candidate: A. Student"]]),
+  );
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  // The secret is findable before redacting, which is the whole problem.
+  await page.getByTestId("search-input").fill("5678");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  const layer = page.getByTestId("annots-0");
+  const box = (await layer.boundingBox())!;
+  await page.getByTestId("tool-redact").click();
+  await page.mouse.move(box.x + 10, box.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 300, box.y + 44, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByTestId("redact-0-0")).toBeVisible();
+
+  await page.getByTestId("apply-redaction").click();
+  // The app verifies by re-reading the result; anything else is a black box over
+  // text that can still be extracted.
+  await expect(page.getByTestId("status")).toHaveText(/no text left in the redacted areas/, {
+    timeout: 60_000,
+  });
+
+  // Searching the live document no longer finds it.
+  await page.getByTestId("search-input").fill("5678");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+
+  // And the bytes themselves do not contain it, which is what actually matters:
+  // a reader with any PDF tool must not be able to recover the text.
+  const saved = await saveAndRead(page, "Save");
+  expect(saved.toString("latin1")).not.toContain("5678");
+
+  // The untouched line is still there, so redaction did not take the page with it.
+  await page.getByTestId("search-input").fill("Candidate");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText(/of \d+/, { timeout: 30_000 });
+});

@@ -12,13 +12,8 @@ import {
   type Annotation,
   type Qpdf,
 } from "@pdf-suite/core";
-import {
-  findMatches,
-  PasswordRequiredError,
-  type DocHandle,
-  type PdfEngine,
-} from "@pdf-suite/engine";
-import { createPdfiumEngine } from "@pdf-suite/engine/pdfium";
+import { findMatches, PasswordRequiredError, type DocHandle } from "@pdf-suite/engine";
+import { createPdfiumEngine, type PdfiumEngine } from "@pdf-suite/engine/pdfium";
 import { createOcr } from "@pdf-suite/ocr";
 import {
   CancelledError,
@@ -33,7 +28,7 @@ import {
 // qpdf's is fetched from a same-origin URL on first use, because most documents
 // never need it and it is another 1.2 MB.
 
-let engine: PdfEngine | undefined;
+let engine: PdfiumEngine | undefined;
 let doc: DocHandle | undefined;
 /** The open document's bytes, decrypted and ready for pdf-lib. */
 let bytes: Uint8Array | undefined;
@@ -385,6 +380,23 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled) });
+      return;
+    }
+    case "redact": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      // Areas are keyed by source page, like annotations, so they are applied to
+      // the materialised document where those indices still hold.
+      const result = await engine.redact(base, request.areas);
+      throwIfCancelled(id);
+      post({
+        id,
+        kind: "redacted",
+        info: await openBytes(id, result.bytes),
+        removed: result.removed,
+        verified: result.verified,
+        leftovers: result.leftovers,
+      });
       return;
     }
     case "save": {

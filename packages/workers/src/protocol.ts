@@ -6,6 +6,7 @@
 
 import type { Annotation, FieldValues, FormInfo } from "@pdf-suite/core";
 import type { OutlineItem, TextRun } from "@pdf-suite/engine";
+import type { RedactArea, RedactionResult } from "@pdf-suite/engine/pdfium";
 import type { OcrAssets } from "@pdf-suite/ocr";
 /**
  * `order` on a request is source page indices in their display positions, with
@@ -33,6 +34,7 @@ export interface DocumentInfo {
  */
 export type { Annotation, AnnotRect, FieldValues, FormField, FormInfo } from "@pdf-suite/core";
 export type { OutlineItem, TextRun } from "@pdf-suite/engine";
+export type { RedactArea, RedactRect, RedactionResult } from "@pdf-suite/engine/pdfium";
 export type { OcrAssets } from "@pdf-suite/ocr";
 
 /** One search hit, in the display position the user is looking at. */
@@ -87,6 +89,8 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Removes the content inside the given areas, then verifies it is gone. */
+    | { kind: "redact"; areas: RedactArea[]; order: number[]; annotations: Annotation[] }
     /** Sets the password the document is saved with, or null to remove protection. */
     | { kind: "protect"; password: string | null }
     /**
@@ -133,6 +137,13 @@ export type WorkerResponse = { id: number } & (
   | { kind: "parts"; parts: ArrayBuffer[] }
   | { kind: "images"; images: { position: number; bytes: ArrayBuffer }[] }
   | { kind: "ocrDone"; info: DocumentInfo; recognised: number; skipped: number }
+  | {
+      kind: "redacted";
+      info: DocumentInfo;
+      removed: Record<number, number>;
+      verified: boolean;
+      leftovers: RedactionResult["leftovers"];
+    }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -153,6 +164,7 @@ export type TerminalResponse = Extract<
       | "parts"
       | "images"
       | "ocrDone"
+      | "redacted"
       | "closed"
       | "cancelled"
       | "error";

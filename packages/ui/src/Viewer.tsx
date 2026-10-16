@@ -42,6 +42,8 @@ export interface ViewerProps {
   annotations?: Annotation[];
   /** Active annotation tool; when set, dragging or clicking a page places one. */
   tool?: AnnotationTool | undefined;
+  /** Areas marked for redaction, keyed by source page. */
+  redactions?: ReadonlyMap<number, { x: number; y: number; w: number; h: number }[]>;
   onPlace?: ((page: number, shape: PlacedShape) => void) | undefined;
   onRemoveAnnotation?: ((index: number) => void) | undefined;
 }
@@ -65,6 +67,7 @@ export function Viewer({
   scrollTo,
   annotations,
   tool,
+  redactions,
   onPlace,
   onRemoveAnnotation,
 }: ViewerProps) {
@@ -149,6 +152,7 @@ export function Viewer({
               scale={scale}
               tool={tool}
               annotations={byPage.get(box.page) ?? []}
+              redactions={redactions?.get(box.page) ?? []}
               onPlace={onPlace}
               onRemove={onRemoveAnnotation}
             />

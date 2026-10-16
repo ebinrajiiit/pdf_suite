@@ -8,7 +8,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Strict CSP (`connect-src 'self'`) and offline e2e test passing on an empty app
 - [ ] Engine spike: PDFium-WASM vs pdf.js on 100 corpus files (speed, fidelity, memory) → ADR 0002
 - [x] OCR spike: Tesseract on generated Malayalam + Hindi samples → ADR 0004 (eng 100%, hin 100%, mal 89% which turned out to be a chillu spelling mismatch, now fixed in search). Real scans still needed
-- [ ] Corpus runner script (`pnpm corpus`)
+- [x] Corpus runner script (`pnpm corpus`) — drives the real worker pipeline (open with repair, render, round-trip, re-open), fails on any regression against the last clean run, and records no filenames
 - [ ] Start collecting the 1,000-file test corpus (kept out of git)
 
 **Gate:** engine chosen, ADR merged, offline test green.
@@ -41,7 +41,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [ ] OCR: desktop native Tesseract and batch folders; preprocessing (deskew, despeckle); per-page language detection
 - [x] Forms: fill and save AcroForms (text, multiline, checkbox, radio, dropdown, option list), with flattening; read-only fields respected, XFA-only forms reported rather than shown empty
 - [ ] Forms: a builder for creating fields, and filling by clicking the widgets on the page instead of the side panel
-- [ ] True redaction (remove content, not just cover it) with verification
+- [x] True redaction: page objects touching the area are removed via PDFium and the result is re-read to prove no text survives. Granularity is per text run, so an overlapping run goes whole — the safe direction, and the count is reported
+- [ ] Redaction: redact by search hit ("remove every occurrence of this number") and a redaction report listing what was removed
 - [ ] Office → PDF via LibreOffice (desktop only)
 - [x] Images → PDF (JPEG/PNG, one page per image or fitted to a page size) and PDF → PNG per page
 

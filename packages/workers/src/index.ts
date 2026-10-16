@@ -7,6 +7,8 @@ export type {
   FormField,
   FormInfo,
   OcrAssets,
+  RedactArea,
+  RedactRect,
   SearchHit,
   WorkerRequest,
   WorkerResponse,

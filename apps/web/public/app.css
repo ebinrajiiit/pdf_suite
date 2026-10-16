@@ -158,6 +158,15 @@ body {
   outline: 1px dashed #c08c00;
   pointer-events: none;
 }
+/* Opaque, because that is what the redacted area will look like in the file. */
+.annot-redact {
+  background: #000;
+  outline: 1px solid #000;
+}
+.annots-redact {
+  pointer-events: auto;
+  cursor: crosshair;
+}
 .annot-note {
   display: grid;
   place-items: center;
