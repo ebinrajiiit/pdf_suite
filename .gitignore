@@ -10,6 +10,8 @@ test-results/
 
 # Tauri
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/Cargo.lock
 
 # Documents dropped in for testing — NEVER commit (CLAUDE.md §6).
 # corpus/ is where the runners look; Data/ is where files arrive by hand.

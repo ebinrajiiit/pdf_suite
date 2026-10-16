@@ -132,6 +132,17 @@ baseline only moves on a clean run or with `--accept`.
 This is the Phase 1 gate, and the same corpus is what ADR 0002 (engine choice)
 and ADR 0004 (OCR accuracy) are waiting on.
 
+## Desktop (Tauri)
+
+```bash
+pnpm desktop:info    # needs Rust: curl https://sh.rustup.rs -sSf | sh
+pnpm desktop         # the same UI in a native window
+```
+
+Scaffolded but **never compiled** — Rust was not installed where it was written.
+`apps/desktop/README.md` lists what to check on the first build. The shell has no
+HTTP permission at all, so it cannot make a network call even by accident.
+
 ## Licences
 
 ```bash

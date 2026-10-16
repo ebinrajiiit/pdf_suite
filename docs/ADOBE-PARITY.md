@@ -50,7 +50,8 @@ explicit non-goals in `docs/PRODUCT.md` — zero-upload is the point of this pro
 7. **Compare two documents** — text and visual diff. Phase 3.
 8. **PDF/A and PDF/UA** — conversion and validation, plus accessibility tagging
    and a reading-order editor. Phases 3 and 5.
-9. **Office → PDF** — desktop only, via LibreOffice. Phase 2.
+9. **Office → PDF** — desktop only, via LibreOffice. Phase 2, and blocked on the
+   desktop shell actually building: it is scaffolded but has never been compiled.
 10. **Page-level polish** — crop, headers and footers, watermarks, Bates
     numbering, page labels, background.
 11. **Attachments and portfolios** — embedded file attachments.

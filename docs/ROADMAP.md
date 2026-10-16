@@ -53,7 +53,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 **Gate:** renders the corpus with no regressions.
 
 ## Phase 2 — OCR, forms, redaction, desktop (months 3–4) → Release 2 (desktop + web)
-- [ ] Tauri desktop app for macOS, Windows, Linux (same UI)
+- [~] Tauri desktop app: scaffolded in `apps/desktop` with a deliberately minimal capability set — file dialogs and nothing else, **no HTTP permission and no updater**, so the shell cannot make a network call by mistake. `tauri info` parses the config, but **it has never been compiled**: Rust was not installed on the machine it was written on. See `apps/desktop/README.md` for what to check first
+- [ ] Desktop: build it, add the icon set, and replace the File System Access fallbacks with native dialogs — WKWebView has no FSA, so inside the shell the app would quietly use the `<input type=file>` and download paths
 - [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
 - [x] OCR preprocessing: despeckle (3×3 median), on by default — turns 8% speckle from 0% accuracy into 100% (ADR 0004)
 - [ ] OCR: desktop native Tesseract and batch folders; deskew (would recover the 4 points despeckling costs on a 5° skew); per-page language detection

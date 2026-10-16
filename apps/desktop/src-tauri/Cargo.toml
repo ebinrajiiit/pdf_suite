@@ -1,0 +1,26 @@
+[package]
+name = "pdf-suite"
+version = "0.0.0"
+description = "A complete PDF suite where your files never leave your computer"
+authors = ["FACTS-H Lab, IIIT Kottayam"]
+edition = "2021"
+rust-version = "1.77"
+# Not published: this is the desktop shell for the web UI.
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Deliberately minimal. No HTTP client, no updater, no shell plugin: the privacy
+# invariants in CLAUDE.md §1 say the only network calls allowed are the four in
+# docs/PRIVACY.md, and none of them exist yet. A dependency that can reach the
+# network is a dependency that can break the claim by accident.
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+[features]
+# Enabled by `tauri build`; keeps `cargo test` from needing a webview.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
