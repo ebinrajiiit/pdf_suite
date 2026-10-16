@@ -15,10 +15,22 @@ export interface FileResult {
   roundTripMs?: number | undefined;
   reopenedPageCount?: number | undefined;
   textRuns?: number | undefined;
+  /** Share of extracted characters per script, as whole percentages. */
+  textScripts?: Record<string, number> | undefined;
   repaired?: boolean | undefined;
   needsPassword?: boolean | undefined;
   formFields?: number | undefined;
   outlineItems?: number | undefined;
+  /** Set when this file had no text layer and OCR was run over page 1. */
+  ocr?:
+    | {
+        ms: number;
+        chars: number;
+        runs: number;
+        /** Share of characters in each script, so Indic output is visible. */
+        scripts: Record<string, number>;
+      }
+    | undefined;
   error?: string | undefined;
 }
 
@@ -27,12 +39,47 @@ export interface CorpusConfig {
   qpdfWasmUrl: string;
   /** Render scale for page 1. */
   scale: number;
+  /**
+   * When set, pages with no text layer are run through OCR. There is no ground
+   * truth for a real scan, so this measures what came back — how much text, at
+   * what confidence, and in which scripts — not accuracy.
+   */
+  ocr?: {
+    languages: string[];
+    assets: { workerPath: string; corePath: string; langPath: string };
+  };
 }
 
 declare global {
   interface Window {
     runCorpus(files: string[], config: CorpusConfig): Promise<FileResult[]>;
   }
+}
+
+/** Characters per script, as whole percentages. No text is reported, only shape. */
+function scriptMix(text: string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  let total = 0;
+  for (const ch of text.replace(/\s/g, "")) {
+    const code = ch.codePointAt(0) ?? 0;
+    const script =
+      code >= 0x0d00 && code <= 0x0d7f
+        ? "malayalam"
+        : code >= 0x0900 && code <= 0x097f
+          ? "devanagari"
+          : code >= 0x0041 && code <= 0x007a
+            ? "latin"
+            : code >= 0x0030 && code <= 0x0039
+              ? "digits"
+              : "other";
+    counts[script] = (counts[script] ?? 0) + 1;
+    total++;
+  }
+  if (total === 0) return {};
+  for (const key of Object.keys(counts)) {
+    counts[key] = Math.round(((counts[key] ?? 0) / total) * 100);
+  }
+  return counts;
 }
 
 window.runCorpus = async (files, config) => {
@@ -64,7 +111,11 @@ window.runCorpus = async (files, config) => {
       result.renderMs = performance.now() - t1;
       bitmap.close();
 
-      result.textRuns = (await client.pageText(0)).length;
+      const runs = await client.pageText(0);
+      result.textRuns = runs.length;
+      // Which scripts the *extracted* text is in. This is how Indic extraction
+      // gets verified on real documents, separately from OCR.
+      result.textScripts = scriptMix(runs.map((r) => r.text).join(""));
 
       // Round-trip: save it, then open what we wrote. A document we cannot
       // re-open after writing is the worst kind of regression.
@@ -72,6 +123,21 @@ window.runCorpus = async (files, config) => {
       const saved = await client.save(order, []);
       result.roundTripMs = performance.now() - t2;
       result.reopenedPageCount = (await client.open(saved)).pageCount;
+
+      // A page with no text is a scan. Running the shipped OCR path over it is
+      // the only way to see what Tesseract does with real Malayalam.
+      if (config.ocr && result.textRuns === 0) {
+        const t3 = performance.now();
+        await client.ocr([0], [0], [], config.ocr.languages, config.ocr.assets);
+        const ocrRuns = await client.pageText(0);
+        const text = ocrRuns.map((r) => r.text).join("");
+        result.ocr = {
+          ms: performance.now() - t3,
+          chars: text.replace(/\s/g, "").length,
+          runs: ocrRuns.length,
+          scripts: scriptMix(text),
+        };
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "PasswordRequiredError") {
         // Not a failure: an encrypted file in the corpus is expected to ask.

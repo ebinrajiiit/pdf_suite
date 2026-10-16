@@ -11,6 +11,11 @@ test-results/
 # Tauri
 apps/desktop/src-tauri/target/
 
+# Documents dropped in for testing — NEVER commit (CLAUDE.md §6).
+# corpus/ is where the runners look; Data/ is where files arrive by hand.
+Data/
+data/
+
 # Test corpus: real documents — NEVER commit
 corpus/*
 !corpus/README.md

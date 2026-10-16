@@ -15,7 +15,8 @@
 // Corpus bytes are read by the browser from localhost and go nowhere else. No
 // filename or document content is printed: only counts, timings and failures.
 //
-//   node scripts/corpus-runner.mjs [--dir corpus] [--scale 1.5] [--limit N] [--json]
+//   node scripts/corpus-runner.mjs [--dir corpus] [--scale 1.5] [--limit N]
+//                                  [--ocr mal,eng] [--json]
 import { chromium } from "@playwright/test";
 import { createServer } from "vite";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -83,6 +84,34 @@ const pdfiumWasm = require.resolve("@embedpdf/pdfium/pdfium.wasm", {
 const qpdfWasm = require.resolve("@neslinesli93/qpdf-wasm/dist/qpdf.wasm", {
   paths: [join(repoRoot, "packages/core")],
 });
+
+// --ocr runs the shipped OCR path over any page that has no text layer, which
+// is the only way to see what Tesseract does with the real scans in the corpus.
+const ocrLangs = flag("ocr", undefined);
+let ocrConfig;
+if (ocrLangs) {
+  const tesseractDir = resolve(
+    require.resolve("tesseract.js/package.json", { paths: [join(repoRoot, "packages/ocr")] }),
+    "..",
+  );
+  const coreDir = resolve(
+    require.resolve("tesseract.js-core/package.json", { paths: [tesseractDir] }),
+    "..",
+  );
+  const langDir = join(repoRoot, "vendor/tessdata/fast");
+  if (!existsSync(langDir)) {
+    console.error("No language data. Run: node scripts/fetch-tessdata.mjs");
+    process.exit(2);
+  }
+  ocrConfig = {
+    languages: ocrLangs.split(","),
+    assets: {
+      workerPath: `http://localhost:5197/@fs${join(tesseractDir, "dist/worker.min.js")}`,
+      corePath: `http://localhost:5197/@fs${coreDir}/`,
+      langPath: `http://localhost:5197/@fs${langDir}/`,
+    },
+  };
+}
 const fsUrl = (p) => `/@fs${p}`;
 
 console.log(`Running ${files.length} PDFs from ${corpusDir.replace(repoRoot + "/", "")}/.`);
@@ -108,7 +137,15 @@ try {
   results = await page.evaluate(
     // eslint-disable-next-line no-undef -- this arrow runs in the page, not in node
     ([urls, config]) => window.runCorpus(urls, config),
-    [files.map(fsUrl), { pdfiumWasmUrl: fsUrl(pdfiumWasm), qpdfWasmUrl: fsUrl(qpdfWasm), scale }],
+    [
+      files.map(fsUrl),
+      {
+        pdfiumWasmUrl: fsUrl(pdfiumWasm),
+        qpdfWasmUrl: fsUrl(qpdfWasm),
+        scale,
+        ...(ocrConfig ? { ocr: ocrConfig } : {}),
+      },
+    ],
   );
 } finally {
   await browser.close();
@@ -156,8 +193,28 @@ const summary = {
   needPassword: [...byId.values()].filter((r) => r.needsPassword).length,
   withForms: [...byId.values()].filter((r) => (r.formFields ?? 0) > 0).length,
   withOutline: [...byId.values()].filter((r) => (r.outlineItems ?? 0) > 0).length,
-  withoutText: [...byId.values()].filter((r) => ok(r) && (r.textRuns ?? 0) === 0).length,
+  // An encrypted file has no text because it never opened, which is not the
+  // same as a scan. Counting it as an OCR candidate was wrong.
+  withoutText: [...byId.values()].filter(
+    (r) => ok(r) && !r.needsPassword && (r.textRuns ?? 0) === 0,
+  ).length,
   pages: pick("pageCount").reduce((a, b) => a + b, 0),
+  // Weighted script mix of extracted text, which is how Indic extraction is
+  // verified against real documents rather than against fixtures we wrote.
+  scripts: (() => {
+    const totals = {};
+    let weight = 0;
+    for (const r of byId.values()) {
+      if (!r.textScripts || !r.textRuns) continue;
+      weight += r.textRuns;
+      for (const [script, pct] of Object.entries(r.textScripts)) {
+        totals[script] = (totals[script] ?? 0) + pct * r.textRuns;
+      }
+    }
+    if (weight === 0) return undefined;
+    for (const key of Object.keys(totals)) totals[key] = Math.round(totals[key] / weight);
+    return totals;
+  })(),
   openMedian: median(pick("openMs")),
   renderMedian: median(pick("renderMs")),
   roundTripMedian: median(pick("roundTripMs")),
@@ -179,7 +236,29 @@ if (argv.includes("--json")) {
     `repaired on open: ${summary.repaired} | encrypted: ${summary.needPassword} | ` +
       `with forms: ${summary.withForms} | with bookmarks: ${summary.withOutline}`,
   );
-  console.log(`no text layer (candidates for OCR): ${summary.withoutText}`);
+  console.log(`no text layer (real scans, candidates for OCR): ${summary.withoutText}`);
+  if (summary.scripts) {
+    const mix = Object.entries(summary.scripts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${k} ${v}%`)
+      .join(", ");
+    console.log(`extracted text by script, across every opened page 1: ${mix}`);
+  }
+  const ocrd = [...byId.values()].filter((r) => r.ocr);
+  if (ocrd.length > 0) {
+    console.log(`\nOCR over ${ocrd.length} page(s) with no text layer:`);
+    for (const r of ocrd) {
+      const mix = Object.entries(r.ocr.scripts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k} ${v}%`)
+        .join(", ");
+      console.log(
+        `  ${r.file}  ${r.ocr.ms.toFixed(0)}ms  ${r.ocr.chars} chars in ${r.ocr.runs} runs  [${mix}]`,
+      );
+    }
+    console.log("  (no ground truth for a real scan, so this is output shape, not accuracy)");
+  }
+
   if (failed.length > 0) {
     console.log(`\nfailures (${failed.length}), by message:`);
     const byMessage = new Map();

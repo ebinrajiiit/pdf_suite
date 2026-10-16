@@ -1,13 +1,254 @@
 {
-  "$comment": "Where every file in corpus/ came from, and under what licence. Written by scripts/fetch-sample-corpus.mjs. corpus/ is git-ignored; this file records that the downloaded documents are openly licensed and that the rest are generated.",
-  "generatedAt": "2026-10-16T09:27:15.512Z",
+  "$comment": "Where every file in corpus/ came from. corpus/ is git-ignored; this file is not. Written by scripts/fetch-sample-corpus.mjs and scripts/fetch-lsgkerala.mjs.",
+  "generatedAt": "2026-10-16T09:53:24.504Z",
   "files": [
+    {
+      "file": "lab-malayalam/CC_intimation_22.10.2025.pdf",
+      "bytes": 205554,
+      "sha256": "8135cc19a216f7a28324da91aaeda941d47d0b97a5cb6d02b164ffac79ff3cd6",
+      "source": "supplied by the lab (Data/malayalam)",
+      "licence": "unknown — treat as internal; do not redistribute",
+      "kind": "real document, supplied by the lab — Malayalam"
+    },
+    {
+      "file": "lab-malayalam/kerala-government-financial-assistance-projects.pdf",
+      "bytes": 209388,
+      "sha256": "a3945ec9e89b5cfbc35e785ee309a99f63f05bd4587bdfaaa774d482627913d9",
+      "source": "supplied by the lab (Data/malayalam)",
+      "licence": "unknown — treat as internal; do not redistribute",
+      "kind": "real document, supplied by the lab — Malayalam"
+    },
     {
       "file": "large/500-pages.pdf",
       "bytes": 455178,
       "sha256": "8655e80732df40c1a75d4d0646ddd9eb2c983e656c726fe04f93f06f46af1826",
       "kind": "synthetic: 500 pages, for virtualisation and batch timing",
       "licence": "n/a — generated"
+    },
+    {
+      "file": "lsgkerala/1_PublicAdministrati_737.pdf",
+      "bytes": 607521,
+      "sha256": "d9f226d5588a6b7daf7150388c42131244599a1a6fe9cf32be39270a2456cae6",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/1_PublicAdministrati_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/10_DrinkingWaterfina_737.pdf",
+      "bytes": 543786,
+      "sha256": "7b0390592961d6e45f1c336473282eea871c4bd027226e46b979a20e14b7edc6",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/10_DrinkingWaterfina_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/12_PublicWorks_737.pdf",
+      "bytes": 841402,
+      "sha256": "1f357fd9a2a192abec8884373bb5ac009bf9d82dd6ba66dc277fce18eedb083e",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/12_PublicWorks_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/2_Agriculture_737.pdf",
+      "bytes": 689679,
+      "sha256": "aa6773c9a17df4982c9b75746843e0fbe3b5280f213da6e799c1be8b6713b2bb",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/2_Agriculture_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/2026-09-28-Quotation_Notice.pdf",
+      "bytes": 230204,
+      "sha256": "f2364f71b687ced883dbb1ff7219ee0a3362e4606f09eef415597560a8075b4d",
+      "source": "http://lsgkerala.gov.in/system/files/2026-10/2026-09-28-Quotation%20Notice.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/tender-other-institutions-news/competitive-quotations-are-invited-vehicle-owners-who-are-willing",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/3_AnimalHusbandry_737.pdf",
+      "bytes": 559082,
+      "sha256": "6a432949b31976d1b767b9d63c1a3ba294c4f8c0b9eb91c7b73f19c8d4b3d6ab",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/3_AnimalHusbandry_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/4_LocalPlanningDev_737.pdf",
+      "bytes": 571032,
+      "sha256": "1bb07fbf75f61e5f8d3e180a5fbe031bd02dcf98ebd0779249c37d0577b63dcc",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/4_LocalPlanningDev_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/5_PovertyAlleviation_737.pdf",
+      "bytes": 533268,
+      "sha256": "b82cf785cd49326cb722eefc6e879eee93a47a66bb412eef7a418a5b7c38b532",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/5_PovertyAlleviation_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/6__SocialJustice_737.pdf",
+      "bytes": 653989,
+      "sha256": "6e8e704d1c39bc726efe8827498a9dd89946401876a39a35fcc5faadffdbb026",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/6__SocialJustice_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/7_WomenDev_737.pdf",
+      "bytes": 600540,
+      "sha256": "f6b2f5361460d2f5e5b17cc47d925b8cdd6d5877260e6862feb67dcf16ebae95",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/7_WomenDev_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/8_1SCDevelopment_3__737.pdf",
+      "bytes": 568569,
+      "sha256": "ed0904fccc7670982738927131b51555c71af012a06feb5763c46acc0550644c",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/8_1SCDevelopment_3__737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/8_2STDevelopment_2__737.pdf",
+      "bytes": 576724,
+      "sha256": "b123350cd22f386269d8d8c8a550f597c4c11692d80bd7053ae4620d420732fa",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/8_2STDevelopment_2__737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/9_Health_737.pdf",
+      "bytes": 696803,
+      "sha256": "bac389cbb2d0a83cc5946be4df64cdfacad1bd3633e9ad75fd1286f7dc864983",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/9_Health_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/CCA__26-7-2022.pdf",
+      "bytes": 1148873,
+      "sha256": "f39b8fdf642c62d279fa461352d6d4ab7246ce27f367d4ea4b2677397476fa62",
+      "source": "http://lsgkerala.gov.in/system/files/2022-07/CCA_%2026-7-2022.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/CCA_02-06-2022_0.pdf",
+      "bytes": 1345170,
+      "sha256": "c94c972d881a290fdd8116707207c6b81b769da8f6e7a7ea96a32e1fb65f279d",
+      "source": "http://lsgkerala.gov.in/system/files/2022-06/CCA_02-06-2022_0.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/CCA-21-08-2022.pdf",
+      "bytes": 1208833,
+      "sha256": "4e7f2591a9d941e381b497adec799698523bea4f447330c6eb971a05a15df897",
+      "source": "http://lsgkerala.gov.in/system/files/2022-08/CCA-21-08-2022.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/CCA-21-11-2022_0.pdf",
+      "bytes": 1020342,
+      "sha256": "5e308a7ebbe358a2e8e05cd1bb63f0ca75b2caa5e3f728459523c3957a14074c",
+      "source": "http://lsgkerala.gov.in/system/files/2022-11/CCA-21-11-2022_0.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/CCA-21-11-2022.pdf",
+      "bytes": 1020342,
+      "sha256": "5e308a7ebbe358a2e8e05cd1bb63f0ca75b2caa5e3f728459523c3957a14074c",
+      "source": "http://lsgkerala.gov.in/system/files/2022-11/CCA-21-11-2022.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/CCA-3-2022-23.pdf",
+      "bytes": 1373530,
+      "sha256": "6e6123e3df19db184c4316f6589443ac6805d6fb7d321b5a6ad4e0666db69877",
+      "source": "http://lsgkerala.gov.in/system/files/2022-10/CCA-3-2022-23.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/Coordination_Committee_Agenda_-_08.03_1__0.pdf",
+      "bytes": 1519398,
+      "sha256": "2298f08990bc19f5422c4f042726d1068895090c82e73e9870154d0d2188e042",
+      "source": "http://lsgkerala.gov.in/system/files/2023-03/Coordination%20Committee%20Agenda%20-%2008.03%20%281%29_0.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/Coordination_Committee_Agenda-_19.12.2022_PDF.pdf",
+      "bytes": 996838,
+      "sha256": "86cfe9b6949f3a8387cc3506282ca1583c1204569c1404f1cdfb53b8155bb490",
+      "source": "http://lsgkerala.gov.in/system/files/2022-12/Coordination%20Committee%20Agenda-%2019.12.2022%20PDF.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/Coordination_Committee_Agenda-09.01.2023_PDF.pdf",
+      "bytes": 1142146,
+      "sha256": "d0e615745d2ac25889fe555081d63f2951eb7ef543be33dfb531bc4dc280c61f",
+      "source": "http://lsgkerala.gov.in/system/files/2023-01/Coordination%20Committee%20Agenda-09.01.2023%20PDF.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/Coordination_Committee_Agenda-14.02.2023.pdf",
+      "bytes": 1567373,
+      "sha256": "403b8a724af8171f91d6602fdf0fc8add879595ce4d9a6945a6f68bf51ec962e",
+      "source": "http://lsgkerala.gov.in/system/files/2023-02/Coordination%20Committee%20Agenda-14.02.2023.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/co-ordination-committee/CC-Minutes",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/Education_new_737.pdf",
+      "bytes": 765955,
+      "sha256": "18add6d29a4717f9f81089c9ff16b9fc9a19ae0b363a609d6cf3907c5e6f88ed",
+      "source": "https://lsgkerala.gov.in/system/files/2019-12/Education_new_737.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml/plan-progress",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
+    },
+    {
+      "file": "lsgkerala/Integrated_Waste_Management.pdf",
+      "bytes": 3538890,
+      "sha256": "c564e406b1537d8bf2c5b689ef87361aca63b44245785af39eca3f86171c1a6d",
+      "source": "http://lsgkerala.gov.in/system/files/2020-12/Integrated%20Waste%20Management.pdf",
+      "foundOn": "https://lsgkerala.gov.in/ml",
+      "licence": "Government of Kerala, published publicly; no licence stated",
+      "kind": "real document, downloaded — Kerala LSGD (Malayalam)"
     },
     {
       "file": "malformed/header-mangled.pdf",

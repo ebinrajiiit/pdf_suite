@@ -57,7 +57,7 @@ Generated images are the best case: no skew, no speckle, no JPEG artefacts, no f
 
 Open questions the corpus must settle:
 
-- [ ] Accuracy on real scanned Malayalam and Hindi documents, including photocopies and mixed English/Indic pages.
+- [ ] Accuracy on real scanned Malayalam and Hindi documents, including photocopies and mixed English/Indic pages. **Still open, and now known to be harder to source than expected:** 41 real documents have been collected, including 25 Malayalam PDFs from Kerala LSGD, and *every one of them is born-digital with a text layer*. `pnpm corpus --ocr mal,eng` runs OCR over any page without text and reports what came back; it currently finds none to run on. Scanned pages have to come from the lab's own scanners.
 - [ ] Whether `tessdata_fast` is good enough or `tessdata_best` (larger, slower) is needed for Indic scripts.
 - [ ] Page-level timings at 300 dpi, and whether a 500-page batch needs the desktop's native Tesseract (Phase 2 names it for exactly this).
 - [ ] Whether Tesseract's own searchable-PDF output is good enough, or we need our own text layer for better word boxes.

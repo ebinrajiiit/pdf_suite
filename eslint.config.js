@@ -33,6 +33,7 @@ export default tseslint.config(
         clearInterval: "readonly",
         fetch: "readonly",
         Buffer: "readonly",
+        setTimeout: "readonly",
       },
     },
   },

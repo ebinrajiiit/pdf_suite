@@ -72,6 +72,27 @@ These cost more than the timings did and are the durable part of this spike.
 5. **pdf.js v6 no longer needs `'unsafe-eval'`** (`isEvalSupported` is gone), and both engines run under the CSP in `docs/PRIVACY.md` unchanged — `'wasm-unsafe-eval'` covers both. Verified by the adapters running in the benchmark page.
 6. **No browser memory API covers both engines.** `performance.measureUserAgentSpecificMemory()` is unavailable in Playwright's Chromium build even cross-origin-isolated, and `usedJSHeapSize` misses PDFium's wasm memory and pdf.js's worker heap. Hence process-tree RSS, which is coarse but comparable.
 
+## Second real-document run: 41 files, 1,424 pages
+
+With the Kerala LSGD documents added (`pnpm corpus:lsgkerala`), the gap holds and
+widens on text extraction.
+
+| | pdf.js | PDFium |
+| --- | --- | --- |
+| Open, median / p95 | 93 ms / 119 ms | **0.3 ms / 1.5 ms** |
+| First-page render, median / p95 | 43 ms / 58 ms | **19 ms / 28 ms** |
+| Text extraction, median | 2.8 ms | **1.2 ms** |
+| Characters extracted (41 files) | 37,645 | **39,748** |
+| Peak browser RSS | **13.8 MB** | 17.7 MB |
+| Files it could not open | **2** | 3 |
+
+Raster agreement: 38 pages compared, median difference 1.40 %, **6 files above
+2 %** — those six are the pages a human should look at before this ADR is
+accepted, and the reason the benchmark reports that number at all.
+
+The one extra PDFium failure is still the damaged header, still covered by the
+qpdf repair pass in the app.
+
 ## First real-document run
 
 `node scripts/fetch-sample-corpus.mjs` pulls public-domain Indian government

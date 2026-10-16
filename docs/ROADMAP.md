@@ -9,7 +9,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [ ] Engine spike: PDFium-WASM vs pdf.js on 100 corpus files → ADR 0002. Run on 14 files so far (8 real Malayalam/Hindi government PDFs): PDFium is 3–900x faster and extracts more text, but fails on a damaged header that pdf.js opens — the qpdf repair pass covers that gap
 - [x] OCR spike: Tesseract on generated Malayalam + Hindi samples → ADR 0004 (eng 100%, hin 100%, mal 89% which turned out to be a chillu spelling mismatch, now fixed in search). Real scans still needed
 - [x] Corpus runner script (`pnpm corpus`) — drives the real worker pipeline (open with repair, render, round-trip, re-open), fails on any regression against the last clean run, and records no filenames
-- [ ] Reach the 1,000-file test corpus (kept out of git). `pnpm corpus:samples` fetches a 14-file starter set of public-domain Malayalam and Hindi government documents plus generated edge cases; the institutional material (grade cards, exam papers, DSC-signed letters, department forms) and any image-only scans still have to come from the lab
+- [ ] Reach the 1,000-file test corpus (kept out of git). 41 files so far: `pnpm corpus:samples` (public-domain Malayalam/Hindi government documents plus generated edge cases), `pnpm corpus:lsgkerala` (Kerala LSGD, 25 real Malayalam PDFs) and the lab's own files. Still missing: **image-only scans**, grade cards, exam papers, DSC-signed letters
 
 **Gate:** engine chosen, ADR merged, offline test green.
 
@@ -22,7 +22,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
   the bitmap, so caching would cost a full copy of every page drawn. Revisit if
   re-rasterising on zoom actually hurts on the corpus
 - [x] Text search with highlights — case- and Unicode-normalisation-insensitive, so Malayalam and Hindi match whichever form the document uses (unit-tested). Highlights are line-level: narrowing them to the matched substring needs glyph quads from the engine
-- [ ] Verify Indic *extraction* (not just matching) against real Malayalam and Hindi documents — needs the corpus
+- [x] Verify Indic extraction against real Malayalam documents: across 40 opened files from Kerala LSGD and the Kerala Assembly, 22% of extracted page-1 characters sit in the Malayalam Unicode block (64% Latin, 5% digits). `pnpm corpus` reports the mix
+- [ ] Verify Indic extraction from *scanned* pages, and for Hindi — every real document collected so far is born-digital, so OCR on real Indic scans is still unmeasured
 - [x] Annotate: highlight (snapped to text lines), sticky note, free text — written as real PDF annotation objects, so the text underneath survives and other viewers can edit them
 - [x] Annotate: underline and strike-through (real `/Underline` and `/StrikeOut`, opaque where a highlight is a tint)
 - [ ] Annotate: freehand and stamps; colour choice; editing an annotation after placing it; generating `/AP` appearance streams for viewers that do not synthesise them

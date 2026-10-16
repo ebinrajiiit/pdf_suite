@@ -106,9 +106,15 @@ is what `pnpm e2e` asserts on every run.
 ```bash
 pnpm corpus:samples   # fetch a starter corpus: real public-domain Malayalam and
                       # Hindi government PDFs, plus generated edge cases
+pnpm corpus:lsgkerala # 25 real Malayalam PDFs from Kerala LSGD (robots.txt-respecting)
 pnpm corpus           # open, render, round-trip and re-open every file
+pnpm corpus --ocr mal,eng   # also OCR any page that has no text layer
 pnpm bench:engines    # PDFium vs pdf.js over the same files (ADR 0002)
 ```
+
+The department's circulars portal (`go.lsgkerala.gov.in`) is **not** crawled: its
+robots.txt disallows `/files`, where its documents live. Download those by hand if
+you need them.
 
 Add your own documents to `corpus/` as well — that is what the gate is for.
 `corpus/PROVENANCE.json` records where each file came from and under what
