@@ -2,7 +2,7 @@
 // working with the network cut. The viewer flow runs inside the guard so the
 // assertion covers real work, not just the shell loading.
 import { test, expect, type Page } from "@playwright/test";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 
 type Size = [number, number];
@@ -17,6 +17,19 @@ async function fixture(sizes: Size[]): Promise<Buffer> {
 async function sizesOf(bytes: Buffer | Uint8Array): Promise<Size[]> {
   const doc = await PDFDocument.load(bytes);
   return doc.getPages().map((p) => [Math.round(p.getWidth()), Math.round(p.getHeight())]);
+}
+
+/** A document with real text, for search. One line per entry, per page. */
+async function textFixture(pages: string[][]): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (const lines of pages) {
+    const page = doc.addPage([595, 842]);
+    lines.forEach((line, i) => {
+      page.drawText(line, { x: 48, y: 760 - i * 20, size: 12, font });
+    });
+  }
+  return Buffer.from(await doc.save());
 }
 
 const PORTRAIT: Size = [595, 842];
@@ -270,4 +283,46 @@ test("compresses a document without losing pages", async ({ page }) => {
   await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
 
   expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([PORTRAIT, LANDSCAPE, SQUARE]);
+});
+
+test("finds text, counts the matches and highlights them", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(
+    page,
+    "results.pdf",
+    await textFixture([
+      ["Result sheet for semester one", "Candidate: A. Student"],
+      ["Result sheet for semester two", "Remarks: none"],
+      ["Appendix", "No result here"],
+    ]),
+  );
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.getByTestId("search-input").fill("result sheet");
+  await page.getByRole("button", { name: "Find" }).click();
+
+  // One per page for the first two pages; page 3 says "result" but not the phrase.
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 2", { timeout: 30_000 });
+  await expect(page.getByTestId("highlight-0-0")).toBeVisible();
+
+  // Stepping moves to the hit on the second page and marks it active.
+  await page.getByRole("button", { name: "Next match" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("2 of 2");
+  await expect(page.getByTestId("highlight-1-0")).toHaveClass(/highlight-active/);
+
+  // Wrapping round returns to the first hit.
+  await page.getByRole("button", { name: "Next match" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 2");
+
+  // Searching is case-insensitive and finds the single-word matches too.
+  await page.getByTestId("search-input").fill("RESULT");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 3", { timeout: 30_000 });
+
+  await page.getByTestId("search-input").fill("nothing-here");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
 });

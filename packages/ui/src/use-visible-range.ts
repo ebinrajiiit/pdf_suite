@@ -15,6 +15,8 @@ export function useVisibleRange(
   ref: (node: HTMLElement | null) => void;
   range: { start: number; end: number };
   total: number;
+  /** Scrolls the container, for jumping to a page. */
+  scrollToOffset: (offset: number) => void;
 } {
   const node = useRef<HTMLElement | null>(null);
   const [viewport, setViewport] = useState({ scroll: 0, size: 0 });
@@ -56,7 +58,16 @@ export function useVisibleRange(
     };
   }, [measure]);
 
-  return { ref, range: visibleRange(offsets, viewport.scroll, viewport.size, lookAhead), total };
+  const scrollToOffset = useCallback((offset: number) => {
+    node.current?.scrollTo({ top: offset, behavior: "smooth" });
+  }, []);
+
+  return {
+    ref,
+    range: visibleRange(offsets, viewport.scroll, viewport.size, lookAhead),
+    total,
+    scrollToOffset,
+  };
 }
 
 /**

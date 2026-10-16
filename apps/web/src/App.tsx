@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { pagesAt, removePages, Thumbnails, Viewer } from "@pdf-suite/ui";
+import { pagesAt, removePages, Thumbnails, Viewer, type Highlight } from "@pdf-suite/ui";
+import type { SearchHit } from "@pdf-suite/workers";
 import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
 import { useDocument } from "./use-document.js";
 
@@ -16,6 +17,7 @@ export function App() {
     render,
     save,
     extract,
+    search,
     setOrder,
   } = useDocument();
   const openInput = useRef<HTMLInputElement>(null);
@@ -25,6 +27,10 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [hitIndex, setHitIndex] = useState(0);
+  const [truncated, setTruncated] = useState(false);
 
   const info = state.info;
   const pageCount = state.order.length;
@@ -40,8 +46,17 @@ export function App() {
   }, []);
 
   // Positions move when pages are added, removed or reordered, so a stale
-  // selection would point at the wrong pages.
-  useEffect(() => setSelected(new Set()), [info]);
+  // selection or a stale set of hits would point at the wrong pages.
+  useEffect(() => {
+    setSelected(new Set());
+    setHits([]);
+    setHitIndex(0);
+    setTruncated(false);
+  }, [info]);
+  useEffect(() => {
+    setHits([]);
+    setHitIndex(0);
+  }, [state.order]);
 
   const onSelect = useCallback((position: number, extend: boolean) => {
     setSelected((current) => {
@@ -129,6 +144,41 @@ export function App() {
     setAskProtect(true);
   }, [info?.protected, protect]);
 
+  /** Hit boxes grouped by display position, which is what the Viewer draws. */
+  const highlights = useMemo(() => {
+    const byPosition = new Map<number, Highlight[]>();
+    for (const hit of hits) {
+      const list = byPosition.get(hit.position) ?? [];
+      list.push(...hit.rects);
+      byPosition.set(hit.position, list);
+    }
+    return byPosition;
+  }, [hits]);
+
+  /** Identifies the current hit as the Viewer keys them: "position:index". */
+  const activeHighlight = useMemo(() => {
+    const hit = hits[hitIndex];
+    if (!hit) return undefined;
+    const before = hits.slice(0, hitIndex).filter((h) => h.position === hit.position).length;
+    return `${hit.position}:${before}`;
+  }, [hits, hitIndex]);
+
+  const handleSearch = useCallback(async () => {
+    const found = await search(query);
+    if (!found) return;
+    setHits(found.hits);
+    setTruncated(found.truncated);
+    setHitIndex(0);
+  }, [query, search]);
+
+  const step = useCallback(
+    (by: number) => {
+      if (hits.length === 0) return;
+      setHitIndex((current) => (current + by + hits.length) % hits.length);
+    },
+    [hits.length],
+  );
+
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
@@ -189,6 +239,42 @@ export function App() {
             {info?.protected ? "Remove password" : "Protect…"}
           </button>
         </span>
+
+        <form
+          className="toolbar-group search"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSearch();
+          }}
+        >
+          <input
+            type="search"
+            aria-label="Search the document"
+            placeholder="Search…"
+            value={query}
+            data-testid="search-input"
+            onChange={(event) => setQuery(event.target.value)}
+            disabled={disabled}
+          />
+          <button type="submit" disabled={disabled || query.trim() === ""}>
+            Find
+          </button>
+          {hits.length > 0 ? (
+            <>
+              <span data-testid="hit-count">
+                {hitIndex + 1} of {hits.length}
+                {truncated ? "+" : ""}
+              </span>
+              <button type="button" aria-label="Previous match" onClick={() => step(-1)}>
+                ‹
+              </button>
+              <button type="button" aria-label="Next match" onClick={() => step(1)}>
+                ›
+              </button>
+            </>
+          ) : null}
+        </form>
 
         <span className="toolbar-name">{state.name ?? "No document open"}</span>
         {info ? (
@@ -303,6 +389,9 @@ export function App() {
               render={render}
               containerWidth={width}
               pixelRatio={globalThis.devicePixelRatio || 1}
+              highlights={highlights}
+              active={activeHighlight}
+              scrollTo={hits[hitIndex]?.position}
             />
           </div>
         </div>

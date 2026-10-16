@@ -1,10 +1,16 @@
 /// <reference lib="webworker" />
 import { createQpdf, merge, reorder, rotate, type Qpdf } from "@pdf-suite/core";
-import { PasswordRequiredError, type DocHandle, type PdfEngine } from "@pdf-suite/engine";
+import {
+  findMatches,
+  PasswordRequiredError,
+  type DocHandle,
+  type PdfEngine,
+} from "@pdf-suite/engine";
 import { createPdfiumEngine } from "@pdf-suite/engine/pdfium";
 import {
   CancelledError,
   type DocumentInfo,
+  type SearchHit,
   type WorkerRequest,
   type WorkerResponse,
 } from "./protocol.js";
@@ -181,6 +187,31 @@ async function handle(request: WorkerRequest): Promise<void> {
       // readable by pdf-lib for every other operation.
       protection = request.password;
       post({ id, kind: "document", info: info(doc!) });
+      return;
+    }
+    case "search": {
+      if (!doc) throw new Error("no document is open");
+      const limit = request.limit ?? 500;
+      const hits: SearchHit[] = [];
+      let truncated = false;
+
+      for (const [position, page] of request.order.entries()) {
+        throwIfCancelled(id);
+        // Text extraction is the expensive part, so progress is per page and a
+        // cancel between pages abandons the rest.
+        const runs = await doc.extractText(page);
+        for (const match of findMatches(runs, request.query)) {
+          if (hits.length >= limit) {
+            truncated = true;
+            break;
+          }
+          hits.push({ position, page, snippet: match.snippet, rects: match.rects });
+        }
+        post({ id, kind: "progress", done: position + 1, total: request.order.length });
+        if (truncated) break;
+      }
+
+      post({ id, kind: "hits", hits, truncated });
       return;
     }
     case "save": {

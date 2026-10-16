@@ -19,6 +19,17 @@ export interface DocumentInfo {
   protected?: boolean;
 }
 
+/** One search hit, in the display position the user is looking at. */
+export interface SearchHit {
+  /** Display position, not the source page index. */
+  position: number;
+  /** Source page index, for rendering. */
+  page: number;
+  snippet: string;
+  /** Boxes to highlight, in PDF points with the origin at the page bottom-left. */
+  rects: { x: number; y: number; w: number; h: number }[];
+}
+
 export type WorkerRequest = { id: number } &
   /** `qpdfWasmUrl` must be same-origin; qpdf is only loaded when first needed. */
   (
@@ -43,6 +54,12 @@ export type WorkerRequest = { id: number } &
     | { kind: "compress"; order: number[] }
     /** Sets the password the document is saved with, or null to remove protection. */
     | { kind: "protect"; password: string | null }
+    /**
+     * Searches the pages in `order`, reporting progress per page. Long documents
+     * are why the protocol has cancellation: a search over 500 pages extracts
+     * text from every one of them.
+     */
+    | { kind: "search"; query: string; order: number[]; limit?: number }
     | { kind: "save"; order: number[] }
     | { kind: "close" }
     | { kind: "cancel"; target: number }
@@ -53,6 +70,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "document"; info: DocumentInfo }
   | { kind: "bitmap"; bitmap: ImageBitmap }
   | { kind: "saved"; bytes: ArrayBuffer }
+  | { kind: "hits"; hits: SearchHit[]; truncated: boolean }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -62,7 +80,7 @@ export type WorkerResponse = { id: number } & (
 /** Replies that complete a request; `progress` does not. */
 export type TerminalResponse = Extract<
   WorkerResponse,
-  { kind: "ready" | "document" | "bitmap" | "saved" | "closed" | "cancelled" | "error" }
+  { kind: "ready" | "document" | "bitmap" | "saved" | "hits" | "closed" | "cancelled" | "error" }
 >;
 
 export class CancelledError extends Error {

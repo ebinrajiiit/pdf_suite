@@ -1,6 +1,7 @@
 import {
   CancelledError,
   type DocumentInfo,
+  type SearchHit,
   type TerminalResponse,
   type WorkerRequest,
   type WorkerResponse,
@@ -28,6 +29,12 @@ export interface PdfWorkerClient {
   compress(order: number[]): Promise<DocumentInfo>;
   /** Sets the password applied when saving, or null to remove protection. */
   protect(password: string | null): Promise<DocumentInfo>;
+  /** Searches the given display order, reporting progress per page. */
+  search(
+    query: string,
+    order: number[],
+    onProgress?: OnProgress,
+  ): Promise<{ hits: SearchHit[]; truncated: boolean }>;
   save(order: number[]): Promise<ArrayBuffer>;
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
@@ -128,6 +135,10 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async protect(password) {
       return expect(await send({ kind: "protect", password }), "document").info;
+    },
+    async search(query, order, onProgress) {
+      const reply = expect(await send({ kind: "search", query, order }, [], onProgress), "hits");
+      return { hits: reply.hits, truncated: reply.truncated };
     },
     async save(order) {
       return expect(await send({ kind: "save", order }), "saved").bytes;

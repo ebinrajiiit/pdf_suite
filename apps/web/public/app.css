@@ -55,6 +55,29 @@ body {
   font-weight: 600;
 }
 
+.search input {
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  width: 10rem;
+}
+.search span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+/* Marks sit over the page canvas, so they must not swallow clicks. */
+.highlight {
+  position: absolute;
+  background: rgb(255 214 0 / 35%);
+  outline: 1px solid rgb(192 140 0 / 60%);
+  pointer-events: none;
+}
+.highlight-active {
+  background: rgb(255 145 0 / 45%);
+  outline: 2px solid rgb(200 80 0 / 80%);
+}
+
 .badge {
   font-size: 0.75rem;
   padding: 0.1rem 0.4rem;

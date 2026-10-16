@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPdfWorkerClient, type DocumentInfo, type PdfWorkerClient } from "@pdf-suite/workers";
+import {
+  createPdfWorkerClient,
+  type DocumentInfo,
+  type PdfWorkerClient,
+  type SearchHit,
+} from "@pdf-suite/workers";
 import pdfiumWasmUrl from "@embedpdf/pdfium/pdfium.wasm?url";
 import qpdfWasmUrl from "@neslinesli93/qpdf-wasm/dist/qpdf.wasm?url";
 import { insertPages } from "@pdf-suite/ui";
@@ -211,6 +216,22 @@ export function useDocument() {
     [run],
   );
 
+  /**
+   * Searches the document as displayed. Returns undefined if the search was
+   * cancelled or failed; `truncated` means the hit limit was reached.
+   */
+  const search = useCallback(
+    async (query: string): Promise<{ hits: SearchHit[]; truncated: boolean } | undefined> => {
+      if (query.trim() === "") return { hits: [], truncated: false };
+      return run("Searching", (worker) =>
+        worker.search(query, stateRef.current.order, (done, total) =>
+          setState((s) => ({ ...s, busy: `Searching page ${done} of ${total}` })),
+        ),
+      );
+    },
+    [run],
+  );
+
   const setOrder = useCallback((order: number[]) => setState((s) => ({ ...s, order })), []);
 
   /** Saves just the given source pages, leaving the open document alone. */
@@ -240,6 +261,7 @@ export function useDocument() {
     render,
     save,
     extract,
+    search,
     setOrder,
   };
 }

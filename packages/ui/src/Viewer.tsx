@@ -1,10 +1,18 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
 
 export interface PageSize {
   width: number;
   height: number;
+}
+
+/** A box in PDF points, origin at the page's bottom-left. */
+export interface Highlight {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface ViewerProps {
@@ -15,11 +23,30 @@ export interface ViewerProps {
   /** CSS pixels available for a page; pages are scaled to fit this width. */
   containerWidth: number;
   pixelRatio?: number;
+  /** Boxes to mark, keyed by display position. */
+  highlights?: ReadonlyMap<number, Highlight[]>;
+  /** The one highlight to emphasise, as "position:index". */
+  active?: string | undefined;
+  /** Display position to scroll into view; changing it scrolls. */
+  scrollTo?: number | undefined;
 }
 
 const GAP = 16;
 
-export function Viewer({ order, pageSizes, render, containerWidth, pixelRatio = 1 }: ViewerProps) {
+function pageHeightOf(page: number, pageSizes: PageSize[]): number {
+  return pageSizes[page]?.height ?? 792;
+}
+
+export function Viewer({
+  order,
+  pageSizes,
+  render,
+  containerWidth,
+  pixelRatio = 1,
+  highlights,
+  active,
+  scrollTo,
+}: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
     [order, pageSizes],
@@ -43,7 +70,14 @@ export function Viewer({ order, pageSizes, render, containerWidth, pixelRatio = 
     return { boxes, offsets };
   }, [order, pageSizes, scale]);
 
-  const { ref, range, total } = useVisibleRange(layout.offsets);
+  const { ref, range, total, scrollToOffset } = useVisibleRange(layout.offsets);
+
+  // Jumping to a search hit scrolls the page into view; the window of mounted
+  // pages follows from the new scroll position as usual.
+  useEffect(() => {
+    if (scrollTo === undefined) return;
+    scrollToOffset(layout.offsets[scrollTo] ?? 0);
+  }, [scrollTo, layout.offsets, scrollToOffset]);
 
   return (
     <div className="viewer" ref={ref} data-testid="viewer">
@@ -67,6 +101,22 @@ export function Viewer({ order, pageSizes, render, containerWidth, pixelRatio = 
               render={render}
               label={`Page ${box.position + 1}`}
             />
+            {(highlights?.get(box.position) ?? []).map((mark, index) => (
+              <div
+                key={`${mark.x}:${mark.y}:${index}`}
+                className={
+                  "highlight" + (active === `${box.position}:${index}` ? " highlight-active" : "")
+                }
+                data-testid={`highlight-${box.position}-${index}`}
+                style={{
+                  left: `${mark.x * scale}px`,
+                  // PDF coordinates start at the bottom of the page, CSS at the top.
+                  top: `${(pageHeightOf(box.page, pageSizes) - mark.y - mark.h) * scale}px`,
+                  width: `${mark.w * scale}px`,
+                  height: `${mark.h * scale}px`,
+                }}
+              />
+            ))}
           </div>
         ))}
       </div>
