@@ -102,9 +102,9 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
-    /** The text runs on one source page that can be edited in place. */
+    /** The paragraphs on one source page that can be edited in place. */
     | { kind: "editableText"; page: number; order: number[]; annotations: Annotation[] }
-    /** Replaces the text of the named runs, then reopens the result. */
+    /** Replaces the text of the named paragraphs, re-wrapping each one. */
     | { kind: "editText"; edits: TextEdit[]; order: number[]; annotations: Annotation[] }
     /** Removes the content inside the given areas, then verifies it is gone. */
     | { kind: "redact"; areas: RedactArea[]; order: number[]; annotations: Annotation[] }
@@ -162,6 +162,10 @@ export type WorkerResponse = { id: number } & (
       kind: "edited";
       info: DocumentInfo;
       applied: number;
+      /** Blocks whose font could not draw the new text and was replaced. */
+      substituted: TextEditResult["substituted"];
+      /** Lines added beyond what a block had, which may overlap what follows. */
+      addedLines: number;
       rejected: TextEditResult["rejected"];
     }
   | { kind: "parts"; parts: ArrayBuffer[] }

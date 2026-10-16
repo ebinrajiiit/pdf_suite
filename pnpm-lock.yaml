@@ -115,6 +115,9 @@ importers:
       '@types/emscripten':
         specifier: ^1.41.6
         version: 1.41.6
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
       pdfjs-dist:
         specifier: ^6.4.299
         version: 6.4.299

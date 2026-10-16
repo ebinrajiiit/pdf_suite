@@ -55,14 +55,25 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
-  /** The text runs on one source page that can be edited in place. */
+  /** The paragraphs on one source page that can be edited in place. */
   editableText(page: number, order: number[], annotations: Annotation[]): Promise<EditableText[]>;
-  /** Replaces the text of the named runs, reopening the document. */
+  /**
+   * Replaces the text of the named paragraphs, re-wrapping each to its own
+   * width, and reopens the document. The reply reports font substitutions and
+   * lines the blocks did not have before, both of which the user must be told
+   * about rather than left to notice.
+   */
   editText(
     edits: TextEdit[],
     order: number[],
     annotations: Annotation[],
-  ): Promise<{ info: DocumentInfo; applied: number; rejected: TextEditResult["rejected"] }>;
+  ): Promise<{
+    info: DocumentInfo;
+    applied: number;
+    substituted: TextEditResult["substituted"];
+    addedLines: number;
+    rejected: TextEditResult["rejected"];
+  }>;
   /**
    * Removes the content inside the given areas. The reply says how many page
    * objects went and whether re-reading the result found any text left inside
@@ -226,7 +237,13 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async editText(edits, order, annotations) {
       const reply = expect(await send({ kind: "editText", edits, order, annotations }), "edited");
-      return { info: reply.info, applied: reply.applied, rejected: reply.rejected };
+      return {
+        info: reply.info,
+        applied: reply.applied,
+        substituted: reply.substituted,
+        addedLines: reply.addedLines,
+        rejected: reply.rejected,
+      };
     },
     async redact(areas, order, annotations) {
       const reply = expect(await send({ kind: "redact", areas, order, annotations }), "redacted");

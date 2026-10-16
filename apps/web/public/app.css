@@ -496,7 +496,11 @@ textarea:focus-visible,
   border-radius: 2px;
   background: #fff;
   font-family: inherit;
-  line-height: 1;
+  /* A paragraph is edited as one block, so this is a textarea: no drag handle,
+     no scrollbar until the text really outgrows the block. */
+  resize: none;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 /* ---------- viewer ---------- */

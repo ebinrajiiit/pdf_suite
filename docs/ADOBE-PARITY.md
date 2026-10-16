@@ -42,24 +42,36 @@ instead of collapsing to icons.
 | Export pages as images | PNG per page |
 | Create PDF from images | JPEG and PNG, one page per image or fitted |
 | Repair a damaged file | qpdf repair pass on open |
-| Edit PDF (text) | Click a line and type over it; the content stream changes, no reflow yet |
+| Edit PDF (text) | Click a paragraph and type over it; it re-wraps to its own width, and a font with no glyph for what was typed is substituted |
 
 ## Missing for English parity, in the order I would build it
 
-1. **Edit text and images in place** — Acrobat's "Edit PDF". **Partly done.**
-   Clicking a line of text and typing over it now changes the words in the
-   content stream, keeping the run's font, size, colour and position, via
-   PDFium's `FPDFText_SetText`. Search, extraction and copy all see the new text,
-   and nothing is drawn over the old.
+1. **Edit text and images in place** — Acrobat's "Edit PDF". **Text done;
+   images not.** Clicking a paragraph and typing over it changes the words in the
+   content stream, keeping font, size, colour and position. The block re-wraps to
+   its own width: lines that already exist are reused, lines the new text needs
+   are added, surplus ones removed. Search, extraction and copy all see the new
+   text, and nothing is drawn over the old.
+
+   Paragraph detection is a heuristic — runs that share a left edge, a size and a
+   line spacing — so the editor outlines the block it found before anything is
+   typed, which makes a wrong guess (tables, columns) visible rather than
+   surprising.
+
+   Font substitution: a character the document's font has no glyph for is set in
+   Helvetica instead, for the whole block, and the swap is reported in the status
+   line. A character no standard font can draw (an emoji, say) is refused rather
+   than written as empty boxes.
 
    What Acrobat still does that this does not:
-   - **Reflow.** A run keeps its origin, so longer text runs past where the old
-     text ended rather than wrapping. Acrobat detects paragraphs and re-lays them
-     out; that means grouping runs into blocks and running a line-breaker, which
-     is the larger half of this feature.
-   - **Font substitution.** PDFs embed subsets, so a character the subset lacks
-     is refused. Acrobat offers to swap in a matching system font; we report the
-     refusal instead.
+   - **Push content aside.** A block that grows lays its extra lines below itself
+     and can overlap what follows; the status line says how many lines were
+     added. Acrobat behaves the same way.
+   - **Match the substituted font.** Acrobat looks for a system font resembling
+     the original; we always use Helvetica, because a font the user has is not a
+     font the next reader has.
+   - **Mixed fonts in one block.** Substitution replaces the whole paragraph's
+     font, not only the characters that needed it.
    - **Images.** Moving, resizing and replacing images in place is untouched.
    - **Adding a new paragraph** in the document's own font, as opposed to a text
      annotation.

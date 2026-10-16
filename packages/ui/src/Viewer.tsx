@@ -54,7 +54,7 @@ export interface ViewerProps {
   editableText?: ReadonlyMap<number, EditableText[]>;
   /** Asks for a page's runs when it comes into view. */
   onNeedEditableText?: ((page: number) => void) | undefined;
-  onEditText?: ((page: number, index: number, text: string) => void) | undefined;
+  onEditText?: ((page: number, indices: number[], text: string) => void) | undefined;
 }
 
 const GAP = 16;
@@ -174,7 +174,7 @@ export function Viewer({
                 pageHeight={pageSizes[box.page]?.height ?? 792}
                 scale={scale}
                 runs={editableText?.get(box.page)}
-                onCommit={(page, index, text) => onEditText?.(page, index, text)}
+                onCommit={(page, indices, text) => onEditText?.(page, indices, text)}
               />
             ) : null}
             <AnnotationLayer

@@ -506,15 +506,11 @@ export function App() {
   );
 
   const handleEditText = useCallback(
-    async (page: number, index: number, text: string) => {
-      const result = await editText([{ page, index, text }]);
+    async (page: number, indices: number[], text: string) => {
+      const result = await editText([{ page, indices, text }]);
       if (!result) return;
       setEditRuns(new Map());
-      setSaved(
-        result.rejected.length > 0
-          ? `Could not change that text: ${result.rejected[0]?.reason ?? "unknown reason"}`
-          : "Text changed",
-      );
+      setSaved(editOutcome(result));
     },
     [editText],
   );
@@ -885,7 +881,7 @@ export function App() {
               editing={editingText}
               editableText={editRuns}
               onNeedEditableText={needEditableText}
-              onEditText={(page, index, text) => void handleEditText(page, index, text)}
+              onEditText={(page, indices, text) => void handleEditText(page, indices, text)}
             />
           </div>
 
@@ -909,13 +905,13 @@ export function App() {
                 </span>
                 <span>
                   <strong>Edit text</strong>
-                  <small>Click a line on the page and type over it</small>
+                  <small>Click a paragraph on the page and type over it</small>
                 </span>
               </button>
               {editingText ? (
                 <p className="tool-hint" data-testid="edit-caveat">
-                  Changes the words in the document itself. Text keeps its position, so it does not
-                  reflow, and a character the embedded font lacks will be refused.
+                  Changes the words in the document itself. A paragraph re-wraps to its own width; a
+                  character the embedded font lacks is set in Helvetica instead.
                 </p>
               ) : null}
             </section>
@@ -1175,3 +1171,29 @@ function stripPdf(name: string): string {
 
 /** Zoom steps, in points per CSS pixel. */
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+
+/**
+ * What to tell the user after editing text. Substituted fonts and lines that did
+ * not fit the original block change how the page looks, so neither is left for
+ * the user to discover on their own.
+ */
+function editOutcome(result: {
+  substituted: { from: string; to: string; characters: string }[];
+  addedLines: number;
+  rejected: { reason: string }[];
+}): string {
+  const refused = result.rejected[0];
+  if (refused) return `Could not change that text: ${refused.reason}`;
+
+  const notes: string[] = [];
+  const swap = result.substituted[0];
+  if (swap) {
+    notes.push(`${swap.from} cannot show ${swap.characters}, so ${swap.to} was used`);
+  }
+  if (result.addedLines > 0) {
+    notes.push(
+      `${result.addedLines} new ${result.addedLines === 1 ? "line" : "lines"} — check what follows`,
+    );
+  }
+  return notes.length > 0 ? `Text changed: ${notes.join("; ")}` : "Text changed";
+}

@@ -90,9 +90,9 @@ async function outlineFixture(): Promise<Buffer> {
 }
 
 /** A document with real text, for search. One line per entry, per page. */
-async function textFixture(pages: string[][]): Promise<Buffer> {
+async function textFixture(pages: string[][], face = StandardFonts.Helvetica): Promise<Buffer> {
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const font = await doc.embedFont(face);
   for (const lines of pages) {
     const page = doc.addPage([595, 842]);
     lines.forEach((line, i) => {
@@ -972,6 +972,83 @@ test("a mark can be removed from the Marks panel", async ({ page }) => {
   await expect(page.getByTestId("comments-empty")).toBeVisible();
 
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
+});
+
+test("a longer paragraph re-wraps inside its own block", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // Two lines, same left edge, one line apart: one paragraph to the editor.
+  await openFixture(
+    page,
+    "memo.pdf",
+    await textFixture([["A fairly long first line of text", "and a second line beneath it"]]),
+  );
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-text").click();
+  const target = page.getByTestId("edittarget-0");
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  const before = (await target.boundingBox())!;
+  await target.click();
+
+  const box = page.getByTestId("editbox-0");
+  await expect(box).toBeVisible();
+  await box.fill(
+    "A fairly long first line of text and a second line beneath it, now with " +
+      "considerably more text than the paragraph started with, which has to go " +
+      "somewhere other than off the edge of the page.",
+  );
+  await box.press("Enter");
+
+  // Lines the block did not have are reported rather than left to be noticed.
+  await expect(page.getByTestId("status")).toHaveText(/Text changed: \d+ new lines?/, {
+    timeout: 30_000,
+  });
+
+  // The block is taller than it was, and no wider: the text wrapped.
+  const after = (await page.getByTestId("edittarget-0").boundingBox())!;
+  expect(after.height).toBeGreaterThan(before.height);
+  expect(after.width).toBeLessThanOrEqual(before.width + 2);
+
+  // The wrapped words are still the document's own text.
+  await page.getByTestId("search-input").fill("off the edge");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
+test("a font that cannot show the new text is substituted, and said so", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // ZapfDingbats has no letters at all — the extreme form of the ordinary case,
+  // an embedded font subset missing a few glyphs.
+  await openFixture(
+    page,
+    "dingbats.pdf",
+    await textFixture([["\u2701\u2702\u2703"]], StandardFonts.ZapfDingbats),
+  );
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-text").click();
+  const target = page.getByTestId("edittarget-0");
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  await target.click();
+  const box = page.getByTestId("editbox-0");
+  await box.fill("Minutes of the meeting");
+  await box.press("Enter");
+
+  await expect(page.getByTestId("status")).toHaveText(/cannot show .*Helvetica was used/, {
+    timeout: 30_000,
+  });
+
+  // Substituted, not dropped: the words are really on the page. One word, not
+  // the phrase: the dingbats block is narrow, so the new text wraps inside it.
+  await page.getByTestId("search-input").fill("Minutes");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
 });
 
 test("edits the text in the document itself, not a note over it", async ({ page }) => {

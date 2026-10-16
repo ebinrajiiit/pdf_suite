@@ -8,30 +8,33 @@ export interface TextEditLayerProps {
   pageHeight: number;
   /** CSS pixels per PDF point. */
   scale: number;
-  /** Runs on this page, or undefined while they are still being read. */
+  /** Blocks on this page, or undefined while they are still being read. */
   runs: EditableText[] | undefined;
-  /** Called with the run and its new text when an edit is committed. */
-  onCommit: (page: number, index: number, text: string) => void;
+  /** Called with the block and its new text when an edit is committed. */
+  onCommit: (page: number, indices: number[], text: string) => void;
 }
 
 /**
- * Click a line of text and type over it, as Acrobat's Edit PDF does.
+ * Click a paragraph and type over it, as Acrobat's Edit PDF does.
  *
- * Each run is a hit target the size of the text it covers. Clicking one swaps in
- * an input positioned and sized to match, so the text appears to be edited
- * where it sits rather than in a dialogue somewhere else.
+ * Each detected paragraph is a hit target the size of the block it covers,
+ * outlined on hover so the block the editor thinks it found is visible before
+ * anything is typed — paragraph detection is a guess (see the engine's
+ * text-edit.ts) and a wrong one should be obvious, not surprising.
  *
- * The input shows the run's own font size and colour, but not its typeface: the
- * document's font is embedded in the PDF and is not available to CSS. The glyphs
- * will be the document's once it re-renders; while typing they are the system
- * font at the right size, which is close enough to judge length and position.
+ * Clicking swaps in a textarea positioned and sized to the block, so the text is
+ * edited where it sits. The box shows the block's font size and colour but not
+ * its typeface: the document's font lives inside the PDF and is not available to
+ * CSS. The glyphs become the document's once the page re-renders; while typing
+ * they are the system font at the right size, which is close enough to judge
+ * length. Wrapping on commit is measured in the real font by the engine.
  */
 export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextEditLayerProps) {
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
 
-  // A new page, or a reopened document, invalidates the run indices.
+  // A new page, or a reopened document, invalidates the block indices.
   useEffect(() => {
     setEditing(null);
   }, [runs]);
@@ -43,37 +46,41 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
   if (!runs) return <div className="editlayer editlayer-loading" data-testid={`edit-${page}`} />;
 
   /** PDF points from the bottom to CSS pixels from the top. */
-  const top = (run: EditableText) => (pageHeight - run.y - run.h) * scale;
+  const top = (block: EditableText) => (pageHeight - block.y - block.h) * scale;
+  /** Blocks are addressed by their first run, which is stable for these bytes. */
+  const key = (block: EditableText) => block.indices[0] ?? -1;
 
-  const commit = (run: EditableText) => {
+  const commit = (block: EditableText) => {
     setEditing(null);
-    if (draft !== run.text) onCommit(page, run.index, draft);
+    if (draft.trim() !== block.text.trim()) onCommit(page, block.indices, draft.trim());
   };
 
   return (
     <div className="editlayer" data-testid={`edit-${page}`}>
-      {runs.map((run) =>
-        editing === run.index ? (
-          <input
-            key={run.index}
+      {runs.map((block) =>
+        editing === key(block) ? (
+          <textarea
+            key={key(block)}
             ref={input}
             className="editbox"
-            data-testid={`editbox-${run.index}`}
+            data-testid={`editbox-${key(block)}`}
             value={draft}
+            spellCheck={false}
             style={{
-              left: `${run.x * scale}px`,
-              top: `${top(run)}px`,
-              width: `${Math.max(run.w * scale + 40, 60)}px`,
-              height: `${Math.max(run.h * scale, 14)}px`,
-              fontSize: `${run.fontSize * scale}px`,
-              color: `rgb(${run.colour.map((c) => Math.round(c * 255)).join(" ")})`,
+              left: `${block.x * scale}px`,
+              top: `${top(block)}px`,
+              width: `${Math.max(block.w * scale, 60)}px`,
+              height: `${Math.max(block.h * scale, block.fontSize * scale * 1.4)}px`,
+              fontSize: `${block.fontSize * scale}px`,
+              lineHeight: 1.2,
+              color: `rgb(${block.colour.map((c) => Math.round(c * 255)).join(" ")})`,
             }}
             onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => commit(run)}
+            onBlur={() => commit(block)}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                commit(run);
+                commit(block);
               } else if (event.key === "Escape") {
                 event.preventDefault();
                 setEditing(null);
@@ -82,20 +89,24 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
           />
         ) : (
           <button
-            key={run.index}
+            key={key(block)}
             type="button"
             className="edittarget"
-            data-testid={`edittarget-${run.index}`}
-            title={run.fontName ? `${run.fontName} ${run.fontSize.toFixed(0)}pt` : "Edit this text"}
+            data-testid={`edittarget-${key(block)}`}
+            title={
+              `${block.indices.length > 1 ? `${block.indices.length} lines` : "1 line"}` +
+              `${block.fontName ? `, ${block.fontName}` : ""} ` +
+              `${block.fontSize.toFixed(0)}pt — click to edit, Enter to apply`
+            }
             style={{
-              left: `${run.x * scale}px`,
-              top: `${top(run)}px`,
-              width: `${Math.max(run.w * scale, 8)}px`,
-              height: `${Math.max(run.h * scale, 10)}px`,
+              left: `${block.x * scale}px`,
+              top: `${top(block)}px`,
+              width: `${Math.max(block.w * scale, 8)}px`,
+              height: `${Math.max(block.h * scale, 10)}px`,
             }}
             onClick={() => {
-              setDraft(run.text);
-              setEditing(run.index);
+              setDraft(block.text);
+              setEditing(key(block));
             }}
           />
         ),

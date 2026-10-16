@@ -401,6 +401,8 @@ async function handle(request: WorkerRequest): Promise<void> {
         kind: "edited",
         info: await openBytes(id, result.bytes),
         applied: result.applied,
+        substituted: result.substituted,
+        addedLines: result.addedLines,
         rejected: result.rejected,
       });
       return;
