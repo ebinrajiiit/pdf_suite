@@ -51,6 +51,45 @@ This would have been a silent product bug: a user searching for a word typed the
 
 Plus the wasm core. Too much to bundle for every user, so: **language packs are an opt-in one-time download from our own release host**, which is the only form `docs/PRIVACY.md` permits. `scripts/fetch-tessdata.mjs` fetches them into a git-ignored `vendor/` for development and prints SHA-256 digests; a release must pin and host them, and `THIRD_PARTY_NOTICES.txt` must carry their Apache-2.0 licence.
 
+## Accuracy against degradation (ground truth known)
+
+A real scan carries no ground truth, so no accuracy can be computed from one —
+only an impression. `node scripts/ocr-accuracy.mjs` instead degrades a page whose
+text we know, one axis at a time, so a drop can be attributed. 300 dpi unless
+stated, 18 pt text.
+
+| Degradation | English | Malayalam |
+| --- | --- | --- |
+| clean | **100 %** | 89 % |
+| JPEG quality 60 % | **100 %** | 89 % |
+| skew 1.5° | **100 %** | 89 % |
+| skew 5° | 96 % | 89 % |
+| blur 1 px | **100 %** | 89 % |
+| blur 2 px | **100 %** | 89 % |
+| speckle 2 % | 89 % | 74 % |
+| **speckle 8 %** | **0 %** | **0 %** |
+| 150 dpi | **100 %** | 89 % |
+| combined "bad photocopy" | 88 % | 83 % |
+
+### Two findings that change what to build
+
+**Speckle is the failure mode, not skew or blur.** Tesseract shrugged off 2 px of
+blur, 5° of skew, JPEG at 60 % and a drop to 150 dpi — all at or near 100 % — but
+2 % salt-and-pepper noise cost 11 points and **8 % noise produced nothing at all,
+with confidence 0**. The earlier version of this ADR listed "deskew, despeckle and
+binarisation" as equally worth doing; that was a guess, and it was wrong.
+**Despeckle first**, and treat a confidence of 0 as "this page needs cleaning up",
+not "this page has no text".
+
+**Malayalam's 89 % ceiling is not misrecognition.** It is identical at every
+degradation level — clean, blurred, skewed, downsampled — which is not how
+recognition errors behave. It is the chillu spelling difference: Tesseract returns
+the ZWJ form where the ground truth uses the atomic letter. `fold()` in
+`packages/engine/src/search.ts` already reconciles the two, so search finds the
+text either way; the 89 % is measuring Unicode representation, not quality. A
+character-accuracy figure for Malayalam therefore has to fold before comparing,
+or it will understate by about 11 points forever.
+
 ## What these numbers are not
 
 Generated images are the best case: no skew, no speckle, no JPEG artefacts, no faint photocopies, no mixed scripts on one page, and 36 pt text. Real exam papers and letters will score lower, and the gap is exactly what the corpus is for. The per-sample timings also cover a single line, not a page.

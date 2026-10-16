@@ -28,9 +28,42 @@ export interface SampleResult extends Sample {
   error?: string | undefined;
 }
 
+/**
+ * A scan is not a clean render: it is skewed, blurred, speckled and JPEG'd. Real
+ * scans would be better input, but they come with no ground truth, so accuracy
+ * cannot be computed from them. Degrading a page whose text we know is the only
+ * way to get an accuracy *number* rather than an impression.
+ */
+export interface Degradation {
+  label: string;
+  /** Rotation in degrees, as a sheet sits crooked on the glass. */
+  skew: number;
+  /** Gaussian-ish blur radius in pixels, for soft focus and photocopying. */
+  blur: number;
+  /** Fraction of pixels turned into speckle, 0–1. */
+  noise: number;
+  /** JPEG quality 0–1; scanners rarely hand over lossless images. */
+  jpeg: number;
+  /** Scan resolution. 300 is the usual floor, 150 is a bad fax. */
+  dpi: number;
+}
+
+export interface AccuracyResult extends Degradation {
+  lang: string;
+  accuracy: number;
+  confidence: number;
+  ms: number;
+  error?: string | undefined;
+}
+
 declare global {
   interface Window {
     runOcrSpike(assets: OcrAssets, samples: Sample[]): Promise<SampleResult[]>;
+    runOcrAccuracy(
+      assets: OcrAssets,
+      sample: Sample,
+      levels: Degradation[],
+    ): Promise<AccuracyResult[]>;
   }
 }
 
@@ -83,6 +116,79 @@ function render(text: string, font: string): OffscreenCanvas {
   ctx.fillText(text, 20 * scale, 75 * scale);
   return canvas;
 }
+
+/** Renders text, then degrades it the way a scanner would. */
+async function scanLike(text: string, font: string, level: Degradation): Promise<Blob> {
+  const scale = level.dpi / 72;
+  const width = Math.round(600 * scale);
+  const height = Math.round(160 * scale);
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.save();
+  // Skew about the centre, as a crooked sheet would be.
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate((level.skew * Math.PI) / 180);
+  ctx.translate(-width / 2, -height / 2);
+  ctx.fillStyle = "#1a1a1a";
+  ctx.font = `${Math.round(18 * scale)}px ${font}`;
+  ctx.textBaseline = "middle";
+  if (level.blur > 0) ctx.filter = `blur(${level.blur}px)`;
+  ctx.fillText(text, 20 * scale, height / 2);
+  ctx.restore();
+  ctx.filter = "none";
+
+  if (level.noise > 0) {
+    const image = ctx.getImageData(0, 0, width, height);
+    const { data } = image;
+    for (let i = 0; i < data.length; i += 4) {
+      if (Math.random() > level.noise) continue;
+      // Salt and pepper, which is what dust and toner look like.
+      const v = Math.random() < 0.5 ? 0 : 255;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+
+  return canvas.convertToBlob({ type: "image/jpeg", quality: level.jpeg });
+}
+
+window.runOcrAccuracy = async (assets, sample, levels) => {
+  const status = document.getElementById("status")!;
+  const results: AccuracyResult[] = [];
+  const ocr = await createOcr({ ...assets, languages: [sample.lang] });
+  try {
+    for (const level of levels) {
+      status.textContent = `${sample.label} / ${level.label}`;
+      const result: AccuracyResult = {
+        ...level,
+        lang: sample.lang,
+        accuracy: 0,
+        confidence: 0,
+        ms: 0,
+      };
+      try {
+        const image = await scanLike(sample.text, sample.font, level);
+        const t0 = performance.now();
+        const recognised = await ocr.recognise(image);
+        result.ms = performance.now() - t0;
+        result.accuracy = similarity(sample.text, recognised.text);
+        result.confidence = recognised.confidence;
+      } catch (err) {
+        result.error = err instanceof Error ? err.message : String(err);
+      }
+      results.push(result);
+    }
+  } finally {
+    await ocr.terminate();
+  }
+  status.textContent = "done";
+  return results;
+};
 
 window.runOcrSpike = async (assets, samples) => {
   const status = document.getElementById("status")!;

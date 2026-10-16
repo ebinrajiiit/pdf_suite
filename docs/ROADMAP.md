@@ -1,5 +1,19 @@
 # Roadmap — zero-upload PDF suite
 
+## Priority decision (2026-10-16)
+
+**English first.** Reach Acrobat-level features in English, then extend to
+Malayalam, Hindi and other Indian languages. `docs/ADOBE-PARITY.md` is the
+concrete gap list that drives the order of work.
+
+This does not remove the Indic support already built — OCR language packs are
+opt-in downloads, Malayalam extraction is verified on real documents, and search
+folds Malayalam chillu spellings — it means no further work waits on sourcing
+Indic scans. Worth revisiting consciously: `docs/PRODUCT.md` names Indic OCR as
+the third reason this beats Acrobat, and in-place text editing (the largest
+parity gap) is a Phase 5 item, so strict sequencing would defer the
+differentiator a long way.
+
 Each phase ships at least one usable release, keeping the lab's one-launch-per-month cadence. Tick items only when implemented **and** tested.
 
 ## Phase 0 — Foundations (weeks 1–4)
