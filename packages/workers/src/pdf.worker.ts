@@ -1,5 +1,13 @@
 /// <reference lib="webworker" />
-import { createQpdf, merge, reorder, rotate, type Qpdf } from "@pdf-suite/core";
+import {
+  annotate,
+  createQpdf,
+  merge,
+  reorder,
+  rotate,
+  type Annotation,
+  type Qpdf,
+} from "@pdf-suite/core";
 import {
   findMatches,
   PasswordRequiredError,
@@ -114,14 +122,25 @@ async function unlock(id: number, password: string): Promise<DocumentInfo> {
 }
 
 /**
- * The open document with the display order applied: pages in their shown
- * positions, deletions gone. Every structural op starts here, so rewriting bytes
- * can never resurrect a page the user deleted.
+ * The open document with everything the user has done applied: pending
+ * annotations written in, pages in their shown positions, deletions gone. Every
+ * structural op starts here, so rewriting bytes can never resurrect a page the
+ * user deleted.
+ *
+ * Annotations go in first, while page indices still mean what they did when the
+ * user placed them; reordering afterwards carries them along with their pages.
  */
-async function materialise(id: number, order: number[]): Promise<Uint8Array> {
+async function materialise(
+  id: number,
+  order: number[],
+  annotations: Annotation[] = [],
+): Promise<Uint8Array> {
   if (!bytes) throw new Error("no document is open");
-  if (order.length === doc?.pageCount() && order.every((page, i) => page === i)) return bytes;
-  const applied = await reorder(bytes, order);
+  const marked = annotations.length === 0 ? bytes : await annotate(bytes, annotations);
+  throwIfCancelled(id);
+  const identity = order.length === doc?.pageCount() && order.every((page, i) => page === i);
+  if (identity) return marked;
+  const applied = await reorder(marked, order);
   throwIfCancelled(id);
   return applied;
 }
@@ -145,7 +164,7 @@ async function handle(request: WorkerRequest): Promise<void> {
     }
     case "merge": {
       const inputs = [
-        await materialise(id, request.order),
+        await materialise(id, request.order, request.annotations),
         ...request.inputs.map((b) => new Uint8Array(b)),
       ];
       post({ id, kind: "progress", done: 0, total: inputs.length });
@@ -167,15 +186,20 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id, kind: "bitmap", bitmap }, [bitmap]);
       return;
     }
+    case "text": {
+      const runs = await doc!.extractText(request.page);
+      post({ id, kind: "runs", runs });
+      return;
+    }
     case "rotate": {
-      const base = await materialise(id, request.order);
+      const base = await materialise(id, request.order, request.annotations);
       const rotated = await rotate(base, request.positions, request.by);
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, rotated) });
       return;
     }
     case "compress": {
-      const base = await materialise(id, request.order);
+      const base = await materialise(id, request.order, request.annotations);
       const smaller = await (await qpdf()).compress(base);
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, smaller) });
@@ -215,7 +239,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       return;
     }
     case "save": {
-      const materialised = await materialise(id, request.order);
+      const materialised = await materialise(id, request.order, request.annotations);
       throwIfCancelled(id);
       const out =
         protection === null

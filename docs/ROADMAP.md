@@ -19,7 +19,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [ ] Viewer: more fit modes (fit page, fit height), outline/bookmarks panel, bitmap cache across zoom levels
 - [x] Text search with highlights — case- and Unicode-normalisation-insensitive, so Malayalam and Hindi match whichever form the document uses (unit-tested). Highlights are line-level: narrowing them to the matched substring needs glyph quads from the engine
 - [ ] Verify Indic *extraction* (not just matching) against real Malayalam and Hindi documents — needs the corpus
-- [ ] Annotate: highlight, underline, strike, sticky note, free text, freehand, stamps
+- [x] Annotate: highlight (snapped to text lines), sticky note, free text — written as real PDF annotation objects, so the text underneath survives and other viewers can edit them
+- [ ] Annotate: underline, strike-through, freehand, stamps; colour choice; editing an annotation after placing it; generating `/AP` appearance streams for viewers that do not synthesise them
 - [x] Organize: merge, insert at a position, reorder (drag thumbnails or the keyboard controls), rotate, delete, extract selected pages, save via native dialog
 - [x] `packages/core`: merge, split, reorder and rotate on pdf-lib, unit-tested
 - [ ] Organize: split one document into several files in one action (extract covers the one-file case)

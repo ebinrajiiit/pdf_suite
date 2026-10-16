@@ -1,3 +1,9 @@
+export {
+  AnnotationLayer,
+  type AnnotationLayerProps,
+  type AnnotationTool,
+  type PlacedShape,
+} from "./AnnotationLayer.js";
 export { PageCanvas, type PageCanvasProps } from "./PageCanvas.js";
 export { insertPages, isIdentity, movePage, pagesAt, removePages } from "./page-order.js";
 export { Thumbnails, type ThumbnailsProps } from "./Thumbnails.js";

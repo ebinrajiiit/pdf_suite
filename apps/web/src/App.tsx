@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { pagesAt, removePages, Thumbnails, Viewer, type Highlight } from "@pdf-suite/ui";
+import {
+  pagesAt,
+  removePages,
+  Thumbnails,
+  Viewer,
+  type AnnotationTool,
+  type Highlight,
+  type PlacedShape,
+} from "@pdf-suite/ui";
+import type { AnnotRect } from "@pdf-suite/core";
 import type { SearchHit } from "@pdf-suite/workers";
 import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
 import { useDocument } from "./use-document.js";
@@ -18,6 +27,10 @@ export function App() {
     save,
     extract,
     search,
+    addAnnotation,
+    removeAnnotation,
+    clearAnnotations,
+    pageText,
     setOrder,
   } = useDocument();
   const openInput = useRef<HTMLInputElement>(null);
@@ -28,6 +41,11 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  const [tool, setTool] = useState<AnnotationTool | undefined>();
+  /** A placed point waiting for its text, for the note and text tools. */
+  const [pendingPoint, setPendingPoint] = useState<{ page: number; x: number; y: number } | null>(
+    null,
+  );
   const [zoom, setZoom] = useState<number | "fit">("fit");
   const [dropping, setDropping] = useState(false);
   const [query, setQuery] = useState("");
@@ -240,6 +258,69 @@ export function App() {
     [hits.length],
   );
 
+  /**
+   * A dragged box becomes a highlight. It is snapped to the text lines it
+   * crosses when the page has a text layer, so a rough drag produces tidy
+   * line-aligned marks; on a scan with no text it stays as drawn.
+   */
+  const placeHighlight = useCallback(
+    async (page: number, rect: AnnotRect) => {
+      const runs = await pageText(page);
+      const overlapping = runs
+        .filter(
+          (r) =>
+            r.x < rect.x + rect.w &&
+            r.x + r.w > rect.x &&
+            r.y < rect.y + rect.h &&
+            r.y + r.h > rect.y,
+        )
+        .map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
+      addAnnotation({
+        kind: "highlight",
+        page,
+        rects: overlapping.length > 0 ? overlapping : [rect],
+      });
+    },
+    [addAnnotation, pageText],
+  );
+
+  const onPlace = useCallback(
+    (page: number, shape: PlacedShape) => {
+      if (shape.kind === "rect") {
+        void placeHighlight(page, shape.rect);
+        return;
+      }
+      // A note or a text box needs its words before it is worth creating.
+      setPendingPoint({ page, x: shape.x, y: shape.y });
+    },
+    [placeHighlight],
+  );
+
+  const commitPending = useCallback(
+    (contents: string) => {
+      const point = pendingPoint;
+      setPendingPoint(null);
+      if (!point || contents.trim() === "") return;
+      if (tool === "note") {
+        addAnnotation({ kind: "note", page: point.page, x: point.x, y: point.y, contents });
+        return;
+      }
+      // Roughly fit the box to the text; the viewer wraps what does not fit.
+      const size = 12;
+      addAnnotation({
+        kind: "text",
+        page: point.page,
+        x: point.x,
+        y: point.y,
+        w: Math.min(360, Math.max(80, contents.length * size * 0.55)),
+        h: size * 1.6 * Math.ceil(contents.length / 60),
+        contents,
+        size,
+      });
+    },
+    [addAnnotation, pendingPoint, tool],
+  );
+
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
@@ -310,6 +391,35 @@ export function App() {
           <button type="button" onClick={() => void handleProtect()} disabled={disabled}>
             {info?.protected ? "Remove password" : "Protect…"}
           </button>
+        </span>
+
+        <span className="toolbar-group" role="group" aria-label="Annotate">
+          {(["highlight", "note", "text"] as const).map((which) => (
+            <button
+              key={which}
+              type="button"
+              className={tool === which ? "tool tool-active" : "tool"}
+              aria-pressed={tool === which}
+              disabled={disabled}
+              data-testid={`tool-${which}`}
+              onClick={() => {
+                setTool((current) => (current === which ? undefined : which));
+                setPendingPoint(null);
+              }}
+            >
+              {which === "highlight" ? "Highlight" : which === "note" ? "Note" : "Add text"}
+            </button>
+          ))}
+          {state.annotations.length > 0 ? (
+            <button
+              type="button"
+              onClick={clearAnnotations}
+              data-testid="clear-annotations"
+              title="Remove every annotation not yet saved"
+            >
+              Clear {state.annotations.length}
+            </button>
+          ) : null}
         </span>
 
         <span className="toolbar-group" role="group" aria-label="Zoom">
@@ -439,6 +549,27 @@ export function App() {
         </form>
       ) : null}
 
+      {pendingPoint ? (
+        <form
+          className="prompt"
+          data-testid="annotation-prompt"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const field = new FormData(event.currentTarget).get("contents");
+            commitPending(typeof field === "string" ? field : "");
+          }}
+        >
+          <label htmlFor="contents">
+            {tool === "note" ? "Note text" : "Text to add to the page"}
+          </label>
+          <input id="contents" name="contents" autoFocus data-testid="annotation-text" />
+          <button type="submit">Place</button>
+          <button type="button" onClick={() => setPendingPoint(null)}>
+            Cancel
+          </button>
+        </form>
+      ) : null}
+
       {askProtect ? (
         <form
           className="prompt"
@@ -491,6 +622,10 @@ export function App() {
               highlights={highlights}
               active={activeHighlight}
               scrollTo={hits[hitIndex]?.position}
+              annotations={state.annotations}
+              tool={tool}
+              onPlace={onPlace}
+              onRemoveAnnotation={tool === undefined ? removeAnnotation : undefined}
             />
           </div>
         </div>

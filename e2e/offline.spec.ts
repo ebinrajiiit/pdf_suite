@@ -2,7 +2,7 @@
 // working with the network cut. The viewer flow runs inside the guard so the
 // assertion covers real work, not just the shell loading.
 import { test, expect, type Page } from "@playwright/test";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, StandardFonts } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 
 type Size = [number, number];
@@ -47,6 +47,20 @@ async function withoutFilePickers(page: Page): Promise<void> {
       Reflect.deleteProperty(Window.prototype, name);
       Reflect.deleteProperty(window, name);
     }
+  });
+}
+
+/** Annotation subtypes per page of a saved document. */
+async function annotationsOf(bytes: Buffer | Uint8Array): Promise<string[][]> {
+  const doc = await PDFDocument.load(bytes);
+  return doc.getPages().map((page) => {
+    const annots = page.node.Annots();
+    if (!annots) return [];
+    const out: string[] = [];
+    for (let i = 0; i < annots.size(); i++) {
+      out.push(String(annots.lookup(i, PDFDict).get(PDFName.of("Subtype"))));
+    }
+    return out;
   });
 }
 
@@ -350,4 +364,135 @@ test("zooming changes the rendered page size", async ({ page }) => {
 
   await page.getByRole("button", { name: "Fit" }).click();
   await expect(page.getByTestId("zoom-level")).toHaveText("Fit");
+});
+
+test("highlights, notes and typed text are written into the saved file", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(
+    page,
+    "marked.pdf",
+    await textFixture([["Result sheet for semester one", "Candidate: A. Student"]]),
+  );
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  const layer = page.getByTestId("annots-0");
+  await expect(layer).toBeVisible();
+  const box = (await layer.boundingBox())!;
+
+  // Highlight: drag across the first line.
+  await page.getByTestId("tool-highlight").click();
+  await page.mouse.move(box.x + 20, box.y + 24);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 240, box.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+
+  // Note: click, then type its text.
+  await page.getByTestId("tool-note").click();
+  await page.mouse.click(box.x + 300, box.y + 120);
+  await page.getByTestId("annotation-text").fill("check this entry");
+  await page.getByRole("button", { name: "Place" }).click();
+  await expect(page.getByTestId("annot-1")).toBeVisible();
+
+  // Typed text on the page.
+  await page.getByTestId("tool-text").click();
+  await page.mouse.click(box.x + 40, box.y + 200);
+  await page.getByTestId("annotation-text").fill("Verified by the exam cell");
+  await page.getByRole("button", { name: "Place" }).click();
+  await expect(page.getByTestId("annot-2")).toBeVisible();
+
+  const saved = await saveAndRead(page, "Save");
+  const subtypes = (await annotationsOf(saved))[0]!;
+  // A highlight snapped to text lines may cover more than one line, so there can
+  // be several Highlight objects; the note and the free text are one each.
+  expect(subtypes.filter((s) => s === "/Highlight").length).toBeGreaterThanOrEqual(1);
+  expect(subtypes).toContain("/Text");
+  expect(subtypes).toContain("/FreeText");
+
+  // The words under a highlight survive: it is an annotation, not paint.
+  const reopened = await PDFDocument.load(saved);
+  expect(reopened.getPageCount()).toBe(1);
+
+  // And they are actually visible when the file is reopened — the engine has to
+  // draw them, which it does by synthesising appearance streams. Structure alone
+  // would not prove the user sees anything.
+  const ink = () =>
+    page
+      .getByTestId("viewer")
+      .getByRole("img", { name: "Page 1" })
+      .evaluate(async (el) => {
+        const canvas = el as HTMLCanvasElement;
+        const off = new OffscreenCanvas(canvas.width, canvas.height);
+        const ctx = off.getContext("2d")!;
+        ctx.drawImage(canvas, 0, 0);
+        const { data } = ctx.getImageData(0, 0, off.width, off.height);
+        let marked = 0;
+        for (let i = 0; i < data.length; i += 4) if (data[i]! < 250) marked++;
+        return marked;
+      });
+
+  await openFixture(
+    page,
+    "plain-again.pdf",
+    await textFixture([["Result sheet for semester one"]]),
+  );
+  await expect.poll(ink).toBeGreaterThan(0);
+  const plainInk = await ink();
+
+  await openFixture(page, "reopened.pdf", saved);
+  await expect.poll(ink).toBeGreaterThan(plainInk);
+});
+
+test("an annotation can be removed before saving", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "one.pdf", await textFixture([["A line of text"]]));
+
+  const box = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-note").click();
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.getByTestId("annotation-text").fill("remove me");
+  await page.getByRole("button", { name: "Place" }).click();
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+
+  // Leaving the tool makes the marks clickable, and a click removes one.
+  await page.getByTestId("tool-note").click();
+  await page.getByTestId("annot-0").click();
+  await expect(page.getByTestId("annot-0")).toBeHidden();
+
+  expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
+});
+
+test("opening a second document replaces the rendered pages", async ({ page }) => {
+  // Regression: both documents have identical page geometry, so nothing the page
+  // canvas depended on changed and the first document's pixels stayed on screen.
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  const fingerprint = () =>
+    page
+      .getByTestId("viewer")
+      .getByRole("img", { name: "Page 1" })
+      .evaluate(async (el) => {
+        const canvas = el as HTMLCanvasElement;
+        const off = new OffscreenCanvas(canvas.width, canvas.height);
+        const ctx = off.getContext("2d")!;
+        ctx.drawImage(canvas, 0, 0);
+        const { data } = ctx.getImageData(0, 0, off.width, off.height);
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) if (data[i]! < 240) ink++;
+        return ink;
+      });
+
+  await openFixture(page, "first.pdf", await textFixture([["First document"]]));
+  await expect.poll(fingerprint).toBeGreaterThan(0);
+  const first = await fingerprint();
+
+  await openFixture(page, "second.pdf", await textFixture([["Second document with more words"]]));
+  await expect.poll(fingerprint).not.toBe(first);
 });

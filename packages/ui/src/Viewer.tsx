@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from "react";
+import type { Annotation } from "@pdf-suite/core";
+import { AnnotationLayer, type AnnotationTool, type PlacedShape } from "./AnnotationLayer.js";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
 
@@ -31,6 +33,12 @@ export interface ViewerProps {
   active?: string | undefined;
   /** Display position to scroll into view; changing it scrolls. */
   scrollTo?: number | undefined;
+  /** Annotations not yet written into the document, drawn as a preview. */
+  annotations?: Annotation[];
+  /** Active annotation tool; when set, dragging or clicking a page places one. */
+  tool?: AnnotationTool | undefined;
+  onPlace?: ((page: number, shape: PlacedShape) => void) | undefined;
+  onRemoveAnnotation?: ((index: number) => void) | undefined;
 }
 
 const GAP = 16;
@@ -49,6 +57,10 @@ export function Viewer({
   highlights,
   active,
   scrollTo,
+  annotations,
+  tool,
+  onPlace,
+  onRemoveAnnotation,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -73,6 +85,17 @@ export function Viewer({
     });
     return { boxes, offsets };
   }, [order, pageSizes, scale]);
+
+  /** Pending annotations grouped by source page, keeping their list index. */
+  const byPage = useMemo(() => {
+    const map = new Map<number, { annotation: Annotation; index: number }[]>();
+    (annotations ?? []).forEach((annotation, index) => {
+      const list = map.get(annotation.page) ?? [];
+      list.push({ annotation, index });
+      map.set(annotation.page, list);
+    });
+    return map;
+  }, [annotations]);
 
   const { ref, range, total, scrollToOffset } = useVisibleRange(layout.offsets);
 
@@ -104,6 +127,15 @@ export function Viewer({
               pixelRatio={scale * pixelRatio}
               render={render}
               label={`Page ${box.position + 1}`}
+            />
+            <AnnotationLayer
+              page={box.page}
+              pageHeight={pageSizes[box.page]?.height ?? 792}
+              scale={scale}
+              tool={tool}
+              annotations={byPage.get(box.page) ?? []}
+              onPlace={onPlace}
+              onRemove={onRemoveAnnotation}
             />
             {(highlights?.get(box.position) ?? []).map((mark, index) => (
               <div

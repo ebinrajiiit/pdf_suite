@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Annotation } from "@pdf-suite/core";
 import {
   createPdfWorkerClient,
   type DocumentInfo,
@@ -20,15 +21,33 @@ export interface DocumentState {
   handle?: FileSystemFileHandle | undefined;
   /** Name of the document waiting on a password; the worker holds its bytes. */
   needsPassword?: string | undefined;
+  /**
+   * Annotations the user has placed but not saved. They are written into the
+   * bytes by any operation that rewrites the document, which is also why they
+   * are cleared when that happens: at that point they are in the document.
+   */
+  annotations: Annotation[];
   busy: string | undefined;
   error: string | undefined;
 }
 
-const initial: DocumentState = { order: [], busy: undefined, error: undefined };
+const initial: DocumentState = {
+  order: [],
+  annotations: [],
+  busy: undefined,
+  error: undefined,
+};
 
 export function useDocument() {
   const client = useRef<PdfWorkerClient | null>(null);
   const [ready, setReady] = useState(false);
+  /**
+   * Bumped whenever the worker holds a different document. The render callback
+   * depends on it so that every page re-rasterises: without it, opening another
+   * document with the same page geometry left the previous document's pixels on
+   * screen, because nothing the canvas depends on had changed.
+   */
+  const [docVersion, setDocVersion] = useState(0);
   const [state, setState] = useState<DocumentState>(initial);
   // Callbacks need the current order without being rebuilt on every reorder,
   // which would remount the viewer's render callback with it.
@@ -90,6 +109,7 @@ export function useDocument() {
     setState((s) => ({ ...s, busy: "Opening", error: undefined }));
     try {
       const info = await worker.open(file.bytes);
+      setDocVersion((v) => v + 1);
       setState((s) => ({
         ...s,
         name: file.name,
@@ -117,6 +137,7 @@ export function useDocument() {
     setState((s) => ({ ...s, busy: "Unlocking", error: undefined }));
     try {
       const info = await worker.unlock(password);
+      setDocVersion((v) => v + 1);
       setState((s) => ({
         ...s,
         info,
@@ -150,9 +171,11 @@ export function useDocument() {
         worker.merge(
           files.map((f) => f.bytes),
           stateRef.current.order,
+          stateRef.current.annotations,
         ),
       );
       if (!info) return;
+      setDocVersion((v) => v + 1);
       // The merged document renumbers every page, so the display order restarts
       // with the appended pages moved to where they were asked for.
       const appended = Array.from({ length: info.pageCount - before }, (_, i) => before + i);
@@ -161,6 +184,8 @@ export function useDocument() {
         ...s,
         info,
         order: insertPages(kept, appended, at),
+        // Pending annotations were written in by the merge.
+        annotations: [],
         // A merged document is a different document: never write back in place.
         handle: undefined,
       }));
@@ -173,37 +198,55 @@ export function useDocument() {
     async (positions: number[], by: 90 | 180 | 270) => {
       if (positions.length === 0) return;
       const info = await run("Rotating", (worker) =>
-        worker.rotate(positions, by, stateRef.current.order),
+        worker.rotate(positions, by, stateRef.current.order, stateRef.current.annotations),
       );
       if (!info) return;
+      setDocVersion((v) => v + 1);
       // Rotating materialises the order, so the document is now exactly what was
       // on screen and the order restarts as the identity.
       setState((s) => ({
         ...s,
         info,
         order: info.pageSizes.map((_, i) => i),
+        annotations: [],
         handle: undefined,
       }));
     },
     [run],
   );
 
-  const render = useCallback((page: number, scale: number) => {
-    const worker = client.current;
-    if (!worker) return Promise.reject(new Error("worker not ready"));
-    return worker.render(page, scale);
-  }, []);
+  const render = useCallback(
+    (page: number, scale: number) => {
+      const worker = client.current;
+      if (!worker) return Promise.reject(new Error("worker not ready"));
+      return worker.render(page, scale);
+    },
+    // docVersion is the whole point of this dependency: a different document
+    // means different pixels for the same page number, and the page canvases
+    // re-rasterise only when this callback's identity changes.
+    [docVersion],
+  );
 
   const save = useCallback(
-    async (order: number[]) => run("Saving", (worker) => worker.save(order)),
+    async (order: number[]) =>
+      run("Saving", (worker) => worker.save(order, stateRef.current.annotations)),
     [run],
   );
 
   /** Recompresses the document, reporting the size change. */
   const compress = useCallback(async () => {
-    const info = await run("Compressing", (worker) => worker.compress(stateRef.current.order));
+    const info = await run("Compressing", (worker) =>
+      worker.compress(stateRef.current.order, stateRef.current.annotations),
+    );
     if (!info) return;
-    setState((s) => ({ ...s, info, order: info.pageSizes.map((_, i) => i), handle: undefined }));
+    setDocVersion((v) => v + 1);
+    setState((s) => ({
+      ...s,
+      info,
+      order: info.pageSizes.map((_, i) => i),
+      annotations: [],
+      handle: undefined,
+    }));
   }, [run]);
 
   /** Sets or clears the password the document is saved with. */
@@ -232,11 +275,36 @@ export function useDocument() {
     [run],
   );
 
+  const addAnnotation = useCallback((annotation: Annotation) => {
+    setState((s) => ({ ...s, annotations: [...s.annotations, annotation] }));
+  }, []);
+
+  const removeAnnotation = useCallback((index: number) => {
+    setState((s) => ({ ...s, annotations: s.annotations.filter((_, i) => i !== index) }));
+  }, []);
+
+  const clearAnnotations = useCallback(() => {
+    setState((s) => ({ ...s, annotations: [] }));
+  }, []);
+
+  /** Text runs for one source page, for snapping a highlight to whole lines. */
+  const pageText = useCallback(async (page: number) => {
+    const worker = client.current;
+    if (!worker) return [];
+    try {
+      return await worker.pageText(page);
+    } catch {
+      // A page with no text layer (a scan) is not an error; it just cannot snap.
+      return [];
+    }
+  }, []);
+
   const setOrder = useCallback((order: number[]) => setState((s) => ({ ...s, order })), []);
 
   /** Saves just the given source pages, leaving the open document alone. */
   const extract = useCallback(
-    async (pages: number[]) => run("Extracting", (worker) => worker.save(pages)),
+    async (pages: number[]) =>
+      run("Extracting", (worker) => worker.save(pages, stateRef.current.annotations)),
     [run],
   );
 
@@ -262,6 +330,10 @@ export function useDocument() {
     save,
     extract,
     search,
+    addAnnotation,
+    removeAnnotation,
+    clearAnnotations,
+    pageText,
     setOrder,
   };
 }

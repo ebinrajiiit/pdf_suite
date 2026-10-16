@@ -1,7 +1,9 @@
 import {
   CancelledError,
+  type Annotation,
   type DocumentInfo,
   type SearchHit,
+  type TextRun,
   type TerminalResponse,
   type WorkerRequest,
   type WorkerResponse,
@@ -22,11 +24,23 @@ export interface PdfWorkerClient {
   open(bytes: ArrayBuffer): Promise<DocumentInfo>;
   /** Retries a document that raised PasswordRequiredError, with its password. */
   unlock(password: string): Promise<DocumentInfo>;
-  merge(inputs: ArrayBuffer[], order: number[], onProgress?: OnProgress): Promise<DocumentInfo>;
+  merge(
+    inputs: ArrayBuffer[],
+    order: number[],
+    annotations: Annotation[],
+    onProgress?: OnProgress,
+  ): Promise<DocumentInfo>;
   render(page: number, scale: number): Promise<ImageBitmap>;
-  rotate(positions: number[], by: 90 | 180 | 270, order: number[]): Promise<DocumentInfo>;
+  /** Extracted text for one source page, for snapping highlights to lines. */
+  pageText(page: number): Promise<TextRun[]>;
+  rotate(
+    positions: number[],
+    by: 90 | 180 | 270,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
   /** Recompresses the document, which reopens it. */
-  compress(order: number[]): Promise<DocumentInfo>;
+  compress(order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** Sets the password applied when saving, or null to remove protection. */
   protect(password: string | null): Promise<DocumentInfo>;
   /** Searches the given display order, reporting progress per page. */
@@ -35,7 +49,7 @@ export interface PdfWorkerClient {
     order: number[],
     onProgress?: OnProgress,
   ): Promise<{ hits: SearchHit[]; truncated: boolean }>;
-  save(order: number[]): Promise<ArrayBuffer>;
+  save(order: number[], annotations: Annotation[]): Promise<ArrayBuffer>;
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
   cancel(id: number): void;
@@ -120,18 +134,24 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     async unlock(password) {
       return expect(await send({ kind: "unlock", password }), "document").info;
     },
-    async merge(inputs, order, onProgress) {
-      return expect(await send({ kind: "merge", inputs, order }, inputs, onProgress), "document")
-        .info;
+    async merge(inputs, order, annotations, onProgress) {
+      return expect(
+        await send({ kind: "merge", inputs, order, annotations }, inputs, onProgress),
+        "document",
+      ).info;
     },
     async render(page, scale) {
       return expect(await send({ kind: "render", page, scale }), "bitmap").bitmap;
     },
-    async rotate(positions, by, order) {
-      return expect(await send({ kind: "rotate", positions, by, order }), "document").info;
+    async pageText(page) {
+      return expect(await send({ kind: "text", page }), "runs").runs;
     },
-    async compress(order) {
-      return expect(await send({ kind: "compress", order }), "document").info;
+    async rotate(positions, by, order, annotations) {
+      return expect(await send({ kind: "rotate", positions, by, order, annotations }), "document")
+        .info;
+    },
+    async compress(order, annotations) {
+      return expect(await send({ kind: "compress", order, annotations }), "document").info;
     },
     async protect(password) {
       return expect(await send({ kind: "protect", password }), "document").info;
@@ -140,8 +160,8 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
       const reply = expect(await send({ kind: "search", query, order }, [], onProgress), "hits");
       return { hits: reply.hits, truncated: reply.truncated };
     },
-    async save(order) {
-      return expect(await send({ kind: "save", order }), "saved").bytes;
+    async save(order, annotations) {
+      return expect(await send({ kind: "save", order, annotations }), "saved").bytes;
     },
     async close() {
       expect(await send({ kind: "close" }), "closed");

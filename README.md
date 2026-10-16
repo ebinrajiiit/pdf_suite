@@ -39,6 +39,11 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | Select one page, **Insert after…** | A merged file's pages land after that page, not at the end |
 | **Rotate left / right** | Rotates the selection, or the whole document when nothing is selected |
 | Select pages, **Extract…** | Saves just those pages to a new file, leaving the open one alone |
+| **Highlight**, then drag across a line | A highlight snapped to the text lines you crossed. On a scan with no text layer it stays as you drew it |
+| **Note**, then click a page | Asks for the text, then drops a sticky note. Hover it to read the note |
+| **Add text**, then click a page | Asks for the words, then places them on the page |
+| Turn the tool off, click a mark | Removes it. **Clear N** removes every unsaved mark |
+| **Save** after annotating | Marks become real PDF annotations — highlights, notes and free text that Acrobat and Chrome can edit, with the text under a highlight intact |
 | Type in **Search**, press Enter | Match count, ‹ › to step through, matched lines highlighted. Ctrl/Cmd+F focuses it |
 | **Protect…**, set a password, **Save** | The saved file needs that password to open. Reopen it to be asked |
 | **Compress** | Rewrites the document; object streams help on real files, not tiny ones |
@@ -58,6 +63,10 @@ is what `pnpm e2e` asserts on every run.
 
 ### Known gaps, so you are not hunting for them
 
+- **Annotations cannot be edited after placing** — remove and place again. No
+  colour picker, no underline/strike/freehand yet, and no `/AP` appearance
+  streams, so a viewer that does not synthesise appearances (PDFium, pdf.js and
+  Acrobat all do) would show nothing.
 - **Search highlights a whole line**, not the matched word. Narrowing it needs
   per-character geometry from the engine (ADR 0002).
 - **Repair on open** fixes a damaged header or junk before it, but not a

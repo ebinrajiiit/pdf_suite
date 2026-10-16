@@ -4,6 +4,8 @@
 // The worker owns the document bytes: a 200 MB file is posted in once and never
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
+import type { Annotation } from "@pdf-suite/core";
+import type { TextRun } from "@pdf-suite/engine";
 /**
  * `order` on a request is source page indices in their display positions, with
  * omitted pages deleted. Every request that rewrites bytes applies it first, so
@@ -18,6 +20,14 @@ export interface DocumentInfo {
   /** Set when the document arrived encrypted and will be re-protected on save. */
   protected?: boolean;
 }
+
+/**
+ * Pending annotations travel with every request that rewrites bytes, like
+ * `order` does, and are applied *before* the order is materialised: they are
+ * keyed by source page index, which reordering would otherwise invalidate.
+ */
+export type { Annotation, AnnotRect } from "@pdf-suite/core";
+export type { TextRun } from "@pdf-suite/engine";
 
 /** One search hit, in the display position the user is looking at. */
 export interface SearchHit {
@@ -46,12 +56,20 @@ export type WorkerRequest = { id: number } &
      * the new pages appear is the caller's choice, made by setting the display
      * order afterwards.
      */
-    | { kind: "merge"; inputs: ArrayBuffer[]; order: number[] }
+    | { kind: "merge"; inputs: ArrayBuffer[]; order: number[]; annotations: Annotation[] }
     | { kind: "render"; page: number; scale: number }
+    /** Extracted text for one source page, used to snap highlights to lines. */
+    | { kind: "text"; page: number }
     /** Rotates the given display positions by `by` degrees and reopens the result. */
-    | { kind: "rotate"; positions: number[]; by: 90 | 180 | 270; order: number[] }
+    | {
+        kind: "rotate";
+        positions: number[];
+        by: 90 | 180 | 270;
+        order: number[];
+        annotations: Annotation[];
+      }
     /** Recompresses the document, reopening the result. */
-    | { kind: "compress"; order: number[] }
+    | { kind: "compress"; order: number[]; annotations: Annotation[] }
     /** Sets the password the document is saved with, or null to remove protection. */
     | { kind: "protect"; password: string | null }
     /**
@@ -60,7 +78,7 @@ export type WorkerRequest = { id: number } &
      * text from every one of them.
      */
     | { kind: "search"; query: string; order: number[]; limit?: number }
-    | { kind: "save"; order: number[] }
+    | { kind: "save"; order: number[]; annotations: Annotation[] }
     | { kind: "close" }
     | { kind: "cancel"; target: number }
   );
@@ -71,6 +89,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "bitmap"; bitmap: ImageBitmap }
   | { kind: "saved"; bytes: ArrayBuffer }
   | { kind: "hits"; hits: SearchHit[]; truncated: boolean }
+  | { kind: "runs"; runs: TextRun[] }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -80,7 +99,18 @@ export type WorkerResponse = { id: number } & (
 /** Replies that complete a request; `progress` does not. */
 export type TerminalResponse = Extract<
   WorkerResponse,
-  { kind: "ready" | "document" | "bitmap" | "saved" | "hits" | "closed" | "cancelled" | "error" }
+  {
+    kind:
+      | "ready"
+      | "document"
+      | "bitmap"
+      | "saved"
+      | "hits"
+      | "runs"
+      | "closed"
+      | "cancelled"
+      | "error";
+  }
 >;
 
 export class CancelledError extends Error {
