@@ -210,3 +210,64 @@ test("merging with one page selected inserts after it", async ({ page }) => {
   // Inserted between the two originals, not appended after them.
   expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([PORTRAIT, SQUARE, LANDSCAPE]);
 });
+
+test("repairs a damaged file on open instead of refusing it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A mangled header: every object is intact but no engine will touch it until
+  // qpdf rebuilds the file (CLAUDE.md §4 — malformed PDFs are normal).
+  const damaged = Buffer.from(await fixture([PORTRAIT, LANDSCAPE, SQUARE]));
+  damaged.write("%XXX-9.9", 0, "latin1");
+
+  await openFixture(page, "damaged.pdf", damaged);
+  await expect(page.getByText("3 pages")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("repaired-badge")).toBeVisible();
+  expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([PORTRAIT, LANDSCAPE, SQUARE]);
+});
+
+test("protects a document with a password and opens it again", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "plain.pdf", await fixture([PORTRAIT, SQUARE]));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  await page.getByRole("button", { name: "Protect…" }).click();
+  await page.getByTestId("new-password").fill("institutional-secret");
+  await page.getByRole("button", { name: "Set password" }).click();
+  await expect(page.getByTestId("protected-badge")).toBeVisible();
+
+  const encrypted = await saveAndRead(page, "Save");
+  // Protection has to survive the save, or opening a protected document and
+  // saving it would quietly strip its password.
+  await expect(PDFDocument.load(encrypted)).rejects.toThrow();
+
+  // Reopening it asks for the password rather than failing.
+  await openFixture(page, "protected.pdf", encrypted);
+  await expect(page.getByTestId("password-prompt")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByTestId("password").fill("wrong-one");
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await expect(page.getByTestId("status")).toHaveText(/did not work/, { timeout: 30_000 });
+
+  await page.getByTestId("password").fill("institutional-secret");
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await expect(page.getByText("2 pages")).toBeVisible({ timeout: 30_000 });
+  // Still protected, so saving again keeps the password.
+  await expect(page.getByTestId("protected-badge")).toBeVisible();
+});
+
+test("compresses a document without losing pages", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "big.pdf", await fixture([PORTRAIT, LANDSCAPE, SQUARE]));
+  await page.getByRole("button", { name: "Compress" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([PORTRAIT, LANDSCAPE, SQUARE]);
+});

@@ -47,6 +47,9 @@ importers:
       '@embedpdf/pdfium':
         specifier: ^2.15.1
         version: 2.15.1
+      '@neslinesli93/qpdf-wasm':
+        specifier: ^0.3.0
+        version: 0.3.0
       '@pdf-suite/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -81,6 +84,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@neslinesli93/qpdf-wasm':
+        specifier: ^0.3.0
+        version: 0.3.0
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -922,6 +928,9 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
+
+  '@neslinesli93/qpdf-wasm@0.3.0':
+    resolution: {integrity: sha512-ObyTmabopTMwN6AGwrEkmDbdmM5wnwlRdn9jnJYQ2KbBUPdPDcfNf1QkcWFOVD+qIgSqILz9nK51e22T+x+gkQ==}
 
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
@@ -3417,6 +3426,8 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@neslinesli93/qpdf-wasm@0.3.0': {}
 
   '@pdf-lib/standard-fonts@1.0.0':
     dependencies:

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@embedpdf/pdfium": "^2.15.1",
+    "@neslinesli93/qpdf-wasm": "^0.3.0",
     "@pdf-suite/core": "workspace:*",
     "@pdf-suite/engine": "workspace:*",
     "@pdf-suite/ui": "workspace:*",

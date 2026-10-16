@@ -4,14 +4,27 @@ import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./fil
 import { useDocument } from "./use-document.js";
 
 export function App() {
-  const { ready, state, open, mergeIn, rotatePages, render, save, extract, setOrder } =
-    useDocument();
+  const {
+    ready,
+    state,
+    open,
+    unlock,
+    mergeIn,
+    rotatePages,
+    compress,
+    protect,
+    render,
+    save,
+    extract,
+    setOrder,
+  } = useDocument();
   const openInput = useRef<HTMLInputElement>(null);
   const mergeInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+  const [askProtect, setAskProtect] = useState(false);
 
   const info = state.info;
   const pageCount = state.order.length;
@@ -107,6 +120,15 @@ export function App() {
     setSelected(new Set());
   }, [pageCount, positions, setOrder, state.order]);
 
+  const handleProtect = useCallback(async () => {
+    if (info?.protected) {
+      await protect(null);
+      setSaved(undefined);
+      return;
+    }
+    setAskProtect(true);
+  }, [info?.protected, protect]);
+
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
@@ -159,11 +181,30 @@ export function App() {
           </button>
         </span>
 
+        <span className="toolbar-group" role="group" aria-label="Document">
+          <button type="button" onClick={() => void compress()} disabled={disabled}>
+            Compress
+          </button>
+          <button type="button" onClick={() => void handleProtect()} disabled={disabled}>
+            {info?.protected ? "Remove password" : "Protect…"}
+          </button>
+        </span>
+
         <span className="toolbar-name">{state.name ?? "No document open"}</span>
         {info ? (
           <span className="toolbar-pages">
             {pageCount} {pageCount === 1 ? "page" : "pages"}
             {positions.length > 0 ? `, ${positions.length} selected` : ""}
+          </span>
+        ) : null}
+        {info?.repaired ? (
+          <span className="badge" data-testid="repaired-badge" title="This file was damaged">
+            Repaired
+          </span>
+        ) : null}
+        {info?.protected ? (
+          <span className="badge" data-testid="protected-badge">
+            Password set
           </span>
         ) : null}
         <span
@@ -194,6 +235,56 @@ export function App() {
         className="visually-hidden"
         onChange={(event) => void onMergeInput(event.target.files)}
       />
+
+      {state.needsPassword ? (
+        <form
+          className="prompt"
+          data-testid="password-prompt"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const field = new FormData(event.currentTarget).get("password");
+            if (typeof field === "string" && field !== "") void unlock(field);
+          }}
+        >
+          <label htmlFor="password">
+            <strong>{state.needsPassword}</strong> needs a password to open. It is used here on this
+            device only.
+          </label>
+          <input id="password" name="password" type="password" autoFocus data-testid="password" />
+          <button type="submit">Unlock</button>
+        </form>
+      ) : null}
+
+      {askProtect ? (
+        <form
+          className="prompt"
+          data-testid="protect-prompt"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const field = new FormData(event.currentTarget).get("newPassword");
+            if (typeof field === "string" && field !== "") {
+              void protect(field);
+              setAskProtect(false);
+            }
+          }}
+        >
+          <label htmlFor="newPassword">
+            Password for the saved file. Keep it safe — a protected PDF cannot be recovered without
+            it.
+          </label>
+          <input
+            id="newPassword"
+            name="newPassword"
+            type="password"
+            autoFocus
+            data-testid="new-password"
+          />
+          <button type="submit">Set password</button>
+          <button type="button" onClick={() => setAskProtect(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : null}
 
       {info ? (
         <div className="workspace">

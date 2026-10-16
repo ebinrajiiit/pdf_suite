@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPdfWorkerClient, type DocumentInfo, type PdfWorkerClient } from "@pdf-suite/workers";
 import pdfiumWasmUrl from "@embedpdf/pdfium/pdfium.wasm?url";
+import qpdfWasmUrl from "@neslinesli93/qpdf-wasm/dist/qpdf.wasm?url";
 import { insertPages } from "@pdf-suite/ui";
 import { readFiles, type PickedFile } from "./file-io.js";
 
@@ -12,6 +13,8 @@ export interface DocumentState {
   /** Source page indices in display order; reordering only rewrites this. */
   order: number[];
   handle?: FileSystemFileHandle | undefined;
+  /** Name of the document waiting on a password; the worker holds its bytes. */
+  needsPassword?: string | undefined;
   busy: string | undefined;
   error: string | undefined;
 }
@@ -32,10 +35,11 @@ export function useDocument() {
     client.current = worker;
     let alive = true;
 
-    // The wasm comes from our own bundle, never a CDN (docs/PRIVACY.md).
+    // Both wasm assets come from our own bundle, never a CDN (docs/PRIVACY.md).
+    // qpdf is passed as a URL and fetched by the worker only when first needed.
     void fetch(pdfiumWasmUrl)
       .then((res) => res.arrayBuffer())
-      .then((wasm) => worker.init(wasm))
+      .then((wasm) => worker.init(wasm, new URL(qpdfWasmUrl, location.href).href))
       .then(() => {
         if (alive) setReady(true);
       })
@@ -70,20 +74,63 @@ export function useDocument() {
     [],
   );
 
-  const open = useCallback(
-    async (file: PickedFile) => {
-      const info = await run("Opening", (worker) => worker.open(file.bytes));
-      if (!info) return;
+  /**
+   * Opens a file. A document that needs a password is reported as
+   * `needsPassword` rather than as an error, so the app can ask for one; the
+   * bytes stay in the worker, since open() transferred them.
+   */
+  const open = useCallback(async (file: PickedFile) => {
+    const worker = client.current;
+    if (!worker) return;
+    setState((s) => ({ ...s, busy: "Opening", error: undefined }));
+    try {
+      const info = await worker.open(file.bytes);
       setState((s) => ({
         ...s,
         name: file.name,
         info,
         order: info.pageSizes.map((_, i) => i),
         handle: file.handle,
+        needsPassword: undefined,
+        error: undefined,
       }));
-    },
-    [run],
-  );
+    } catch (err) {
+      if (err instanceof Error && err.name === "PasswordRequiredError") {
+        setState((s) => ({ ...s, name: file.name, needsPassword: file.name, error: undefined }));
+        return;
+      }
+      setState((s) => ({ ...s, error: message(err) }));
+    } finally {
+      setState((s) => ({ ...s, busy: undefined }));
+    }
+  }, []);
+
+  /** Supplies the password for the document the worker is holding. */
+  const unlock = useCallback(async (password: string) => {
+    const worker = client.current;
+    if (!worker) return;
+    setState((s) => ({ ...s, busy: "Unlocking", error: undefined }));
+    try {
+      const info = await worker.unlock(password);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        needsPassword: undefined,
+        error: undefined,
+        // A decrypted copy is a new document; it must not overwrite the original.
+        handle: undefined,
+      }));
+    } catch (err) {
+      const wrong = err instanceof Error && err.name === "WrongPasswordError";
+      setState((s) => ({
+        ...s,
+        error: wrong ? "That password did not work" : message(err),
+      }));
+    } finally {
+      setState((s) => ({ ...s, busy: undefined }));
+    }
+  }, []);
 
   /**
    * Appends `files` and places the new pages at display position `at` (end when
@@ -147,6 +194,23 @@ export function useDocument() {
     [run],
   );
 
+  /** Recompresses the document, reporting the size change. */
+  const compress = useCallback(async () => {
+    const info = await run("Compressing", (worker) => worker.compress(stateRef.current.order));
+    if (!info) return;
+    setState((s) => ({ ...s, info, order: info.pageSizes.map((_, i) => i), handle: undefined }));
+  }, [run]);
+
+  /** Sets or clears the password the document is saved with. */
+  const protect = useCallback(
+    async (password: string | null) => {
+      const info = await run("Updating protection", (worker) => worker.protect(password));
+      if (!info) return;
+      setState((s) => ({ ...s, info, handle: undefined }));
+    },
+    [run],
+  );
+
   const setOrder = useCallback((order: number[]) => setState((s) => ({ ...s, order })), []);
 
   /** Saves just the given source pages, leaving the open document alone. */
@@ -167,9 +231,12 @@ export function useDocument() {
     ready,
     state,
     open,
+    unlock,
     openFiles,
     mergeIn,
     rotatePages,
+    compress,
+    protect,
     render,
     save,
     extract,

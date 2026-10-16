@@ -13,24 +13,40 @@ export interface DocumentInfo {
   pageCount: number;
   /** PDF points, rotation applied. */
   pageSizes: { width: number; height: number }[];
+  /** Set when the file was damaged and qpdf reconstructed it to open it. */
+  repaired?: boolean;
+  /** Set when the document arrived encrypted and will be re-protected on save. */
+  protected?: boolean;
 }
 
-export type WorkerRequest = { id: number } & (
-  | { kind: "init"; wasmBinary: ArrayBuffer }
-  | { kind: "open"; bytes: ArrayBuffer; password?: string }
-  /**
-   * Appends the given documents to the open one and reopens the result. Where
-   * the new pages appear is the caller's choice, made by setting the display
-   * order afterwards.
-   */
-  | { kind: "merge"; inputs: ArrayBuffer[]; order: number[] }
-  | { kind: "render"; page: number; scale: number }
-  /** Rotates the given display positions by `by` degrees and reopens the result. */
-  | { kind: "rotate"; positions: number[]; by: 90 | 180 | 270; order: number[] }
-  | { kind: "save"; order: number[] }
-  | { kind: "close" }
-  | { kind: "cancel"; target: number }
-);
+export type WorkerRequest = { id: number } &
+  /** `qpdfWasmUrl` must be same-origin; qpdf is only loaded when first needed. */
+  (
+    | { kind: "init"; wasmBinary: ArrayBuffer; qpdfWasmUrl: string }
+    | { kind: "open"; bytes: ArrayBuffer }
+    /**
+     * Supplies the password for a document whose open() raised
+     * PasswordRequiredError. The worker still holds those bytes, so they are not
+     * sent again — open() transferred them, which detaches the sender's copy.
+     */
+    | { kind: "unlock"; password: string }
+    /**
+     * Appends the given documents to the open one and reopens the result. Where
+     * the new pages appear is the caller's choice, made by setting the display
+     * order afterwards.
+     */
+    | { kind: "merge"; inputs: ArrayBuffer[]; order: number[] }
+    | { kind: "render"; page: number; scale: number }
+    /** Rotates the given display positions by `by` degrees and reopens the result. */
+    | { kind: "rotate"; positions: number[]; by: 90 | 180 | 270; order: number[] }
+    /** Recompresses the document, reopening the result. */
+    | { kind: "compress"; order: number[] }
+    /** Sets the password the document is saved with, or null to remove protection. */
+    | { kind: "protect"; password: string | null }
+    | { kind: "save"; order: number[] }
+    | { kind: "close" }
+    | { kind: "cancel"; target: number }
+  );
 
 export type WorkerResponse = { id: number } & (
   | { kind: "ready" }

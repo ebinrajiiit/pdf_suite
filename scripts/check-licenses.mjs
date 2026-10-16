@@ -2,6 +2,7 @@
 // Fails if any installed production dependency has a non-allow-listed licence
 // or is on the banned-by-name list. Policy: docs/LICENSE-POLICY.md
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const ALLOWED = new Set([
   "MIT",
@@ -16,6 +17,8 @@ const ALLOWED = new Set([
   "MPL-2.0",
   "BlueOak-1.0.0",
   "Python-2.0",
+  // Bundled binaries only (libjpeg-turbo inside qpdf.wasm) — see ADR 0003.
+  "IJG",
 ]);
 const BANNED_NAMES = [/mupdf/i, /^pymupdf$/i, /^fitz$/i, /ghostscript/i, /pdf2docx/i];
 
@@ -48,6 +51,18 @@ for (const [licence, pkgs] of Object.entries(report)) {
     } else if (!isAllowed(licence)) {
       failures.push(`${pkg.name}: licence "${licence}" not allowed`);
     }
+  }
+}
+
+// npm metadata says nothing about code compiled into a wasm blob, so the
+// components recorded in third-party.json are checked against the same list.
+// Nothing enforced this before qpdf arrived carrying libjpeg-turbo.
+const thirdParty = JSON.parse(readFileSync(new URL("./third-party.json", import.meta.url), "utf8"));
+for (const component of thirdParty.components) {
+  if (!isAllowed(component.licence)) {
+    failures.push(
+      `${component.name} (third-party.json): licence "${component.licence}" not allowed`,
+    );
   }
 }
 

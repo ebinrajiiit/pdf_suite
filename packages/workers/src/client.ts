@@ -17,11 +17,17 @@ type RequestBody = WorkerRequest extends infer T
 export type OnProgress = (done: number, total: number) => void;
 
 export interface PdfWorkerClient {
-  init(wasmBinary: ArrayBuffer): Promise<void>;
-  open(bytes: ArrayBuffer, password?: string): Promise<DocumentInfo>;
+  init(wasmBinary: ArrayBuffer, qpdfWasmUrl: string): Promise<void>;
+  open(bytes: ArrayBuffer): Promise<DocumentInfo>;
+  /** Retries a document that raised PasswordRequiredError, with its password. */
+  unlock(password: string): Promise<DocumentInfo>;
   merge(inputs: ArrayBuffer[], order: number[], onProgress?: OnProgress): Promise<DocumentInfo>;
   render(page: number, scale: number): Promise<ImageBitmap>;
   rotate(positions: number[], by: 90 | 180 | 270, order: number[]): Promise<DocumentInfo>;
+  /** Recompresses the document, which reopens it. */
+  compress(order: number[]): Promise<DocumentInfo>;
+  /** Sets the password applied when saving, or null to remove protection. */
+  protect(password: string | null): Promise<DocumentInfo>;
   save(order: number[]): Promise<ArrayBuffer>;
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
@@ -98,13 +104,14 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
   }
 
   return {
-    async init(wasmBinary) {
-      expect(await send({ kind: "init", wasmBinary }, [wasmBinary]), "ready");
+    async init(wasmBinary, qpdfWasmUrl) {
+      expect(await send({ kind: "init", wasmBinary, qpdfWasmUrl }, [wasmBinary]), "ready");
     },
-    async open(bytes, password) {
-      const request: RequestBody =
-        password === undefined ? { kind: "open", bytes } : { kind: "open", bytes, password };
-      return expect(await send(request, [bytes]), "document").info;
+    async open(bytes) {
+      return expect(await send({ kind: "open", bytes }, [bytes]), "document").info;
+    },
+    async unlock(password) {
+      return expect(await send({ kind: "unlock", password }), "document").info;
     },
     async merge(inputs, order, onProgress) {
       return expect(await send({ kind: "merge", inputs, order }, inputs, onProgress), "document")
@@ -115,6 +122,12 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async rotate(positions, by, order) {
       return expect(await send({ kind: "rotate", positions, by, order }), "document").info;
+    },
+    async compress(order) {
+      return expect(await send({ kind: "compress", order }), "document").info;
+    },
+    async protect(password) {
+      return expect(await send({ kind: "protect", password }), "document").info;
     },
     async save(order) {
       return expect(await send({ kind: "save", order }), "saved").bytes;
