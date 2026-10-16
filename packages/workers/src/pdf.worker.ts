@@ -5,6 +5,7 @@ import {
   merge,
   reorder,
   rotate,
+  split,
   type Annotation,
   type Qpdf,
 } from "@pdf-suite/core";
@@ -52,11 +53,14 @@ function qpdf(): Promise<Qpdf> {
   return qpdfInstance;
 }
 
-function info(handle: DocHandle): DocumentInfo {
+async function info(handle: DocHandle): Promise<DocumentInfo> {
   const pageCount = handle.pageCount();
   const pageSizes = [];
   for (let i = 0; i < pageCount; i++) pageSizes.push(handle.pageSize(i));
-  return { pageCount, pageSizes, repaired, protected: protection !== null };
+  // The outline is read once per open: it is small, and the panel needs it
+  // immediately rather than after another round trip.
+  const outline = await handle.outline().catch(() => []);
+  return { pageCount, pageSizes, outline, repaired, protected: protection !== null };
 }
 
 function post(message: WorkerResponse, transfer: Transferable[] = []): void {
@@ -187,7 +191,8 @@ async function handle(request: WorkerRequest): Promise<void> {
       return;
     }
     case "text": {
-      const runs = await doc!.extractText(request.page);
+      if (!doc) throw new Error("no document is open");
+      const runs = await doc.extractText(request.page);
       post({ id, kind: "runs", runs });
       return;
     }
@@ -210,7 +215,8 @@ async function handle(request: WorkerRequest): Promise<void> {
       // Protection is applied on save, not now: the working copy has to stay
       // readable by pdf-lib for every other operation.
       protection = request.password;
-      post({ id, kind: "document", info: info(doc!) });
+      if (!doc) throw new Error("no document is open");
+      post({ id, kind: "document", info: await info(doc) });
       return;
     }
     case "search": {
@@ -236,6 +242,23 @@ async function handle(request: WorkerRequest): Promise<void> {
       }
 
       post({ id, kind: "hits", hits, truncated });
+      return;
+    }
+    case "split": {
+      const base = await materialise(id, request.order, request.annotations);
+      // Boundaries are where a new part starts; 0 is implied and duplicates and
+      // out-of-range values are ignored rather than producing empty parts.
+      const count = request.order.length;
+      const starts = [...new Set([0, ...request.at.filter((n) => n > 0 && n < count)])].sort(
+        (a, b) => a - b,
+      );
+      const ranges: [number, number][] = starts.map((start, i) => [
+        start,
+        (starts[i + 1] ?? count) - 1,
+      ]);
+      const parts = (await split(base, ranges)).map((bytes) => bytes.buffer as ArrayBuffer);
+      throwIfCancelled(id);
+      post({ id, kind: "parts", parts }, parts);
       return;
     }
     case "save": {

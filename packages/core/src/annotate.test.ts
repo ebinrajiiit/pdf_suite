@@ -95,3 +95,25 @@ test("the text under a highlight survives, because nothing is drawn over it", as
   // The page's own content is untouched; only the Annots array grew.
   expect(reloaded.getPage(0).node.Annots()?.size()).toBe(1);
 });
+
+test("underline and strike-through are their own PDF subtypes", async () => {
+  const marked = await annotate(await makeDoc(1), [
+    { kind: "underline", page: 0, rects: [{ x: 40, y: 300, w: 200, h: 14 }] },
+    { kind: "strike", page: 0, rects: [{ x: 40, y: 280, w: 200, h: 14 }] },
+  ]);
+  expect((await subtypesOf(marked))[0]).toEqual(["/Underline", "/StrikeOut"]);
+});
+
+test("a line over text is opaque, a highlight is not", async () => {
+  // A tint has to let the words through; a correction mark should not.
+  const doc = await makeDoc(1);
+  const rects = [{ x: 40, y: 300, w: 100, h: 12 }];
+  const highlight = await PDFDocument.load(
+    await annotate(doc, [{ kind: "highlight", page: 0, rects }]),
+  );
+  const strike = await PDFDocument.load(await annotate(doc, [{ kind: "strike", page: 0, rects }]));
+  const opacityOf = (d: PDFDocument) =>
+    Number(String(d.getPage(0).node.Annots()!.lookup(0, PDFDict).get(PDFName.of("CA"))));
+  expect(opacityOf(highlight)).toBeLessThan(1);
+  expect(opacityOf(strike)).toBe(1);
+});

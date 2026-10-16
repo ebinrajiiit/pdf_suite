@@ -50,6 +50,8 @@ export interface PdfWorkerClient {
     onProgress?: OnProgress,
   ): Promise<{ hits: SearchHit[]; truncated: boolean }>;
   save(order: number[], annotations: Annotation[]): Promise<ArrayBuffer>;
+  /** Splits into parts starting at the given display positions. */
+  split(at: number[], order: number[], annotations: Annotation[]): Promise<ArrayBuffer[]>;
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
   cancel(id: number): void;
@@ -162,6 +164,9 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async save(order, annotations) {
       return expect(await send({ kind: "save", order, annotations }), "saved").bytes;
+    },
+    async split(at, order, annotations) {
+      return expect(await send({ kind: "split", at, order, annotations }), "parts").parts;
     },
     async close() {
       expect(await send({ kind: "close" }), "closed");

@@ -2,7 +2,7 @@
 // working with the network cut. The viewer flow runs inside the guard so the
 // assertion covers real work, not just the shell loading.
 import { test, expect, type Page } from "@playwright/test";
-import { PDFDict, PDFDocument, PDFName, StandardFonts } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 
 type Size = [number, number];
@@ -17,6 +17,39 @@ async function fixture(sizes: Size[]): Promise<Buffer> {
 async function sizesOf(bytes: Buffer | Uint8Array): Promise<Size[]> {
   const doc = await PDFDocument.load(bytes);
   return doc.getPages().map((p) => [Math.round(p.getWidth()), Math.round(p.getHeight())]);
+}
+
+/** A document with bookmarks pointing at pages, for the outline panel. */
+async function outlineFixture(): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (const title of ["One", "Two", "Three"]) {
+    doc.addPage([400, 400]).drawText(`Chapter ${title}`, { x: 40, y: 340, size: 16, font });
+  }
+  const context = doc.context;
+  const pages = doc.getPages();
+  // An outline is a linked list of items under the catalogue's /Outlines.
+  const outlinesRef = context.nextRef();
+  const items = ["Chapter One", "Chapter Two", "Chapter Three"].map((title, i) =>
+    context.register(
+      context.obj({
+        Title: PDFString.of(title),
+        Parent: outlinesRef,
+        Dest: [pages[i]!.ref, PDFName.of("Fit")],
+      }),
+    ),
+  );
+  for (const [i, ref] of items.entries()) {
+    const dict = context.lookup(ref, PDFDict);
+    if (items[i - 1]) dict.set(PDFName.of("Prev"), items[i - 1]!);
+    if (items[i + 1]) dict.set(PDFName.of("Next"), items[i + 1]!);
+  }
+  context.assign(
+    outlinesRef,
+    context.obj({ Type: "Outlines", First: items[0]!, Last: items[2]!, Count: items.length }),
+  );
+  doc.catalog.set(PDFName.of("Outlines"), outlinesRef);
+  return Buffer.from(await doc.save());
 }
 
 /** A document with real text, for search. One line per entry, per page. */
@@ -495,4 +528,81 @@ test("opening a second document replaces the rendered pages", async ({ page }) =
 
   await openFixture(page, "second.pdf", await textFixture([["Second document with more words"]]));
   await expect.poll(fingerprint).not.toBe(first);
+});
+
+test("shows the document's bookmarks and jumps to one", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "bookmarked.pdf", await outlineFixture());
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.getByTestId("tab-outline").click();
+  await expect(page.getByTestId("outline")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Chapter Two" })).toBeVisible();
+
+  // Clicking a bookmark scrolls the viewer to that page.
+  const before = await page.getByTestId("viewer").evaluate((el) => el.scrollTop);
+  await page.getByRole("button", { name: "Chapter Three" }).click();
+  await expect
+    .poll(() => page.getByTestId("viewer").evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(before);
+});
+
+test("a document without bookmarks says so rather than showing an empty panel", async ({
+  page,
+}) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "plain.pdf", await fixture([PORTRAIT]));
+
+  await page.getByTestId("tab-outline").click();
+  await expect(page.getByTestId("outline-empty")).toBeVisible();
+});
+
+test("splits a document into one file per selected page", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "four.pdf", await fixture([PORTRAIT, LANDSCAPE, SQUARE, PORTRAIT]));
+  await expect(page.getByText("4 pages")).toBeVisible();
+
+  // Page 3 starts a new part, so the split is [1,2] and [3,4].
+  await page.getByTestId("select-2").click();
+
+  const downloads: Promise<Buffer>[] = [];
+  page.on("download", (download) => downloads.push(download.path().then((p) => readFile(p!))));
+  await page.getByTestId("split").click();
+  await expect(page.getByTestId("status")).toHaveText(/Saved 2 of 2 parts/, { timeout: 30_000 });
+
+  const parts = await Promise.all(downloads);
+  expect(parts).toHaveLength(2);
+  expect(await sizesOf(parts[0]!)).toEqual([PORTRAIT, LANDSCAPE]);
+  expect(await sizesOf(parts[1]!)).toEqual([SQUARE, PORTRAIT]);
+});
+
+test("underline and strike-through reach the saved file", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "lines.pdf", await textFixture([["A line to mark up"]]));
+
+  const box = (await page.getByTestId("annots-0").boundingBox())!;
+  for (const [tool, from] of [
+    ["underline", 24],
+    ["strike", 60],
+  ] as const) {
+    await page.getByTestId(`tool-${tool}`).click();
+    await page.mouse.move(box.x + 20, box.y + from);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + from + 16, { steps: 6 });
+    await page.mouse.up();
+  }
+
+  const subtypes = (await annotationsOf(await saveAndRead(page, "Save")))[0]!;
+  expect(subtypes).toContain("/Underline");
+  expect(subtypes).toContain("/StrikeOut");
 });

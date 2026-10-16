@@ -31,8 +31,20 @@ interface Common {
   author?: string;
 }
 
+/** The quad-based markup kinds, which differ only in subtype and colour. */
+export type MarkupKind = "highlight" | "underline" | "strike";
+
+/** Shared shape of the quad-based kinds. Each kind is its own union member so
+ *  that `kind` stays a literal and narrowing works on it. */
+interface Markup extends Common {
+  rects: AnnotRect[];
+  opacity?: number;
+}
+
 export type Annotation =
-  | (Common & { kind: "highlight"; rects: AnnotRect[]; opacity?: number })
+  | (Markup & { kind: "highlight" })
+  | (Markup & { kind: "underline" })
+  | (Markup & { kind: "strike" })
   | (Common & { kind: "note"; x: number; y: number; contents: string })
   | (Common & {
       kind: "text";
@@ -45,6 +57,12 @@ export type Annotation =
     });
 
 const HIGHLIGHT_YELLOW: AnnotColor = [1, 0.85, 0.2];
+const LINE_RED: AnnotColor = [0.85, 0.15, 0.15];
+const SUBTYPES: Record<MarkupKind, string> = {
+  highlight: "Highlight",
+  underline: "Underline",
+  strike: "StrikeOut",
+};
 const NOTE_YELLOW: AnnotColor = [1, 0.82, 0.25];
 const TEXT_BLACK: AnnotColor = [0, 0, 0];
 /** Bit 3 (value 4) is Print: without it many viewers omit the annotation on paper. */
@@ -85,9 +103,18 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
       CreationDate: PDFString.of(stamp),
     };
 
-    if (annotation.kind === "highlight") {
-      if (annotation.rects.length === 0) throw new Error("a highlight needs at least one box");
-      const colour = annotation.color ?? HIGHLIGHT_YELLOW;
+    if (
+      annotation.kind === "highlight" ||
+      annotation.kind === "underline" ||
+      annotation.kind === "strike"
+    ) {
+      if (annotation.rects.length === 0) {
+        throw new Error(`a ${annotation.kind} needs at least one box`);
+      }
+      // A line over text reads as a correction, so it defaults to red; a
+      // highlight is a tint and defaults to yellow.
+      const colour =
+        annotation.color ?? (annotation.kind === "highlight" ? HIGHLIGHT_YELLOW : LINE_RED);
       // One annotation per box keeps each line independently removable, which is
       // what a reader expects when they delete "that highlight".
       for (const rect of annotation.rects) {
@@ -99,12 +126,13 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
           context.register(
             context.obj({
               ...shared,
-              Subtype: "Highlight",
+              Subtype: SUBTYPES[annotation.kind],
               Rect: [left, bottom, right, top],
               // QuadPoints order is upper-left, upper-right, lower-left, lower-right.
               QuadPoints: [left, top, right, top, left, bottom, right, bottom],
               C: colour,
-              CA: annotation.opacity ?? 0.4,
+              // A tint has to let the text through; a line does not.
+              CA: annotation.opacity ?? (annotation.kind === "highlight" ? 0.4 : 1),
             }),
           ),
         );

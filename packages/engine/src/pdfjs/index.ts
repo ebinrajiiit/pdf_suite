@@ -3,6 +3,7 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import {
   PasswordRequiredError,
   type DocHandle,
+  type OutlineItem,
   type PdfEngine,
   type TextRun,
   type TimingSink,
@@ -92,6 +93,40 @@ class PdfjsDocHandle implements DocHandle {
       return runs;
     } finally {
       page.cleanup();
+    }
+  }
+
+  async outline(): Promise<OutlineItem[]> {
+    const raw = await this.#doc.getOutline();
+    if (!raw) return [];
+    const resolve = async (
+      items: Awaited<ReturnType<PDFDocumentProxy["getOutline"]>>,
+      depth: number,
+    ): Promise<OutlineItem[]> => {
+      if (!items || depth > 16) return [];
+      const out: OutlineItem[] = [];
+      for (const item of items) {
+        out.push({
+          title: item.title,
+          page: await this.#pageOf(item.dest),
+          children: await resolve(item.items, depth + 1),
+        });
+      }
+      return out;
+    };
+    return resolve(raw, 0);
+  }
+
+  /** pdf.js destinations are either a named string or an explicit array. */
+  async #pageOf(dest: string | unknown[] | null): Promise<number | undefined> {
+    try {
+      const explicit = typeof dest === "string" ? await this.#doc.getDestination(dest) : dest;
+      const ref = explicit?.[0];
+      if (!ref || typeof ref !== "object") return undefined;
+      return await this.#doc.getPageIndex(ref as Parameters<PDFDocumentProxy["getPageIndex"]>[0]);
+    } catch {
+      // A broken destination is not a reason to drop the whole outline.
+      return undefined;
     }
   }
 

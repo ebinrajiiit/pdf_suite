@@ -287,6 +287,18 @@ export function useDocument() {
     setState((s) => ({ ...s, annotations: [] }));
   }, []);
 
+  /**
+   * Splits at the selected display positions and returns one document per part.
+   * The open document is left alone, like extract.
+   */
+  const splitAt = useCallback(
+    async (at: number[]) =>
+      run("Splitting", (worker) =>
+        worker.split(at, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
   /** Text runs for one source page, for snapping a highlight to whole lines. */
   const pageText = useCallback(async (page: number) => {
     const worker = client.current;
@@ -330,6 +342,7 @@ export function useDocument() {
     save,
     extract,
     search,
+    splitAt,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

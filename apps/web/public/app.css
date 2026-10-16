@@ -117,11 +117,15 @@ body {
   pointer-events: none;
 }
 .annots-highlight,
+.annots-underline,
+.annots-strike,
 .annots-note,
 .annots-text {
   pointer-events: auto;
 }
-.annots-highlight {
+.annots-highlight,
+.annots-underline,
+.annots-strike {
   cursor: crosshair;
 }
 .annots-note,
@@ -136,6 +140,18 @@ body {
 .annot-highlight {
   background: rgb(255 214 0 / 40%);
   mix-blend-mode: multiply;
+}
+/* A line over text is a correction mark, drawn where the PDF will draw it. */
+.annot-underline {
+  border-bottom: 2px solid rgb(217 38 38);
+}
+.annot-strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 2px solid rgb(217 38 38);
 }
 .annot-dragging {
   background: rgb(255 214 0 / 25%);
@@ -240,10 +256,87 @@ body {
   display: block;
 }
 
-.thumbs {
-  flex: 0 0 160px;
-  overflow-y: auto;
+.sidebar {
+  flex: 0 0 190px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-right: 1px solid var(--line);
+}
+.sidebar-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+}
+.tab {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.25rem;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.tab-active {
+  opacity: 1;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 #2563eb;
+}
+
+.outline {
+  overflow: auto;
+  padding: 0.5rem 0.4rem;
+  font-size: 0.82rem;
+}
+.outline-empty {
+  padding: 1rem 0.75rem;
+  opacity: 0.7;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.outline-branch {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.outline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.outline-twisty {
+  flex: 0 0 1.1rem;
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.outline-title {
+  flex: 1 1 auto;
+  font: inherit;
+  text-align: left;
+  padding: 0.15rem 0.2rem;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.outline-title:hover {
+  background: var(--sunken);
+}
+.outline-dead {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.thumbs {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 0.75rem 0 0.75rem 1.25rem;
 }
 .thumb {

@@ -18,6 +18,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
-    "@pdf-suite/core": "workspace:*"
+    "@pdf-suite/core": "workspace:*",
+    "@pdf-suite/engine": "workspace:*"
   }
 }

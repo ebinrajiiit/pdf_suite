@@ -5,7 +5,7 @@
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
 import type { Annotation } from "@pdf-suite/core";
-import type { TextRun } from "@pdf-suite/engine";
+import type { OutlineItem, TextRun } from "@pdf-suite/engine";
 /**
  * `order` on a request is source page indices in their display positions, with
  * omitted pages deleted. Every request that rewrites bytes applies it first, so
@@ -19,6 +19,8 @@ export interface DocumentInfo {
   repaired?: boolean;
   /** Set when the document arrived encrypted and will be re-protected on save. */
   protected?: boolean;
+  /** The document's bookmarks, empty when it has none. */
+  outline: OutlineItem[];
 }
 
 /**
@@ -27,7 +29,7 @@ export interface DocumentInfo {
  * keyed by source page index, which reordering would otherwise invalidate.
  */
 export type { Annotation, AnnotRect } from "@pdf-suite/core";
-export type { TextRun } from "@pdf-suite/engine";
+export type { OutlineItem, TextRun } from "@pdf-suite/engine";
 
 /** One search hit, in the display position the user is looking at. */
 export interface SearchHit {
@@ -79,6 +81,11 @@ export type WorkerRequest = { id: number } &
      */
     | { kind: "search"; query: string; order: number[]; limit?: number }
     | { kind: "save"; order: number[]; annotations: Annotation[] }
+    /**
+     * Splits the document at the given display positions, each starting a new
+     * part. Returns one document per part, in order.
+     */
+    | { kind: "split"; at: number[]; order: number[]; annotations: Annotation[] }
     | { kind: "close" }
     | { kind: "cancel"; target: number }
   );
@@ -90,6 +97,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "saved"; bytes: ArrayBuffer }
   | { kind: "hits"; hits: SearchHit[]; truncated: boolean }
   | { kind: "runs"; runs: TextRun[] }
+  | { kind: "parts"; parts: ArrayBuffer[] }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -107,6 +115,7 @@ export type TerminalResponse = Extract<
       | "saved"
       | "hits"
       | "runs"
+      | "parts"
       | "closed"
       | "cancelled"
       | "error";

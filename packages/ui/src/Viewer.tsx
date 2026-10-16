@@ -24,9 +24,14 @@ export interface ViewerProps {
   render: (page: number, scale: number) => Promise<ImageBitmap>;
   /** CSS pixels available for a page; used by the "fit" zoom. */
   containerWidth: number;
+  /** CSS pixels of visible height; used by the "page" zoom. */
+  containerHeight?: number;
   pixelRatio?: number;
-  /** "fit" scales the widest page to the container; a number is a fixed scale. */
-  zoom?: number | "fit";
+  /**
+   * "fit" scales the widest page to the container width, "page" fits a whole
+   * page in view, a number is a fixed scale in CSS pixels per point.
+   */
+  zoom?: number | "fit" | "page";
   /** Boxes to mark, keyed by display position. */
   highlights?: ReadonlyMap<number, Highlight[]>;
   /** The one highlight to emphasise, as "position:index". */
@@ -52,6 +57,7 @@ export function Viewer({
   pageSizes,
   render,
   containerWidth,
+  containerHeight,
   pixelRatio = 1,
   zoom = "fit",
   highlights,
@@ -66,9 +72,18 @@ export function Viewer({
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
     [order, pageSizes],
   );
+  const tallest = useMemo(
+    () => Math.max(1, ...order.map((page) => pageSizes[page]?.height ?? 0)),
+    [order, pageSizes],
+  );
   // Fit never magnifies past one point per CSS pixel; an explicit zoom may.
+  const fitWidth = Math.min(1, Math.max(0.1, (containerWidth - GAP * 2) / widest));
   const scale =
-    zoom === "fit" ? Math.min(1, Math.max(0.1, (containerWidth - GAP * 2) / widest)) : zoom;
+    zoom === "fit"
+      ? fitWidth
+      : zoom === "page"
+        ? Math.min(fitWidth, Math.max(0.1, ((containerHeight ?? 0) - GAP * 2) / tallest))
+        : zoom;
 
   const layout = useMemo(() => {
     const offsets = [0];

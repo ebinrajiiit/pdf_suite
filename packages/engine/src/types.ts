@@ -5,12 +5,22 @@ export interface PdfEngine {
   open(bytes: ArrayBuffer, opts?: { password?: string }): Promise<DocHandle>;
 }
 
+/** One entry of the document's outline (its bookmarks). */
+export interface OutlineItem {
+  title: string;
+  /** Source page index, or undefined when the bookmark points elsewhere. */
+  page?: number | undefined;
+  children: OutlineItem[];
+}
+
 export interface DocHandle {
   pageCount(): number;
   /** In PDF points, with page rotation applied. */
   pageSize(index: number): { width: number; height: number };
   renderPage(index: number, scale: number): Promise<ImageBitmap>;
   extractText(index: number): Promise<TextRun[]>;
+  /** The document's bookmarks, empty when it has none. */
+  outline(): Promise<OutlineItem[]>;
   close(): void;
 }
 

@@ -2,6 +2,7 @@ import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
 import {
   PasswordRequiredError,
   type DocHandle,
+  type OutlineItem,
   type PdfEngine,
   type TextRun,
   type TimingSink,
@@ -151,6 +152,54 @@ class PdfiumDocHandle implements DocHandle {
       this.#m.FPDFText_ClosePage(textPage);
       this.#free(rectPtr);
     }
+  }
+
+  async outline(): Promise<OutlineItem[]> {
+    this.#assertOpen();
+    // Bookmarks are a sibling-linked tree of first-child pointers. Depth is
+    // capped because a malformed file can point a child back at its ancestor,
+    // and malformed PDFs are normal (CLAUDE.md §4).
+    const walk = (parent: number, depth: number): OutlineItem[] => {
+      if (depth > 16) return [];
+      const items: OutlineItem[] = [];
+      let bookmark = this.#m.FPDFBookmark_GetFirstChild(this.#doc, parent);
+      while (bookmark && items.length < 5000) {
+        items.push({
+          title: this.#bookmarkTitle(bookmark),
+          page: this.#bookmarkPage(bookmark),
+          children: walk(bookmark, depth + 1),
+        });
+        bookmark = this.#m.FPDFBookmark_GetNextSibling(this.#doc, bookmark);
+      }
+      return items;
+    };
+    return walk(0, 0);
+  }
+
+  /** Titles come back as UTF-16; the first call asks for the byte length. */
+  #bookmarkTitle(bookmark: number): string {
+    const bytes = this.#m.FPDFBookmark_GetTitle(bookmark, 0, 0);
+    if (bytes <= 2) return "";
+    const ptr = this.#malloc(bytes);
+    try {
+      this.#m.FPDFBookmark_GetTitle(bookmark, ptr, bytes);
+      return this.#m.pdfium.UTF16ToString(ptr);
+    } finally {
+      this.#free(ptr);
+    }
+  }
+
+  #bookmarkPage(bookmark: number): number | undefined {
+    let dest = this.#m.FPDFBookmark_GetDest(this.#doc, bookmark);
+    if (!dest) {
+      // No direct destination: it may carry a GoTo action instead.
+      const action = this.#m.FPDFBookmark_GetAction(bookmark);
+      if (!action) return undefined;
+      dest = this.#m.FPDFAction_GetDest(this.#doc, action);
+      if (!dest) return undefined;
+    }
+    const index = this.#m.FPDFDest_GetDestPageIndex(this.#doc, dest);
+    return index >= 0 ? index : undefined;
   }
 
   close(): void {

@@ -44,6 +44,10 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | **Add text**, then click a page | Asks for the words, then places them on the page |
 | Turn the tool off, click a mark | Removes it. **Clear N** removes every unsaved mark |
 | **Save** after annotating | Marks become real PDF annotations — highlights, notes and free text that Acrobat and Chrome can edit, with the text under a highlight intact |
+| **Underline** / **Strike**, then drag | The same snapping, written as real `/Underline` and `/StrikeOut` marks |
+| **Bookmarks** tab in the sidebar | The document's outline, click an entry to jump. Says so plainly when a file has none |
+| Select pages, **Split…** | Each selected page starts a new file; you get one save dialog per part |
+| Zoom **Page** | Fits a whole page in the window |
 | Type in **Search**, press Enter | Match count, ‹ › to step through, matched lines highlighted. Ctrl/Cmd+F focuses it |
 | **Protect…**, set a password, **Save** | The saved file needs that password to open. Reopen it to be asked |
 | **Compress** | Rewrites the document; object streams help on real files, not tiny ones |

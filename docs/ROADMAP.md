@@ -16,14 +16,19 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 ## Phase 1 — View and organize (months 1–2) → Release 1 (web PWA)
 - [x] Viewer: virtualised pages (only the visible window is mounted), fit-to-width, thumbnails
 - [x] Viewer: zoom controls (buttons and Ctrl/Cmd +/-/0), drag-and-drop open, Ctrl/Cmd+F to search
-- [ ] Viewer: more fit modes (fit page, fit height), outline/bookmarks panel, bitmap cache across zoom levels
+- [x] Viewer: fit page, outline/bookmarks panel (sidebar tabs, click to jump)
+- [ ] Viewer: bitmap cache across zoom levels — deliberately not done: pages are
+  transferred into the canvas zero-copy, and `transferFromImageBitmap` consumes
+  the bitmap, so caching would cost a full copy of every page drawn. Revisit if
+  re-rasterising on zoom actually hurts on the corpus
 - [x] Text search with highlights — case- and Unicode-normalisation-insensitive, so Malayalam and Hindi match whichever form the document uses (unit-tested). Highlights are line-level: narrowing them to the matched substring needs glyph quads from the engine
 - [ ] Verify Indic *extraction* (not just matching) against real Malayalam and Hindi documents — needs the corpus
 - [x] Annotate: highlight (snapped to text lines), sticky note, free text — written as real PDF annotation objects, so the text underneath survives and other viewers can edit them
-- [ ] Annotate: underline, strike-through, freehand, stamps; colour choice; editing an annotation after placing it; generating `/AP` appearance streams for viewers that do not synthesise them
+- [x] Annotate: underline and strike-through (real `/Underline` and `/StrikeOut`, opaque where a highlight is a tint)
+- [ ] Annotate: freehand and stamps; colour choice; editing an annotation after placing it; generating `/AP` appearance streams for viewers that do not synthesise them
 - [x] Organize: merge, insert at a position, reorder (drag thumbnails or the keyboard controls), rotate, delete, extract selected pages, save via native dialog
 - [x] `packages/core`: merge, split, reorder and rotate on pdf-lib, unit-tested
-- [ ] Organize: split one document into several files in one action (extract covers the one-file case)
+- [x] Organize: split into several files — each selected page starts a new part, one save dialog per part (a single archive would need a zip writer)
 - [x] Compress, password protect / remove password (qpdf.wasm) — ADR 0003
 - [x] Repair-on-open fallback for malformed files (recovers a mangled header or junk prefix; a destroyed xref still fails — see ADR 0003)
 - [x] Installable PWA, fully offline after first load (engine starts with the network cut)

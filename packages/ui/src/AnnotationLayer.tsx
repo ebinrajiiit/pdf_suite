@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Annotation, AnnotRect } from "@pdf-suite/core";
 
-export type AnnotationTool = "highlight" | "note" | "text";
+export type AnnotationTool = "highlight" | "underline" | "strike" | "note" | "text";
 
 /** What the user drew, in PDF points with the origin at the page bottom-left. */
 export type PlacedShape =
@@ -76,7 +76,7 @@ export function AnnotationLayer({
       className={tool ? `annots annots-${tool}` : "annots"}
       data-testid={`annots-${page}`}
       onPointerDown={(event) => {
-        if (tool !== "highlight") return;
+        if (tool !== "highlight" && tool !== "underline" && tool !== "strike") return;
         const { x, y } = positionIn(event);
         event.currentTarget.setPointerCapture(event.pointerId);
         setDrag({ x1: x, y1: y, x2: x, y2: y });
@@ -106,12 +106,16 @@ export function AnnotationLayer({
           onClick: onRemove ? () => onRemove(index) : undefined,
         };
 
-        if (annotation.kind === "highlight") {
+        if (
+          annotation.kind === "highlight" ||
+          annotation.kind === "underline" ||
+          annotation.kind === "strike"
+        ) {
           return annotation.rects.map((rect: AnnotRect, n: number) => (
             <div
               {...common}
               key={`${index}:${n}`}
-              className="annot annot-highlight"
+              className={`annot annot-${annotation.kind}`}
               data-testid={`annot-${index}`}
               style={{
                 left: `${rect.x * scale}px`,

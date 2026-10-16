@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Outline,
   pagesAt,
   removePages,
   Thumbnails,
@@ -27,6 +28,7 @@ export function App() {
     save,
     extract,
     search,
+    splitAt,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -42,16 +44,20 @@ export function App() {
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
+  const [sidebar, setSidebar] = useState<"pages" | "outline">("pages");
+  const [height, setHeight] = useState(600);
   /** A placed point waiting for its text, for the note and text tools. */
   const [pendingPoint, setPendingPoint] = useState<{ page: number; x: number; y: number } | null>(
     null,
   );
-  const [zoom, setZoom] = useState<number | "fit">("fit");
+  const [zoom, setZoom] = useState<number | "fit" | "page">("fit");
   const [dropping, setDropping] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [hitIndex, setHitIndex] = useState(0);
   const [truncated, setTruncated] = useState(false);
+  /** Display position to jump to, from a bookmark click. */
+  const [goTo, setGoTo] = useState<number | undefined>();
 
   const info = state.info;
   const pageCount = state.order.length;
@@ -60,16 +66,21 @@ export function App() {
   useEffect(() => {
     const el = main.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setWidth(el.clientWidth));
+    const observer = new ResizeObserver(() => {
+      setWidth(el.clientWidth);
+      setHeight(el.clientHeight);
+    });
     observer.observe(el);
     setWidth(el.clientWidth);
+    setHeight(el.clientHeight);
     return () => observer.disconnect();
   }, []);
 
   const stepZoom = useCallback((by: number) => {
     setZoom((current) => {
-      // "fit" is roughly a page width, so stepping away from it starts at 100%.
-      const from = current === "fit" ? ZOOM_LEVELS.indexOf(1) : ZOOM_LEVELS.indexOf(current);
+      // A fit mode is roughly a page width, so stepping away from it starts at 100%.
+      const from =
+        typeof current === "number" ? ZOOM_LEVELS.indexOf(current) : ZOOM_LEVELS.indexOf(1);
       const index = from === -1 ? ZOOM_LEVELS.indexOf(1) : from;
       return ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, index + by))] ?? 1;
     });
@@ -124,7 +135,7 @@ export function App() {
     });
   }, []);
 
-  const name = state.name ?? "document.pdf";
+  const name0 = state.name ?? "document.pdf";
   /** Positions in ascending display order, which is what every op expects. */
   const positions = useMemo(() => [...selected].sort((a, b) => a - b), [selected]);
   const target = positions.length > 0 ? positions : state.order.map((_, i) => i);
@@ -194,19 +205,34 @@ export function App() {
     const edited = !state.handle || state.order.length !== info?.pageCount;
     const written = await saveBytes(
       bytes,
-      edited ? suffixName(name, "edited") : name,
+      edited ? suffixName(name0, "edited") : name0,
       edited ? undefined : state.handle,
     );
     setSaved(written ? `Saved ${written}` : undefined);
-  }, [info?.pageCount, name, save, state.handle, state.order]);
+  }, [info?.pageCount, name0, save, state.handle, state.order]);
 
   const handleExtract = useCallback(async () => {
     const pages = pagesAt(state.order, positions);
     const bytes = await extract(pages);
     if (!bytes) return;
-    const written = await saveBytes(bytes, suffixName(name, `${pages.length} pages`));
+    const written = await saveBytes(bytes, suffixName(name0, `${pages.length} pages`));
     setSaved(written ? `Saved ${written}` : undefined);
-  }, [extract, name, positions, state.order]);
+  }, [extract, name0, positions, state.order]);
+
+  /** Each selected page starts a new part; every part is saved in turn. */
+  const handleSplit = useCallback(async () => {
+    const parts = await splitAt(positions);
+    if (!parts) return;
+    let written = 0;
+    for (const [index, part] of parts.entries()) {
+      const name = suffixName(name0, `part ${index + 1}`);
+      // One dialog per part. A single archive would be friendlier, but a zip
+      // writer is a dependency we do not need yet.
+      if (await saveBytes(part, name)) written++;
+      else break;
+    }
+    setSaved(written > 0 ? `Saved ${written} of ${parts.length} parts` : undefined);
+  }, [name0, positions, splitAt]);
 
   const handleDelete = useCallback(() => {
     if (positions.length === 0 || positions.length === pageCount) return;
@@ -259,12 +285,13 @@ export function App() {
   );
 
   /**
-   * A dragged box becomes a highlight. It is snapped to the text lines it
-   * crosses when the page has a text layer, so a rough drag produces tidy
-   * line-aligned marks; on a scan with no text it stays as drawn.
+   * A dragged box becomes a mark of whichever quad-based tool is active. It is
+   * snapped to the text lines it crosses when the page has a text layer, so a
+   * rough drag produces tidy line-aligned marks; on a scan with no text layer it
+   * stays as drawn.
    */
-  const placeHighlight = useCallback(
-    async (page: number, rect: AnnotRect) => {
+  const placeMarkup = useCallback(
+    async (page: number, rect: AnnotRect, kind: "highlight" | "underline" | "strike") => {
       const runs = await pageText(page);
       const overlapping = runs
         .filter(
@@ -275,11 +302,7 @@ export function App() {
             r.y + r.h > rect.y,
         )
         .map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
-      addAnnotation({
-        kind: "highlight",
-        page,
-        rects: overlapping.length > 0 ? overlapping : [rect],
-      });
+      addAnnotation({ kind, page, rects: overlapping.length > 0 ? overlapping : [rect] });
     },
     [addAnnotation, pageText],
   );
@@ -287,13 +310,15 @@ export function App() {
   const onPlace = useCallback(
     (page: number, shape: PlacedShape) => {
       if (shape.kind === "rect") {
-        void placeHighlight(page, shape.rect);
+        if (tool === "highlight" || tool === "underline" || tool === "strike") {
+          void placeMarkup(page, shape.rect, tool);
+        }
         return;
       }
       // A note or a text box needs its words before it is worth creating.
       setPendingPoint({ page, x: shape.x, y: shape.y });
     },
-    [placeHighlight],
+    [placeMarkup, tool],
   );
 
   const commitPending = useCallback(
@@ -382,6 +407,15 @@ export function App() {
           >
             Extract…
           </button>
+          <button
+            type="button"
+            onClick={() => void handleSplit()}
+            disabled={disabled || positions.length === 0}
+            title="Each selected page starts a new file"
+            data-testid="split"
+          >
+            Split…
+          </button>
         </span>
 
         <span className="toolbar-group" role="group" aria-label="Document">
@@ -394,7 +428,7 @@ export function App() {
         </span>
 
         <span className="toolbar-group" role="group" aria-label="Annotate">
-          {(["highlight", "note", "text"] as const).map((which) => (
+          {(["highlight", "underline", "strike", "note", "text"] as const).map((which) => (
             <button
               key={which}
               type="button"
@@ -407,7 +441,7 @@ export function App() {
                 setPendingPoint(null);
               }}
             >
-              {which === "highlight" ? "Highlight" : which === "note" ? "Note" : "Add text"}
+              {TOOL_LABELS[which]}
             </button>
           ))}
           {state.annotations.length > 0 ? (
@@ -432,7 +466,7 @@ export function App() {
             −
           </button>
           <span className="zoom-level" data-testid="zoom-level">
-            {zoom === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`}
+            {zoom === "fit" ? "Fit" : zoom === "page" ? "Page" : `${Math.round(zoom * 100)}%`}
           </span>
           <button
             type="button"
@@ -444,6 +478,14 @@ export function App() {
           </button>
           <button type="button" onClick={() => setZoom("fit")} disabled={disabled}>
             Fit
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom("page")}
+            disabled={disabled}
+            data-testid="fit-page"
+          >
+            Page
           </button>
         </span>
 
@@ -603,25 +645,60 @@ export function App() {
 
       {info ? (
         <div className="workspace">
-          <Thumbnails
-            order={state.order}
-            pageSizes={info.pageSizes}
-            render={render}
-            onReorder={setOrder}
-            selected={selected}
-            onSelect={onSelect}
-          />
+          <div className="sidebar">
+            <div className="sidebar-tabs" role="tablist" aria-label="Sidebar">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sidebar === "pages"}
+                className={sidebar === "pages" ? "tab tab-active" : "tab"}
+                onClick={() => setSidebar("pages")}
+              >
+                Pages
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sidebar === "outline"}
+                className={sidebar === "outline" ? "tab tab-active" : "tab"}
+                data-testid="tab-outline"
+                onClick={() => setSidebar("outline")}
+              >
+                Bookmarks{info.outline.length > 0 ? ` (${info.outline.length})` : ""}
+              </button>
+            </div>
+            {sidebar === "pages" ? (
+              <Thumbnails
+                order={state.order}
+                pageSizes={info.pageSizes}
+                render={render}
+                onReorder={setOrder}
+                selected={selected}
+                onSelect={onSelect}
+              />
+            ) : (
+              <Outline
+                items={info.outline}
+                onGo={(page) => {
+                  // Bookmarks name source pages; the viewer scrolls by position.
+                  const position = state.order.indexOf(page);
+                  if (position >= 0) setGoTo(position);
+                }}
+              />
+            )}
+          </div>
           <div className="main" ref={main}>
             <Viewer
               order={state.order}
               pageSizes={info.pageSizes}
               render={render}
               containerWidth={width}
+              containerHeight={height}
               pixelRatio={globalThis.devicePixelRatio || 1}
               zoom={zoom}
               highlights={highlights}
               active={activeHighlight}
-              scrollTo={hits[hitIndex]?.position}
+              scrollTo={goTo ?? hits[hitIndex]?.position}
               annotations={state.annotations}
               tool={tool}
               onPlace={onPlace}
@@ -651,6 +728,14 @@ export function App() {
     </div>
   );
 }
+
+const TOOL_LABELS: Record<AnnotationTool, string> = {
+  highlight: "Highlight",
+  underline: "Underline",
+  strike: "Strike",
+  note: "Note",
+  text: "Add text",
+};
 
 /** Zoom steps, in points per CSS pixel. */
 const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
