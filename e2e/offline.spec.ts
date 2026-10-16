@@ -37,6 +37,22 @@ async function withoutFilePickers(page: Page): Promise<void> {
   });
 }
 
+async function rotationsOf(bytes: Buffer | Uint8Array): Promise<number[]> {
+  const doc = await PDFDocument.load(bytes);
+  return doc.getPages().map((p) => p.getRotation().angle);
+}
+
+/** Clicks a button and returns the bytes of the file it downloads. */
+async function saveAndRead(page: Page, button: string): Promise<Buffer> {
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: button }).click(),
+  ]);
+  const path = await download.path();
+  expect(path, `${button} produced no file`).toBeTruthy();
+  return readFile(path!);
+}
+
 async function openFixture(page: Page, name: string, bytes: Buffer): Promise<void> {
   await page.setInputFiles('[data-testid="open-input"]', {
     name,
@@ -82,15 +98,8 @@ test("opens, merges, reorders and saves without contacting any non-self origin",
   // Reorder by the keyboard-reachable control rather than dragging.
   await page.getByRole("button", { name: "Move page 1 down" }).click();
 
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: "Save" }).click(),
-  ]);
-  const saved = await download.path();
-  expect(saved).toBeTruthy();
-
   // Merge appended, then page 1 moved below page 2.
-  expect(await sizesOf(await readFile(saved!))).toEqual([LANDSCAPE, PORTRAIT, SQUARE]);
+  expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([LANDSCAPE, PORTRAIT, SQUARE]);
 
   expect(foreign, `Foreign requests:\n${foreign.join("\n")}`).toEqual([]);
 });
@@ -132,4 +141,72 @@ test("the service worker caches no documents", async ({ page }) => {
   });
 
   expect(cached.filter((u) => /\.pdf(\?|$)/i.test(u) || /secret/i.test(u))).toEqual([]);
+});
+
+test("rotate, delete and extract act on the selected pages", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "three.pdf", await fixture([PORTRAIT, LANDSCAPE, SQUARE]));
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  // Rotating the selection rewrites the document, so it reopens and the
+  // selection is cleared — hence selecting again before each step.
+  await page.getByTestId("select-0").click();
+  await expect(page.getByText("3 pages, 1 selected")).toBeVisible();
+  await page.getByRole("button", { name: "Rotate right" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  expect(await rotationsOf(await saveAndRead(page, "Save"))).toEqual([90, 0, 0]);
+
+  // Deleting only rewrites the display order, so the page count drops at once.
+  await page.getByTestId("select-1").click();
+  await page.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  // Extract writes only the selected page and leaves the open document alone.
+  await page.getByTestId("select-1").click();
+  expect(await sizesOf(await saveAndRead(page, "Extract…"))).toEqual([SQUARE]);
+  await expect(page.getByText("2 pages")).toBeVisible();
+});
+
+test("a deleted page stays deleted when the document is next rewritten", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "two.pdf", await fixture([PORTRAIT, LANDSCAPE]));
+  await page.getByTestId("select-0").click();
+  await page.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  // Merge rewrites bytes. If it rewrote from the originally opened document
+  // instead of what is on screen, the deleted portrait page would come back.
+  await page.setInputFiles('[data-testid="merge-input"]', {
+    name: "extra.pdf",
+    mimeType: "application/pdf",
+    buffer: await fixture([SQUARE]),
+  });
+  await expect(page.getByText("2 pages")).toBeVisible();
+  expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([LANDSCAPE, SQUARE]);
+});
+
+test("merging with one page selected inserts after it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "two.pdf", await fixture([PORTRAIT, LANDSCAPE]));
+  await page.getByTestId("select-0").click();
+  await expect(page.getByRole("button", { name: "Insert after…" })).toBeEnabled();
+
+  await page.setInputFiles('[data-testid="merge-input"]', {
+    name: "inserted.pdf",
+    mimeType: "application/pdf",
+    buffer: await fixture([SQUARE]),
+  });
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  // Inserted between the two originals, not appended after them.
+  expect(await sizesOf(await saveAndRead(page, "Save"))).toEqual([PORTRAIT, SQUARE, LANDSCAPE]);
 });

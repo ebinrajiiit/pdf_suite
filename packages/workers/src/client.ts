@@ -19,8 +19,9 @@ export type OnProgress = (done: number, total: number) => void;
 export interface PdfWorkerClient {
   init(wasmBinary: ArrayBuffer): Promise<void>;
   open(bytes: ArrayBuffer, password?: string): Promise<DocumentInfo>;
-  merge(inputs: ArrayBuffer[], onProgress?: OnProgress): Promise<DocumentInfo>;
+  merge(inputs: ArrayBuffer[], order: number[], onProgress?: OnProgress): Promise<DocumentInfo>;
   render(page: number, scale: number): Promise<ImageBitmap>;
+  rotate(positions: number[], by: 90 | 180 | 270, order: number[]): Promise<DocumentInfo>;
   save(order: number[]): Promise<ArrayBuffer>;
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
@@ -105,11 +106,15 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         password === undefined ? { kind: "open", bytes } : { kind: "open", bytes, password };
       return expect(await send(request, [bytes]), "document").info;
     },
-    async merge(inputs, onProgress) {
-      return expect(await send({ kind: "merge", inputs }, inputs, onProgress), "document").info;
+    async merge(inputs, order, onProgress) {
+      return expect(await send({ kind: "merge", inputs, order }, inputs, onProgress), "document")
+        .info;
     },
     async render(page, scale) {
       return expect(await send({ kind: "render", page, scale }), "bitmap").bitmap;
+    },
+    async rotate(positions, by, order) {
+      return expect(await send({ kind: "rotate", positions, by, order }), "document").info;
     },
     async save(order) {
       return expect(await send({ kind: "save", order }), "saved").bytes;

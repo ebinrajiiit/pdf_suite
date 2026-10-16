@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPdfWorkerClient, type DocumentInfo, type PdfWorkerClient } from "@pdf-suite/workers";
 import pdfiumWasmUrl from "@embedpdf/pdfium/pdfium.wasm?url";
+import { insertPages } from "@pdf-suite/ui";
 import { readFiles, type PickedFile } from "./file-io.js";
 
 export interface DocumentState {
@@ -21,6 +22,10 @@ export function useDocument() {
   const client = useRef<PdfWorkerClient | null>(null);
   const [ready, setReady] = useState(false);
   const [state, setState] = useState<DocumentState>(initial);
+  // Callbacks need the current order without being rebuilt on every reorder,
+  // which would remount the viewer's render callback with it.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     const worker = createPdfWorkerClient();
@@ -80,14 +85,53 @@ export function useDocument() {
     [run],
   );
 
+  /**
+   * Appends `files` and places the new pages at display position `at` (end when
+   * omitted). The worker applies the current order first, so pages deleted
+   * before a merge stay deleted.
+   */
   const mergeIn = useCallback(
-    async (files: PickedFile[]) => {
+    async (files: PickedFile[], at?: number) => {
       if (files.length === 0) return;
-      const info = await run("Merging", (worker) => worker.merge(files.map((f) => f.bytes)));
+      const before = stateRef.current.order.length;
+      const info = await run("Merging", (worker) =>
+        worker.merge(
+          files.map((f) => f.bytes),
+          stateRef.current.order,
+        ),
+      );
       if (!info) return;
-      // Page identities changed, so the display order restarts, and the result is
-      // a new document: it must not silently overwrite the file we opened.
-      setState((s) => ({ ...s, info, order: info.pageSizes.map((_, i) => i), handle: undefined }));
+      // The merged document renumbers every page, so the display order restarts
+      // with the appended pages moved to where they were asked for.
+      const appended = Array.from({ length: info.pageCount - before }, (_, i) => before + i);
+      const kept = Array.from({ length: before }, (_, i) => i);
+      setState((s) => ({
+        ...s,
+        info,
+        order: insertPages(kept, appended, at),
+        // A merged document is a different document: never write back in place.
+        handle: undefined,
+      }));
+    },
+    [run],
+  );
+
+  /** Rotates the given display positions, rewriting the document. */
+  const rotatePages = useCallback(
+    async (positions: number[], by: 90 | 180 | 270) => {
+      if (positions.length === 0) return;
+      const info = await run("Rotating", (worker) =>
+        worker.rotate(positions, by, stateRef.current.order),
+      );
+      if (!info) return;
+      // Rotating materialises the order, so the document is now exactly what was
+      // on screen and the order restarts as the identity.
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        handle: undefined,
+      }));
     },
     [run],
   );
@@ -105,6 +149,12 @@ export function useDocument() {
 
   const setOrder = useCallback((order: number[]) => setState((s) => ({ ...s, order })), []);
 
+  /** Saves just the given source pages, leaving the open document alone. */
+  const extract = useCallback(
+    async (pages: number[]) => run("Extracting", (worker) => worker.save(pages)),
+    [run],
+  );
+
   const openFiles = useCallback(
     async (files: FileList | File[]) => {
       const picked = await readFiles(files);
@@ -113,7 +163,18 @@ export function useDocument() {
     [open],
   );
 
-  return { ready, state, open, openFiles, mergeIn, render, save, setOrder };
+  return {
+    ready,
+    state,
+    open,
+    openFiles,
+    mergeIn,
+    rotatePages,
+    render,
+    save,
+    extract,
+    setOrder,
+  };
 }
 
 function message(err: unknown): string {

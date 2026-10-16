@@ -18,9 +18,9 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [ ] Viewer: zoom controls, further fit modes, outline/bookmarks
 - [ ] Text search with highlights (incl. Indic text)
 - [ ] Annotate: highlight, underline, strike, sticky note, free text, freehand, stamps
-- [x] Organize: merge, reorder (drag thumbnails or the keyboard controls), save via native dialog
+- [x] Organize: merge, insert at a position, reorder (drag thumbnails or the keyboard controls), rotate, delete, extract selected pages, save via native dialog
 - [x] `packages/core`: merge, split, reorder and rotate on pdf-lib, unit-tested
-- [ ] Organize UI for split, rotate, delete and insert pages
+- [ ] Organize: split one document into several files in one action (extract covers the one-file case)
 - [ ] Compress, password protect / remove password (qpdf.wasm)
 - [ ] Repair-on-open fallback for malformed files
 - [x] Installable PWA, fully offline after first load (engine starts with the network cut)

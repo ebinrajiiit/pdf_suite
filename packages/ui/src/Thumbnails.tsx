@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { PageCanvas } from "./PageCanvas.js";
+import { movePage } from "./page-order.js";
 import { useVisibleRange } from "./use-visible-range.js";
 import type { PageSize } from "./Viewer.js";
 
@@ -9,21 +10,25 @@ export interface ThumbnailsProps {
   render: (page: number, scale: number) => Promise<ImageBitmap>;
   /** Called with the new display order. */
   onReorder: (order: number[]) => void;
+  /** Selected display positions. */
+  selected: ReadonlySet<number>;
+  /** Called with the position clicked and whether the click extends the selection. */
+  onSelect: (position: number, extend: boolean) => void;
   width?: number;
 }
 
 const GAP = 12;
 const LABEL_HEIGHT = 20;
 
-function move(order: number[], from: number, to: number): number[] {
-  if (to < 0 || to >= order.length || from === to) return order;
-  const next = [...order];
-  const [page] = next.splice(from, 1);
-  next.splice(to, 0, page!);
-  return next;
-}
-
-export function Thumbnails({ order, pageSizes, render, onReorder, width = 120 }: ThumbnailsProps) {
+export function Thumbnails({
+  order,
+  pageSizes,
+  render,
+  onReorder,
+  selected,
+  onSelect,
+  width = 120,
+}: ThumbnailsProps) {
   const [dragging, setDragging] = useState<number | null>(null);
 
   const layout = useMemo(() => {
@@ -46,7 +51,11 @@ export function Thumbnails({ order, pageSizes, render, onReorder, width = 120 }:
         {layout.boxes.slice(range.start, range.end + 1).map((box) => (
           <li
             key={`${box.position}:${box.page}`}
-            className={`thumb${dragging === box.position ? " thumb-dragging" : ""}`}
+            className={
+              "thumb" +
+              (dragging === box.position ? " thumb-dragging" : "") +
+              (selected.has(box.position) ? " thumb-selected" : "")
+            }
             style={{ top: `${layout.offsets[box.position] ?? 0}px`, width: `${box.width}px` }}
             data-testid={`thumb-${box.position}`}
             draggable
@@ -55,18 +64,31 @@ export function Thumbnails({ order, pageSizes, render, onReorder, width = 120 }:
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
-              if (dragging !== null) onReorder(move(order, dragging, box.position));
+              if (dragging !== null) onReorder(movePage(order, dragging, box.position));
               setDragging(null);
             }}
           >
-            <PageCanvas
-              page={box.page}
-              width={box.width}
-              height={box.height}
-              pixelRatio={box.scale}
-              render={render}
-              label={`Page ${box.position + 1} thumbnail`}
-            />
+            {/* The thumbnail itself selects the page, so it is a real button
+                rather than a click handler on the list item. */}
+            <button
+              type="button"
+              className="thumb-select"
+              aria-label={`Select page ${box.position + 1}`}
+              aria-pressed={selected.has(box.position)}
+              data-testid={`select-${box.position}`}
+              onClick={(event) =>
+                onSelect(box.position, event.shiftKey || event.metaKey || event.ctrlKey)
+              }
+            >
+              <PageCanvas
+                page={box.page}
+                width={box.width}
+                height={box.height}
+                pixelRatio={box.scale}
+                render={render}
+                label={`Page ${box.position + 1} thumbnail`}
+              />
+            </button>
             <div className="thumb-bar">
               <span>{box.position + 1}</span>
               {/* Dragging is mouse-only, so the same move is reachable by keyboard. */}
@@ -74,7 +96,7 @@ export function Thumbnails({ order, pageSizes, render, onReorder, width = 120 }:
                 type="button"
                 aria-label={`Move page ${box.position + 1} up`}
                 disabled={box.position === 0}
-                onClick={() => onReorder(move(order, box.position, box.position - 1))}
+                onClick={() => onReorder(movePage(order, box.position, box.position - 1))}
               >
                 ↑
               </button>
@@ -82,7 +104,7 @@ export function Thumbnails({ order, pageSizes, render, onReorder, width = 120 }:
                 type="button"
                 aria-label={`Move page ${box.position + 1} down`}
                 disabled={box.position === order.length - 1}
-                onClick={() => onReorder(move(order, box.position, box.position + 1))}
+                onClick={() => onReorder(movePage(order, box.position, box.position + 1))}
               >
                 ↓
               </button>

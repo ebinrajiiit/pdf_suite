@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { merge, reorder } from "@pdf-suite/core";
+import { merge, reorder, rotate } from "@pdf-suite/core";
 import type { DocHandle, PdfEngine } from "@pdf-suite/engine";
 import { createPdfiumEngine } from "@pdf-suite/engine/pdfium";
 import {
@@ -48,6 +48,19 @@ async function openBytes(id: number, next: Uint8Array, password?: string): Promi
   return info(handle);
 }
 
+/**
+ * The open document with the display order applied: pages in their shown
+ * positions, deletions gone. Every structural op starts here, so rewriting bytes
+ * can never resurrect a page the user deleted.
+ */
+async function materialise(id: number, order: number[]): Promise<Uint8Array> {
+  if (!bytes) throw new Error("no document is open");
+  if (order.length === doc?.pageCount() && order.every((page, i) => page === i)) return bytes;
+  const applied = await reorder(bytes, order);
+  throwIfCancelled(id);
+  return applied;
+}
+
 async function handle(request: WorkerRequest): Promise<void> {
   const { id } = request;
   switch (request.kind) {
@@ -62,8 +75,10 @@ async function handle(request: WorkerRequest): Promise<void> {
       return;
     }
     case "merge": {
-      if (!bytes) throw new Error("no document is open");
-      const inputs = [bytes, ...request.inputs.map((b) => new Uint8Array(b))];
+      const inputs = [
+        await materialise(id, request.order),
+        ...request.inputs.map((b) => new Uint8Array(b)),
+      ];
       post({ id, kind: "progress", done: 0, total: inputs.length });
       throwIfCancelled(id);
       const merged = await merge(inputs);
@@ -83,16 +98,19 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id, kind: "bitmap", bitmap }, [bitmap]);
       return;
     }
-    case "save": {
-      if (!bytes) throw new Error("no document is open");
-      const identity =
-        request.order.length === doc?.pageCount() && request.order.every((page, i) => page === i);
+    case "rotate": {
+      const base = await materialise(id, request.order);
+      const rotated = await rotate(base, request.positions, request.by);
       throwIfCancelled(id);
-      // A reorder result is ours to give away; the open document's own bytes have
-      // to be copied, because transferring would detach them.
-      const buffer = identity
-        ? (bytes.slice().buffer as ArrayBuffer)
-        : ((await reorder(bytes, request.order)).buffer as ArrayBuffer);
+      post({ id, kind: "document", info: await openBytes(id, rotated) });
+      return;
+    }
+    case "save": {
+      const out = await materialise(id, request.order);
+      throwIfCancelled(id);
+      // A materialised copy is ours to give away; the open document's own bytes
+      // have to be copied, because transferring would detach them.
+      const buffer = (out === bytes ? out.slice() : out).buffer as ArrayBuffer;
       post({ id, kind: "saved", bytes: buffer }, [buffer]);
       return;
     }
