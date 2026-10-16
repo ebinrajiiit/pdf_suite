@@ -15,7 +15,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 
 ## Phase 1 — View and organize (months 1–2) → Release 1 (web PWA)
 - [x] Viewer: virtualised pages (only the visible window is mounted), fit-to-width, thumbnails
-- [ ] Viewer: zoom controls, further fit modes, outline/bookmarks
+- [x] Viewer: zoom controls (buttons and Ctrl/Cmd +/-/0), drag-and-drop open, Ctrl/Cmd+F to search
+- [ ] Viewer: more fit modes (fit page, fit height), outline/bookmarks panel, bitmap cache across zoom levels
 - [x] Text search with highlights — case- and Unicode-normalisation-insensitive, so Malayalam and Hindi match whichever form the document uses (unit-tested). Highlights are line-level: narrowing them to the matched substring needs glyph quads from the engine
 - [ ] Verify Indic *extraction* (not just matching) against real Malayalam and Hindi documents — needs the corpus
 - [ ] Annotate: highlight, underline, strike, sticky note, free text, freehand, stamps

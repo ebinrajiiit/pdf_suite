@@ -21,12 +21,15 @@ export function App() {
     setOrder,
   } = useDocument();
   const openInput = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const mergeInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  const [zoom, setZoom] = useState<number | "fit">("fit");
+  const [dropping, setDropping] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [hitIndex, setHitIndex] = useState(0);
@@ -44,6 +47,42 @@ export function App() {
     setWidth(el.clientWidth);
     return () => observer.disconnect();
   }, []);
+
+  const stepZoom = useCallback((by: number) => {
+    setZoom((current) => {
+      // "fit" is roughly a page width, so stepping away from it starts at 100%.
+      const from = current === "fit" ? ZOOM_LEVELS.indexOf(1) : ZOOM_LEVELS.indexOf(current);
+      const index = from === -1 ? ZOOM_LEVELS.indexOf(1) : from;
+      return ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, index + by))] ?? 1;
+    });
+  }, []);
+
+  // Ctrl/Cmd+F goes to our search, not the browser's, which cannot see inside a
+  // canvas anyway. Zoom keys match what every viewer uses.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const meta = event.metaKey || event.ctrlKey;
+      if (meta && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchInput.current?.focus();
+        searchInput.current?.select();
+        return;
+      }
+      if (!meta) return;
+      if (event.key === "=" || event.key === "+") {
+        event.preventDefault();
+        stepZoom(1);
+      } else if (event.key === "-") {
+        event.preventDefault();
+        stepZoom(-1);
+      } else if (event.key === "0") {
+        event.preventDefault();
+        setZoom("fit");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stepZoom]);
 
   // Positions move when pages are added, removed or reordered, so a stale
   // selection or a stale set of hits would point at the wrong pages.
@@ -105,6 +144,28 @@ export function App() {
       if (picked[0]) await open(picked[0]);
     },
     [open],
+  );
+
+  /**
+   * Dropping a file opens it, or merges it when a document is already open —
+   * the same two actions the toolbar offers, so nothing is silently discarded.
+   */
+  const onDrop = useCallback(
+    async (event: React.DragEvent) => {
+      event.preventDefault();
+      setDropping(false);
+      const dropped = Array.from(event.dataTransfer.files).filter(
+        (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
+      );
+      if (dropped.length === 0) return;
+      const picked = await readFiles(dropped);
+      if (!info) {
+        if (picked[0]) await open(picked[0]);
+        return;
+      }
+      await mergeIn(picked);
+    },
+    [info, mergeIn, open],
   );
 
   const handleSave = useCallback(async () => {
@@ -183,7 +244,18 @@ export function App() {
   const disabled = !ready || !info || state.busy !== undefined;
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={(event) => {
+        // Only when the pointer actually leaves the window, not a child element.
+        if (event.currentTarget === event.target) setDropping(false);
+      }}
+      onDrop={(event) => void onDrop(event)}
+    >
       <header className="toolbar">
         <strong>PDF Suite</strong>
         <button type="button" onClick={handleOpen} disabled={!ready}>
@@ -240,6 +312,31 @@ export function App() {
           </button>
         </span>
 
+        <span className="toolbar-group" role="group" aria-label="Zoom">
+          <button
+            type="button"
+            onClick={() => stepZoom(-1)}
+            disabled={disabled}
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <span className="zoom-level" data-testid="zoom-level">
+            {zoom === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`}
+          </span>
+          <button
+            type="button"
+            onClick={() => stepZoom(1)}
+            disabled={disabled}
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+          <button type="button" onClick={() => setZoom("fit")} disabled={disabled}>
+            Fit
+          </button>
+        </span>
+
         <form
           className="toolbar-group search"
           role="search"
@@ -249,6 +346,7 @@ export function App() {
           }}
         >
           <input
+            ref={searchInput}
             type="search"
             aria-label="Search the document"
             placeholder="Search…"
@@ -389,6 +487,7 @@ export function App() {
               render={render}
               containerWidth={width}
               pixelRatio={globalThis.devicePixelRatio || 1}
+              zoom={zoom}
               highlights={highlights}
               active={activeHighlight}
               scrollTo={hits[hitIndex]?.position}
@@ -402,12 +501,21 @@ export function App() {
             Open a PDF to view, reorder and merge it. Every operation runs here, on your computer —
             switch off your network and it keeps working.
           </p>
+          <p className="empty-hint">Drop a PDF anywhere on this window, or use Open.</p>
           <p className="empty-hint">
             Click a page thumbnail to select it; shift-click to select more. Rotate, delete and
             extract act on the selection, or on the whole document when nothing is selected.
           </p>
         </main>
       )}
+      {dropping ? (
+        <div className="dropzone" data-testid="dropzone">
+          {info ? "Drop to merge into this document" : "Drop to open"}
+        </div>
+      ) : null}
     </div>
   );
 }
+
+/** Zoom steps, in points per CSS pixel. */
+const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];

@@ -326,3 +326,28 @@ test("finds text, counts the matches and highlights them", async ({ page }) => {
   await page.getByRole("button", { name: "Find" }).click();
   await expect(page.getByTestId("hit-count")).toBeHidden();
 });
+
+test("zooming changes the rendered page size", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "zoom.pdf", await fixture([PORTRAIT]));
+  const canvas = page.getByTestId("viewer").getByRole("img", { name: "Page 1" });
+  await expect(canvas).toBeVisible();
+  await expect(page.getByTestId("zoom-level")).toHaveText("Fit");
+
+  const fitted = await canvas.evaluate((el) => el.getBoundingClientRect().width);
+
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect(page.getByTestId("zoom-level")).toHaveText("125%");
+  // The page is re-rasterised larger, not scaled up as a blurry bitmap.
+  await expect
+    .poll(() => canvas.evaluate((el) => (el as HTMLCanvasElement).width))
+    .toBeGreaterThan(0);
+  const zoomed = await canvas.evaluate((el) => el.getBoundingClientRect().width);
+  expect(zoomed).toBeGreaterThan(fitted);
+
+  await page.getByRole("button", { name: "Fit" }).click();
+  await expect(page.getByTestId("zoom-level")).toHaveText("Fit");
+});
