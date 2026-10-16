@@ -4,8 +4,11 @@ import {
   type DocumentInfo,
   type FieldValues,
   type OcrAssets,
+  type EditableText,
   type RedactArea,
   type RedactionResult,
+  type TextEdit,
+  type TextEditResult,
   type SearchHit,
   type TextRun,
   type TerminalResponse,
@@ -52,6 +55,14 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** The text runs on one source page that can be edited in place. */
+  editableText(page: number, order: number[], annotations: Annotation[]): Promise<EditableText[]>;
+  /** Replaces the text of the named runs, reopening the document. */
+  editText(
+    edits: TextEdit[],
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; applied: number; rejected: TextEditResult["rejected"] }>;
   /**
    * Removes the content inside the given areas. The reply says how many page
    * objects went and whether re-reading the result found any text left inside
@@ -208,6 +219,14 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async editableText(page, order, annotations) {
+      return expect(await send({ kind: "editableText", page, order, annotations }), "editable")
+        .runs;
+    },
+    async editText(edits, order, annotations) {
+      const reply = expect(await send({ kind: "editText", edits, order, annotations }), "edited");
+      return { info: reply.info, applied: reply.applied, rejected: reply.rejected };
     },
     async redact(areas, order, annotations) {
       const reply = expect(await send({ kind: "redact", areas, order, annotations }), "redacted");

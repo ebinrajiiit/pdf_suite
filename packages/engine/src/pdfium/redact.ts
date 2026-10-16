@@ -158,7 +158,8 @@ export async function redactWithPdfium(
   }
 }
 
-function saveCopy(
+/** Writes the in-memory document out. Shared with the text editor. */
+export function saveCopy(
   m: WrappedPdfiumModule,
   doc: number,
   malloc: (bytes: number) => number,

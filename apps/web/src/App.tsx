@@ -12,7 +12,7 @@ import {
   type PlacedShape,
 } from "@pdf-suite/ui";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
-import type { SearchHit } from "@pdf-suite/workers";
+import type { EditableText, SearchHit } from "@pdf-suite/workers";
 import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
 import { useDocument } from "./use-document.js";
 
@@ -36,6 +36,8 @@ export function App() {
     runOcr,
     applyForm,
     redact,
+    editableText,
+    editText,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -52,6 +54,9 @@ export function App() {
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
+  /** Edit-text mode, which is a different thing from the annotation tools. */
+  const [editingText, setEditingText] = useState(false);
+  const [editRuns, setEditRuns] = useState<Map<number, EditableText[]>>(new Map());
   const [sidebar, setSidebar] = useState<"pages" | "outline" | "form" | "comments">("pages");
   const [colour, setColour] = useState<AnnotColor>(COLOURS[0]!.value);
   const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
@@ -133,6 +138,7 @@ export function App() {
   // selection or a stale set of hits would point at the wrong pages.
   useEffect(() => {
     setFieldValues({});
+    setEditRuns(new Map());
     setRedactions(new Map());
     setSelected(new Set());
     setHits([]);
@@ -482,6 +488,37 @@ export function App() {
     [addAnnotation, colour, pendingPoint, tool],
   );
 
+  /** Reads a page's editable runs once, when it first comes into view. */
+  const needEditableText = useCallback(
+    (page: number) => {
+      setEditRuns((current) => {
+        if (current.has(page)) return current;
+        // Mark it in flight before awaiting, or a second scroll asks again.
+        const next = new Map(current);
+        next.set(page, []);
+        void editableText(page).then((runs) =>
+          setEditRuns((later) => new Map(later).set(page, runs)),
+        );
+        return next;
+      });
+    },
+    [editableText],
+  );
+
+  const handleEditText = useCallback(
+    async (page: number, index: number, text: string) => {
+      const result = await editText([{ page, index, text }]);
+      if (!result) return;
+      setEditRuns(new Map());
+      setSaved(
+        result.rejected.length > 0
+          ? `Could not change that text: ${result.rejected[0]?.reason ?? "unknown reason"}`
+          : "Text changed",
+      );
+    },
+    [editText],
+  );
+
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
@@ -498,6 +535,7 @@ export function App() {
       onClick={() => {
         setTool((current) => (current === which ? undefined : which));
         setPendingPoint(null);
+        setEditingText(false);
       }}
     >
       <span className="tool-icon" aria-hidden="true">
@@ -844,10 +882,44 @@ export function App() {
               redactions={redactions}
               onPlace={onPlace}
               onRemoveAnnotation={tool === undefined ? removeAnnotation : undefined}
+              editing={editingText}
+              editableText={editRuns}
+              onNeedEditableText={needEditableText}
+              onEditText={(page, index, text) => void handleEditText(page, index, text)}
             />
           </div>
 
           <aside className="tools" aria-label="Tools">
+            <section className="tool-group">
+              <h2>Edit</h2>
+              <button
+                type="button"
+                className={editingText ? "edit-toggle edit-toggle-on" : "edit-toggle"}
+                aria-pressed={editingText}
+                disabled={disabled}
+                data-testid="edit-text"
+                onClick={() => {
+                  setEditingText((on) => !on);
+                  setTool(undefined);
+                  setEditRuns(new Map());
+                }}
+              >
+                <span className="tool-icon" aria-hidden="true">
+                  ✎
+                </span>
+                <span>
+                  <strong>Edit text</strong>
+                  <small>Click a line on the page and type over it</small>
+                </span>
+              </button>
+              {editingText ? (
+                <p className="tool-hint" data-testid="edit-caveat">
+                  Changes the words in the document itself. Text keeps its position, so it does not
+                  reflow, and a character the embedded font lacks will be refused.
+                </p>
+              ) : null}
+            </section>
+
             <section className="tool-group">
               <h2>Annotate</h2>
               <div className="tool-grid">

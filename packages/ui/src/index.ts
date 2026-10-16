@@ -7,6 +7,7 @@ export {
 export { CommentList, type CommentListProps } from "./CommentList.js";
 export { FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { Outline, type OutlineProps } from "./Outline.js";
+export { TextEditLayer, type TextEditLayerProps } from "./TextEditLayer.js";
 export { PageCanvas, type PageCanvasProps } from "./PageCanvas.js";
 export { insertPages, isIdentity, movePage, pagesAt, removePages } from "./page-order.js";
 export { Thumbnails, type ThumbnailsProps } from "./Thumbnails.js";

@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from "react";
 import type { Annotation } from "@pdf-suite/core";
 import { AnnotationLayer, type AnnotationTool, type PlacedShape } from "./AnnotationLayer.js";
+import { TextEditLayer } from "./TextEditLayer.js";
+import type { EditableText } from "@pdf-suite/engine/pdfium";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
 
@@ -46,6 +48,13 @@ export interface ViewerProps {
   redactions?: ReadonlyMap<number, { x: number; y: number; w: number; h: number }[]>;
   onPlace?: ((page: number, shape: PlacedShape) => void) | undefined;
   onRemoveAnnotation?: ((index: number) => void) | undefined;
+  /** When set, pages show their editable text runs instead of annotation tools. */
+  editing?: boolean;
+  /** Editable runs by source page; undefined for a page still being read. */
+  editableText?: ReadonlyMap<number, EditableText[]>;
+  /** Asks for a page's runs when it comes into view. */
+  onNeedEditableText?: ((page: number) => void) | undefined;
+  onEditText?: ((page: number, index: number, text: string) => void) | undefined;
 }
 
 const GAP = 16;
@@ -70,6 +79,10 @@ export function Viewer({
   redactions,
   onPlace,
   onRemoveAnnotation,
+  editing,
+  editableText,
+  onNeedEditableText,
+  onEditText,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -117,6 +130,15 @@ export function Viewer({
 
   const { ref, range, total, scrollToOffset } = useVisibleRange(layout.offsets);
 
+  // Ask for the runs of pages that are on screen, and only those: reading them
+  // means parsing the page's content stream.
+  useEffect(() => {
+    if (!editing || !onNeedEditableText) return;
+    for (const box of layout.boxes.slice(range.start, range.end + 1)) {
+      if (!editableText?.has(box.page)) onNeedEditableText(box.page);
+    }
+  }, [editing, editableText, layout.boxes, onNeedEditableText, range.end, range.start]);
+
   // Jumping to a search hit scrolls the page into view; the window of mounted
   // pages follows from the new scroll position as usual.
   useEffect(() => {
@@ -146,6 +168,15 @@ export function Viewer({
               render={render}
               label={`Page ${box.position + 1}`}
             />
+            {editing ? (
+              <TextEditLayer
+                page={box.page}
+                pageHeight={pageSizes[box.page]?.height ?? 792}
+                scale={scale}
+                runs={editableText?.get(box.page)}
+                onCommit={(page, index, text) => onEditText?.(page, index, text)}
+              />
+            ) : null}
             <AnnotationLayer
               page={box.page}
               pageHeight={pageSizes[box.page]?.height ?? 792}

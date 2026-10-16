@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
-import type { RedactArea } from "@pdf-suite/workers";
+import type { EditableText, RedactArea, TextEdit } from "@pdf-suite/workers";
 import {
   createPdfWorkerClient,
   type DocumentInfo,
@@ -319,6 +319,41 @@ export function useDocument() {
     [run],
   );
 
+  /** The text runs on a page that can be edited in place. */
+  const editableText = useCallback(async (page: number): Promise<EditableText[]> => {
+    const worker = client.current;
+    if (!worker) return [];
+    try {
+      return await worker.editableText(page, stateRef.current.order, stateRef.current.annotations);
+    } catch {
+      // A page whose text cannot be read is not an error worth a banner; it
+      // simply has nothing to edit.
+      return [];
+    }
+  }, []);
+
+  /** Replaces the text of the named runs, rewriting the document. */
+  const editText = useCallback(
+    async (edits: TextEdit[]) => {
+      const result = await run("Editing text", (worker) =>
+        worker.editText(edits, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        // The page content changed, so this is a different document.
+        handle: undefined,
+        path: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
   /** Writes form values, optionally flattening them so they cannot be edited. */
   const applyForm = useCallback(
     async (values: FieldValues, flatten: boolean) => {
@@ -476,6 +511,8 @@ export function useDocument() {
     runOcr,
     applyForm,
     redact,
+    editableText,
+    editText,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

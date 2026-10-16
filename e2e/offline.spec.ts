@@ -973,3 +973,44 @@ test("a mark can be removed from the Marks panel", async ({ page }) => {
 
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
 });
+
+test("edits the text in the document itself, not a note over it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "letter.pdf", await textFixture([["Dear Sir or Madam"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  // The original words are findable.
+  await page.getByTestId("search-input").fill("Madam");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  await page.getByTestId("edit-text").click();
+  await expect(page.getByTestId("edit-caveat")).toBeVisible();
+
+  // Every run on the page is a target; the first one is the line of text.
+  const target = page.getByTestId("edittarget-0");
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  await target.click();
+
+  const box = page.getByTestId("editbox-0");
+  await expect(box).toBeVisible();
+  await box.fill("Dear Registrar");
+  await box.press("Enter");
+  await expect(page.getByTestId("status")).toHaveText("Text changed", { timeout: 30_000 });
+
+  // The new words are in the page's own text, which is what makes this editing
+  // rather than annotating: search reads the content stream, not annotations.
+  await page.getByTestId("search-input").fill("Registrar");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  // And the old words are gone from the file, not merely covered over.
+  const saved = await saveAndRead(page, "Save");
+  expect(await annotationsOf(saved)).toEqual([[]]);
+  await page.getByTestId("search-input").fill("Madam");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+});

@@ -91,7 +91,8 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 **Gate:** licence revenue funds Phase 5, or decide to license an SDK for editing.
 
 ## Phase 5 — Parity (months 10–15)
-- [ ] In-place text editing with font matching
+- [~] In-place text editing: editing an existing run's text works through PDFium's `FPDFText_SetText`, keeping font, size, colour and position. Still missing the hard half — reflow within a paragraph, and font substitution when the embedded subset lacks a glyph
+- [ ] In-place text editing: paragraph detection and reflow, font substitution, and adding new text in the document's own font
 - [ ] Image replace/move in place
 - [ ] Accessibility tagging + PDF/UA checks
 - [ ] Mobile: view, annotate, sign

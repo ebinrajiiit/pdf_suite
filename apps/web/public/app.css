@@ -440,6 +440,65 @@ textarea:focus-visible,
   color: var(--ink-soft);
 }
 
+.edit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+}
+.edit-toggle:hover:not(:disabled) {
+  background: var(--sunken);
+}
+.edit-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.edit-toggle-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.edit-toggle small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+/* Editable text sits over the page: a target per run, swapped for an input. */
+.editlayer {
+  position: absolute;
+  inset: 0;
+}
+.edittarget {
+  position: absolute;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  cursor: text;
+}
+.edittarget:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.editbox {
+  position: absolute;
+  padding: 0 1px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: #fff;
+  font-family: inherit;
+  line-height: 1;
+}
+
 /* ---------- viewer ---------- */
 
 .main {

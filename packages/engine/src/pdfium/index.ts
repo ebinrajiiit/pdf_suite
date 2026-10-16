@@ -1,5 +1,12 @@
 import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
-import { redactWithPdfium, type RedactArea, type RedactionResult } from "./redact.js";
+import { redactWithPdfium, saveCopy, type RedactArea, type RedactionResult } from "./redact.js";
+import {
+  applyTextEdits,
+  listEditableText,
+  type EditableText,
+  type TextEdit,
+  type TextEditResult,
+} from "./text-edit.js";
 import {
   PasswordRequiredError,
   type DocHandle,
@@ -243,6 +250,7 @@ function lastError(m: WrappedPdfiumModule): string {
 }
 
 export type { RedactArea, RedactionResult, RedactRect } from "./redact.js";
+export type { EditableText, TextEdit, TextEditResult } from "./text-edit.js";
 
 /** PDFium's linear memory is its real footprint, and no browser memory API
  *  attributes it reliably, so the engine reports it for ADR 0002's benchmark. */
@@ -254,6 +262,13 @@ export type PdfiumEngine = PdfEngine & {
    * only PDFium can edit page objects; pdf-lib cannot.
    */
   redact(bytes: Uint8Array, areas: RedactArea[]): Promise<RedactionResult>;
+  /**
+   * The text runs on a page that can be edited in place. Only PDFium can do
+   * this: pdf-lib cannot touch a content stream and pdf.js only reads.
+   */
+  editableText(bytes: Uint8Array, page: number): Promise<EditableText[]>;
+  /** Replaces the text of the named runs and returns the new document. */
+  editText(bytes: Uint8Array, edits: TextEdit[]): Promise<TextEditResult>;
 };
 
 export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<PdfiumEngine> {
@@ -269,6 +284,25 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
   m.PDFiumExt_Init();
   opts.onTiming?.("parse", performance.now() - t0);
 
+  /** Opens a document, runs one operation on it, and always closes it. */
+  async function withDocument<T>(bytes: Uint8Array, work: (doc: number) => T): Promise<T> {
+    const size = bytes.byteLength;
+    const ptr = m.pdfium.wasmExports.malloc(size);
+    if (!ptr) throw new Error(`PDFium could not allocate ${size} bytes`);
+    m.pdfium.HEAPU8.set(bytes, ptr);
+    const doc = m.FPDF_LoadMemDocument64(ptr, size, "");
+    if (!doc) {
+      m.pdfium.wasmExports.free(ptr);
+      throw new Error("PDFium could not open the document");
+    }
+    try {
+      return work(doc);
+    } finally {
+      m.FPDF_CloseDocument(doc);
+      m.pdfium.wasmExports.free(ptr);
+    }
+  }
+
   /** Opens bytes just long enough to read one page's text, for verification. */
   async function textOf(bytes: Uint8Array, page: number) {
     const handle = await engine.open(bytes.buffer as ArrayBuffer);
@@ -283,6 +317,15 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
     wasmHeapBytes: () => m.pdfium.HEAPU8.byteLength,
 
     redact: (bytes, areas) => redactWithPdfium(m, bytes, areas, textOf),
+
+    editableText: async (bytes, page) =>
+      withDocument(bytes, (doc) => listEditableText(m, doc, page)),
+
+    editText: async (bytes, edits) =>
+      withDocument(bytes, (doc) => {
+        const heap = { malloc: m.pdfium.wasmExports.malloc, free: m.pdfium.wasmExports.free };
+        return applyTextEdits(m, doc, edits, () => saveCopy(m, doc, heap.malloc, heap.free));
+      }),
 
     async open(bytes, openOpts) {
       // Documents are immutable inputs (CLAUDE.md §4), and PDFium reads from this

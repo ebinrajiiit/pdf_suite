@@ -42,12 +42,27 @@ instead of collapsing to icons.
 | Export pages as images | PNG per page |
 | Create PDF from images | JPEG and PNG, one page per image or fitted |
 | Repair a damaged file | qpdf repair pass on open |
+| Edit PDF (text) | Click a line and type over it; the content stream changes, no reflow yet |
 
 ## Missing for English parity, in the order I would build it
 
-1. **Edit text and images in place** — Acrobat's "Edit PDF". The single biggest
-   gap and the hardest item: it needs font matching and re-flow. Phase 5, and the
-   roadmap explicitly contemplates licensing an SDK rather than building it.
+1. **Edit text and images in place** — Acrobat's "Edit PDF". **Partly done.**
+   Clicking a line of text and typing over it now changes the words in the
+   content stream, keeping the run's font, size, colour and position, via
+   PDFium's `FPDFText_SetText`. Search, extraction and copy all see the new text,
+   and nothing is drawn over the old.
+
+   What Acrobat still does that this does not:
+   - **Reflow.** A run keeps its origin, so longer text runs past where the old
+     text ended rather than wrapping. Acrobat detects paragraphs and re-lays them
+     out; that means grouping runs into blocks and running a line-breaker, which
+     is the larger half of this feature.
+   - **Font substitution.** PDFs embed subsets, so a character the subset lacks
+     is refused. Acrobat offers to swap in a matching system font; we report the
+     refusal instead.
+   - **Images.** Moving, resizing and replacing images in place is untouched.
+   - **Adding a new paragraph** in the document's own font, as opposed to a text
+     annotation.
 2. **Digital signatures** — sign, certify, and a validation panel. Phase 3; needs
    the signing-library ADR and, on desktop, PKCS#11 for USB tokens.
 3. **Comment workflow** — the list and colours are done; what remains is reply

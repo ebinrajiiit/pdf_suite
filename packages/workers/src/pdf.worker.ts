@@ -383,6 +383,28 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id, kind: "document", info: await openBytes(id, filled) });
       return;
     }
+    case "editableText": {
+      if (!engine) throw new Error("worker not initialised");
+      // Read from the document as it will be written, so run indices line up
+      // with what an edit will address.
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "editable", runs: await engine.editableText(base, request.page) });
+      return;
+    }
+    case "editText": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      const result = await engine.editText(base, request.edits);
+      throwIfCancelled(id);
+      post({
+        id,
+        kind: "edited",
+        info: await openBytes(id, result.bytes),
+        applied: result.applied,
+        rejected: result.rejected,
+      });
+      return;
+    }
     case "redact": {
       if (!engine) throw new Error("worker not initialised");
       const base = await materialise(id, request.order, request.annotations);

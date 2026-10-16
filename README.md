@@ -39,6 +39,7 @@ takes a moment and the toolbar stays disabled until it says "Ready".
 | Select one page, **Insert after…** | A merged file's pages land after that page, not at the end |
 | **Rotate left / right** | Rotates the selection, or the whole document when nothing is selected |
 | Select pages, **Extract…** | Saves just those pages to a new file, leaving the open one alone |
+| **Edit text**, then click a line | Type over the words in the document itself — not a note on top. Search and copy see the change. No reflow yet, so longer text runs past where the old text ended |
 | **Highlight**, then drag across a line | A highlight snapped to the text lines you crossed. On a scan with no text layer it stays as you drew it |
 | **Note**, then click a page | Asks for the text, then drops a sticky note. Hover it to read the note |
 | **Add text**, then click a page | Asks for the words, then places them on the page |
