@@ -53,7 +53,35 @@ export interface TextEdit {
   /** Indices from the `EditableText` block, valid only for the bytes it was read from. */
   indices: number[];
   text: string;
+  /** Points. Omitted keeps the size the block already had. */
+  fontSize?: number | undefined;
+  /**
+   * One of `STANDARD_FONTS`. Omitted keeps the document's own font, which is
+   * usually the right answer: it may be a face no standard font resembles.
+   */
+  fontName?: string | undefined;
 }
+
+/**
+ * The faces a block can be changed to: the PDF standard set, minus the two with
+ * no letters in them. Nothing else is offered, because a font the editor has is
+ * not a font the next reader has — only these are guaranteed to be drawable
+ * everywhere without embedding anything.
+ */
+export const STANDARD_FONTS = [
+  "Helvetica",
+  "Helvetica-Bold",
+  "Helvetica-Oblique",
+  "Times-Roman",
+  "Times-Bold",
+  "Times-Italic",
+  "Courier",
+  "Courier-Bold",
+  "Courier-Oblique",
+] as const;
+
+/** Points. Below the first, text is unreadable; above the second, absurd. */
+const SIZE_RANGE = [1, 400] as const;
 
 export interface TextEditResult {
   bytes: Uint8Array;
@@ -456,29 +484,65 @@ export function applyTextEdits(
 
         const left = Math.min(...block.map((run) => run.l));
         const width = Math.max(...block.map((run) => run.r)) - left;
-        const lineHeight =
-          block.length > 1 ? first.baseline - block[1]!.baseline : first.size * 1.2;
 
-        // Can the block's own font draw the new text? PDFs embed subsets, so
-        // this is common rather than exotic.
+        const size = edit.fontSize ?? first.size;
+        if (!(size >= SIZE_RANGE[0] && size <= SIZE_RANGE[1])) {
+          rejected.push({
+            page: pageIndex,
+            indices: edit.indices,
+            reason: `a font size of ${size} pt is not a size anything can be read at`,
+          });
+          continue;
+        }
+
+        // A deliberate change of face, as opposed to the substitution below.
+        // The name is checked against the standard set rather than passed
+        // through: this arrives over the worker protocol.
         let font = first.font;
-        const missing = missingGlyphs(m, font, first.size, edit.text);
+        if (edit.fontName !== undefined) {
+          if (!(STANDARD_FONTS as readonly string[]).includes(edit.fontName)) {
+            rejected.push({
+              page: pageIndex,
+              indices: edit.indices,
+              reason: `${edit.fontName} is not one of the PDF standard fonts`,
+            });
+            continue;
+          }
+          const chosen = m.FPDFText_LoadStandardFont(doc, edit.fontName);
+          if (!chosen) {
+            rejected.push({
+              page: pageIndex,
+              indices: edit.indices,
+              reason: `${edit.fontName} could not be loaded`,
+            });
+            continue;
+          }
+          font = chosen;
+        }
+
+        // Keeping the line spacing the block was set with, scaled to the new
+        // size, rather than imposing a ratio of our own.
+        const lineHeight =
+          (block.length > 1 ? first.baseline - block[1]!.baseline : first.size * 1.2) *
+          (size / first.size);
+
+        // Can that font draw the new text? PDFs embed subsets, so this is
+        // common rather than exotic.
+        const missing = missingGlyphs(m, font, size, edit.text);
         if (missing !== "") {
           const standard = m.FPDFText_LoadStandardFont(doc, SUBSTITUTE);
           // Helvetica covers Latin text, which is what a subset usually lacks a
           // few glyphs of. It does not cover everything, and substituting a font
           // that cannot draw the text either would silently leave gaps on the
           // page, so that case is refused instead.
-          const stillMissing = standard
-            ? missingGlyphs(m, standard, first.size, edit.text)
-            : missing;
+          const stillMissing = standard ? missingGlyphs(m, standard, size, edit.text) : missing;
           if (!standard || stillMissing !== "") {
             rejected.push({
               page: pageIndex,
               indices: edit.indices,
               reason:
-                `the document's font cannot show ${missing}, and nor can ` +
-                `${SUBSTITUTE}: that character needs a font neither this ` +
+                `${first.fontName || "that font"} cannot show ${missing}, and nor ` +
+                `can ${SUBSTITUTE}: that character needs a font neither this ` +
                 "document nor the PDF standard set provides",
             });
             continue;
@@ -492,17 +556,18 @@ export function applyTextEdits(
           });
         }
 
-        const substituting = font !== first.font;
-        const lines = wrap(edit.text, width, measurer(m, heap, doc, font, first.size));
+        // A run carries its own font and size, and neither can be changed in
+        // place, so any change of face or size rebuilds the block the same way a
+        // substitution does.
+        const rebuilding = font !== first.font || size !== first.size;
+        const lines = wrap(edit.text, width, measurer(m, heap, doc, font, size));
 
         for (const [line, text] of lines.entries()) {
           const y = first.baseline - line * lineHeight;
-          // A substituted block is rebuilt whole: its old runs are in the wrong
-          // font, so none of them can be reused.
-          const reuse = substituting ? undefined : block[line];
+          const reuse = rebuilding ? undefined : block[line];
           const object = reuse
             ? m.FPDFPage_GetObject(page, reuse.index)
-            : m.FPDFPageObj_CreateTextObj(doc, font, first.size);
+            : m.FPDFPageObj_CreateTextObj(doc, font, size);
           if (!object) continue;
 
           const ptr = wideString(m, heap, text);
@@ -539,7 +604,7 @@ export function applyTextEdits(
 
         // Runs the new text no longer needs — all of them when the font was
         // replaced. Highest index first, again because removal shifts indices.
-        const surplus = substituting ? block : block.slice(lines.length);
+        const surplus = rebuilding ? block : block.slice(lines.length);
         for (const run of [...surplus].sort((a, b) => b.index - a.index)) {
           const object = m.FPDFPage_GetObject(page, run.index);
           if (object && m.FPDFPage_RemoveObject(page, object)) m.FPDFPageObj_Destroy(object);

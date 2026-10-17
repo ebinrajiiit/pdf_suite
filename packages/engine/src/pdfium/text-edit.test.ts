@@ -158,3 +158,54 @@ test("a character no standard font can draw is refused, not dropped", async () =
   // Refused means unchanged, not half-written.
   expect(await textOf(result.bytes)).toContain("Dear Sir");
 });
+
+test("a block can be set in a different size, re-wrapping as it goes", async () => {
+  const bytes = await fixture(["A line of text here", "and a second one below"]);
+  const [block] = await engine.editableText(bytes, 0);
+
+  const result = await engine.editText(bytes, [
+    { page: 0, indices: block!.indices, text: block!.text, fontSize: 18 },
+  ]);
+  expect(result.applied).toBe(1);
+  expect(result.rejected).toEqual([]);
+
+  const after = await engine.editableText(result.bytes, 0);
+  expect(after[0]?.fontSize).toBeCloseTo(18, 1);
+  // Bigger text in the same width needs more lines, not a wider block.
+  expect(after.flatMap((b) => b.indices).length).toBeGreaterThan(block!.indices.length);
+  expect(await textOf(result.bytes)).toBe(block!.text);
+});
+
+test("a block can be set in another standard face", async () => {
+  const bytes = await fixture(["Minutes of the meeting"]);
+  const [block] = await engine.editableText(bytes, 0);
+  expect(block?.fontName).toContain("Helvetica");
+
+  const result = await engine.editText(bytes, [
+    { page: 0, indices: block!.indices, text: block!.text, fontName: "Times-Bold" },
+  ]);
+  expect(result.applied).toBe(1);
+
+  const after = await engine.editableText(result.bytes, 0);
+  expect(after[0]?.fontName).toContain("Times");
+  expect(await textOf(result.bytes)).toBe("Minutes of the meeting");
+});
+
+test("a face that is not a standard font is refused", async () => {
+  const bytes = await fixture(["Minutes of the meeting"]);
+  const [block] = await engine.editableText(bytes, 0);
+
+  // The worker protocol is a trust boundary: the name is checked, not passed on.
+  const result = await engine.editText(bytes, [
+    { page: 0, indices: block!.indices, text: "Anything", fontName: "Comic Sans MS" },
+  ]);
+  expect(result.applied).toBe(0);
+  expect(result.rejected[0]?.reason).toMatch(/not one of the PDF standard fonts/);
+  expect(await textOf(result.bytes)).toBe("Minutes of the meeting");
+
+  const silly = await engine.editText(bytes, [
+    { page: 0, indices: block!.indices, text: "Anything", fontSize: 0 },
+  ]);
+  expect(silly.applied).toBe(0);
+  expect(silly.rejected[0]?.reason).toMatch(/not a size/);
+});

@@ -1051,6 +1051,42 @@ test("a font that cannot show the new text is substituted, and said so", async (
   await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
 });
 
+test("the format bar changes the size and the face, not just reports them", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "note.pdf", await textFixture([["Minutes of the meeting"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-text").click();
+  const target = page.getByTestId("edittarget-0");
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  const before = (await target.boundingBox())!;
+  await target.click();
+
+  await expect(page.getByTestId("editbar-0")).toContainText("Helvetica");
+  await page.getByTestId("editsize-0").fill("20");
+  await page.getByTestId("editface-0").selectOption("Times-Bold");
+  // Picking from the bar must not count as leaving the box and committing.
+  await expect(page.getByTestId("editbox-0")).toBeVisible();
+  await page.getByTestId("editbox-0").press("Enter");
+  await expect(page.getByTestId("status")).toHaveText(/Text changed/, { timeout: 30_000 });
+
+  // Bigger type in the same block: taller, no wider, and the words survive.
+  const after = (await page.getByTestId("edittarget-0").boundingBox())!;
+  expect(after.height).toBeGreaterThan(before.height);
+  expect(after.width).toBeLessThanOrEqual(before.width + 2);
+
+  await page.getByTestId("edittarget-0").click();
+  const bar = page.getByTestId("editbar-0");
+  await expect(bar).toContainText("Times");
+  await expect(page.getByTestId("editsize-0")).toHaveValue(/20/);
+
+  await page.getByTestId("search-input").fill("Minutes");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
 test("edits the text in the document itself, not a note over it", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");
@@ -1073,9 +1109,8 @@ test("edits the text in the document itself, not a note over it", async ({ page 
   await target.click();
 
   // The format bar says what you are typing into: face, size, colour.
-  const bar = page.getByTestId("editbar-0");
-  await expect(bar).toContainText("Helvetica");
-  await expect(bar).toContainText("12 pt");
+  await expect(page.getByTestId("editbar-0")).toContainText("Helvetica");
+  await expect(page.getByTestId("editsize-0")).toHaveValue("12");
 
   const box = page.getByTestId("editbox-0");
   await expect(box).toBeVisible();

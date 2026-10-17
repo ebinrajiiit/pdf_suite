@@ -10,6 +10,7 @@ import {
   type AnnotationTool,
   type Highlight,
   type PlacedShape,
+  type TextEditCommit,
 } from "@pdf-suite/ui";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
 import type { EditableText, SearchHit } from "@pdf-suite/workers";
@@ -506,8 +507,8 @@ export function App() {
   );
 
   const handleEditText = useCallback(
-    async (page: number, indices: number[], text: string) => {
-      const result = await editText([{ page, indices, text }]);
+    async (page: number, edit: TextEditCommit) => {
+      const result = await editText([{ page, ...edit }]);
       if (!result) return;
       setEditRuns(new Map());
       setSaved(editOutcome(result));
@@ -882,7 +883,7 @@ export function App() {
               editing={editingText}
               editableText={editRuns}
               onNeedEditableText={needEditableText}
-              onEditText={(page, indices, text) => void handleEditText(page, indices, text)}
+              onEditText={(page, edit) => void handleEditText(page, edit)}
             />
           </div>
 

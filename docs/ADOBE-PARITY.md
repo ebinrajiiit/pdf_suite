@@ -20,7 +20,10 @@ them rather than in the top bar.
 
 Editing text shows a format bar over the block being edited — typeface, size,
 colour, how many lines — because the typeface you are typing into should not be a
-guess. It is read-only: changing the size or the face from there is not built.
+guess. The size and the face are live: changing either rebuilds the block in that
+format and re-wraps it. The faces offered are the PDF standard set, since those
+draw everywhere without embedding anything; the document's own font stays the
+default, because it may be a face no standard font resembles.
 
 What is still cruder than Acrobat: no contextual toolbar on a selected mark, no
 properties panel for annotations, no right-click menus, and the tools panel hides
@@ -73,7 +76,11 @@ below 980 px instead of collapsing to icons.
      added. Acrobat behaves the same way.
    - **Match the substituted font.** Acrobat looks for a system font resembling
      the original; we always use Helvetica, because a font the user has is not a
-     font the next reader has.
+     font the next reader has. Setting a face by hand is limited to the standard
+     fourteen for the same reason — embedding an arbitrary system font is a
+     separate piece of work.
+   - **Format a selection.** Size and face apply to the whole block, not to the
+     words you have selected inside it.
    - **Mixed fonts in one block.** Substitution replaces the whole paragraph's
      font, not only the characters that needed it.
    - **Images.** Moving, resizing and replacing images in place is untouched.

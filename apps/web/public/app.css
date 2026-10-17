@@ -507,6 +507,18 @@ textarea:focus-visible,
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* Labels for screen readers on controls whose meaning is visual. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The format bar over the block being edited: what Acrobat puts in its Format
    panel, where the text actually is. */
 .editbar {
@@ -523,7 +535,6 @@ textarea:focus-visible,
   font-size: 0.72rem;
   line-height: 1.6;
   white-space: nowrap;
-  pointer-events: none;
 }
 .editbar-swatch {
   width: 0.65rem;
@@ -531,12 +542,38 @@ textarea:focus-visible,
   border: 1px solid var(--line);
   border-radius: 2px;
 }
-.editbar-face {
+.editbar-field {
+  display: flex;
+  align-items: center;
+}
+/* The face and size are controls, not labels: they rebuild the block. */
+.editbar-face,
+.editbar-size {
+  padding: 0.05rem 0.2rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   font-weight: 600;
 }
-.editbar-size,
+.editbar-face:hover,
+.editbar-size:hover,
+.editbar-face:focus,
+.editbar-size:focus {
+  border-color: var(--line);
+  background: var(--sunken);
+}
+.editbar-size {
+  width: 3.4rem;
+  text-align: right;
+}
+.editbar-unit,
 .editbar-lines {
   color: var(--ink-soft);
+}
+.editbar-unit {
+  margin-left: -0.35rem;
 }
 .editbar-keys {
   padding-left: 0.4rem;

@@ -251,6 +251,7 @@ function lastError(m: WrappedPdfiumModule): string {
 
 export type { RedactArea, RedactionResult, RedactRect } from "./redact.js";
 export type { EditableText, TextEdit, TextEditResult } from "./text-edit.js";
+export { STANDARD_FONTS } from "./text-edit.js";
 
 /** PDFium's linear memory is its real footprint, and no browser memory API
  *  attributes it reliably, so the engine reports it for ADR 0002's benchmark. */

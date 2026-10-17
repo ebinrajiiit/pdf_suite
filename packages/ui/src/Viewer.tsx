@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import type { Annotation } from "@pdf-suite/core";
 import { AnnotationLayer, type AnnotationTool, type PlacedShape } from "./AnnotationLayer.js";
-import { TextEditLayer } from "./TextEditLayer.js";
+import { TextEditLayer, type TextEditCommit } from "./TextEditLayer.js";
 import type { EditableText } from "@pdf-suite/engine/pdfium";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
@@ -54,7 +54,7 @@ export interface ViewerProps {
   editableText?: ReadonlyMap<number, EditableText[]>;
   /** Asks for a page's runs when it comes into view. */
   onNeedEditableText?: ((page: number) => void) | undefined;
-  onEditText?: ((page: number, indices: number[], text: string) => void) | undefined;
+  onEditText?: ((page: number, edit: TextEditCommit) => void) | undefined;
 }
 
 const GAP = 16;
@@ -174,7 +174,7 @@ export function Viewer({
                 pageHeight={pageSizes[box.page]?.height ?? 792}
                 scale={scale}
                 runs={editableText?.get(box.page)}
-                onCommit={(page, indices, text) => onEditText?.(page, indices, text)}
+                onCommit={(page, edit) => onEditText?.(page, edit)}
               />
             ) : null}
             <AnnotationLayer
