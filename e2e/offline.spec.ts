@@ -3041,3 +3041,25 @@ test("a mark sheet exports to Word as a table, under its own heading", async ({ 
   expect(xml.indexOf("Annexure A")).toBeLessThan(xml.indexOf("<w:tbl>"));
   expect(xml).toContain('<w:b/><w:sz w:val="28"/>');
 });
+
+test("every action in the tools panel shows its whole label", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "paper.pdf", await textFixture([["Question paper"]]));
+
+  // Six buttons squeezed into a 248px panel used to shrink to "To W" and
+  // "Tabl" — a button nobody can find, which is how "where is PDF to Word?"
+  // starts. A clipped label is one whose text is wider than its button.
+  const clipped = await page
+    .getByRole("complementary", { name: "Tools" })
+    .evaluate((panel) =>
+      [...panel.querySelectorAll("button")]
+        .filter((button) => button.scrollWidth > button.clientWidth + 1)
+        .map((button) => button.textContent ?? ""),
+    );
+  expect(clipped).toEqual([]);
+
+  // And the one that was asked about is there, by name.
+  await expect(page.getByTestId("to-docx")).toHaveText("To Word…");
+});

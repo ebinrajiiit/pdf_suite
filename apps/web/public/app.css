@@ -522,13 +522,18 @@ textarea:focus-visible,
   outline-offset: 1px;
 }
 
+/* A row of actions that wraps rather than squeezing. Six buttons in a 248px
+   panel used to shrink to "To W" and "Tabl", which is a button nobody can
+   find; each one now keeps its own label and the row wraps instead. A label
+   longer than the panel still takes a line of its own rather than overflowing. */
 .action-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
 }
 .action-row > * {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: min(100%, max-content);
 }
 .action-row select {
   font: inherit;
@@ -540,12 +545,14 @@ textarea:focus-visible,
 }
 .panel-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   padding: 0.5rem 0.6rem;
   border-top: 1px solid var(--line);
 }
 .panel-actions > * {
   flex: 1 1 auto;
+  min-width: min(100%, max-content);
 }
 .check {
   display: flex;
