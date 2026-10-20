@@ -420,12 +420,29 @@ textarea:focus-visible,
   flex-direction: column;
   gap: 0.4rem;
 }
-.tool-group h2 {
+.tool-group > summary {
   margin: 0;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tool-group > summary::-webkit-details-marker {
+  display: none;
+}
+.tool-group > summary::before {
+  content: "▾ ";
+  display: inline-block;
+  width: 1em;
+}
+.tool-group:not([open]) > summary::before {
+  content: "▸ ";
+}
+.tool-group[open] {
+  padding-bottom: 0.2rem;
 }
 .tool-hint {
   margin: 0;
@@ -1054,6 +1071,116 @@ textarea:focus-visible,
   font-size: 0.78rem;
 }
 
+/* Every action by name, for when sixty buttons is too many to scan. */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgb(0 0 0 / 35%);
+}
+.palette {
+  width: min(34rem, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.palette-input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+}
+.palette-input:focus {
+  outline: none;
+}
+.palette-list {
+  margin: 0;
+  padding: 0.3rem;
+  overflow-y: auto;
+  list-style: none;
+}
+.palette-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.palette-item-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.palette-item-off {
+  opacity: 0.45;
+  cursor: default;
+}
+.palette-label {
+  flex: 1 1 auto;
+}
+.palette-group,
+.palette-key {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+.palette-key {
+  font-family: inherit;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.palette-none,
+.palette-hint {
+  padding: 0.6rem 1rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+.keys {
+  padding: 1rem 1.2rem;
+}
+.keys h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+.keys dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.8rem;
+  margin: 0;
+  overflow-y: auto;
+}
+.keys dl > div {
+  display: contents;
+}
+.keys dt {
+  text-align: right;
+}
+.keys kbd {
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--sunken);
+  white-space: nowrap;
+}
+.keys dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {
@@ -1596,6 +1723,13 @@ textarea:focus-visible,
 .empty-hint {
   margin: 1rem 0 0 !important;
   font-size: 0.82rem;
+}
+.empty-hint kbd {
+  font-family: inherit;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--sunken);
 }
 
 /* ---------- status bar ---------- */

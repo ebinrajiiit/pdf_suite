@@ -18,6 +18,13 @@ tools grouped by task, and zoom plus status along the bottom. Tools are a grid o
 labelled buttons with the active one held down, and the colour choice sits with
 them rather than in the top bar.
 
+Sixty-odd actions no longer fit in a panel someone can scan, so ⌘K opens a
+palette that searches every one of them by name, group and a few extra words —
+"shrink" finds Compress — and ? lists the keys. The tool groups collapse, and
+what a reader collapses stays collapsed. Only one panel is open at a time:
+they are strips above the document, and two at once pushes the document off the
+screen.
+
 Editing text shows a format bar over the block being edited — typeface, size,
 colour, how many lines — because the typeface you are typing into should not be a
 guess. The size and the face are live: changing either rebuilds the block in that

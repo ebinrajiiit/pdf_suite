@@ -1489,6 +1489,57 @@ test("carries a file inside the document, and gives it back", async ({ page }) =
   await expect(page.getByTestId("attachments-empty")).toBeVisible();
 });
 
+test("the palette finds any action by name and runs it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "report.pdf", await textFixture([["One"], ["Two"]]));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("palette")).toBeVisible();
+
+  // Words in any order, and a word that is not in the name at all.
+  await page.getByTestId("palette-input").fill("num page");
+  await expect(page.getByTestId("palette-numbers")).toBeVisible();
+  await page.getByTestId("palette-input").fill("shrink");
+  await expect(page.getByTestId("palette-compress")).toBeVisible();
+
+  // Enter runs the first match: the properties panel opens.
+  await page.getByTestId("palette-input").fill("document properties");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("palette")).toBeHidden();
+  await expect(page.getByTestId("properties-panel")).toBeVisible();
+
+  // Opening another panel closes that one: two strips would push the document
+  // off the screen.
+  await page.keyboard.press("Meta+k");
+  await page.getByTestId("palette-input").fill("watermark");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("watermark-panel")).toBeVisible();
+  await expect(page.getByTestId("properties-panel")).toBeHidden();
+
+  // Something that matches nothing says so rather than looking broken.
+  await page.keyboard.press("Meta+k");
+  await page.getByTestId("palette-input").fill("xyzzy");
+  await expect(page.getByTestId("palette-none")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("palette")).toBeHidden();
+});
+
+test("the shortcut sheet lists the keys", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await page.keyboard.press("?");
+  await expect(page.getByTestId("keys")).toBeVisible();
+  await expect(page.getByTestId("keys")).toContainText("Find any action by name");
+  await expect(page.getByTestId("keys")).toContainText("Delete the selected pages");
+  await page.keyboard.press("?");
+  await expect(page.getByTestId("keys")).toBeHidden();
+});
+
 test("does one thing to many files at once", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

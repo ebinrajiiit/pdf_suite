@@ -5,6 +5,7 @@ export {
   type PlacedShape,
 } from "./AnnotationLayer.js";
 export { CommentList, type CommentListProps } from "./CommentList.js";
+export { CommandPalette, type Command, type CommandPaletteProps } from "./CommandPalette.js";
 export { ContextMenu, type ContextMenuProps, type MenuItem } from "./ContextMenu.js";
 export { computed, FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { ImageEditLayer, type ImageEditLayerProps } from "./ImageEditLayer.js";

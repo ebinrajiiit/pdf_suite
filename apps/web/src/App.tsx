@@ -11,12 +11,14 @@ import {
   type Highlight,
   type PlacedShape,
   addBookmark,
+  CommandPalette,
   computed,
   ContextMenu,
   moveAt,
   removeAt,
   renameAt,
   SignaturePad,
+  type Command,
   type MenuItem,
   type TextEditCommit,
 } from "@pdf-suite/ui";
@@ -155,6 +157,38 @@ export function App() {
     issues: StandardIssue[];
   } | null>(null);
 
+  /**
+   * Which tool groups are open. Kept in this browser so the panel someone
+   * collapsed stays collapsed; a group this app does not know about yet counts
+   * as open, which is why the check below is for `!== false`.
+   */
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem(GROUPS_KEY);
+      return stored ? (JSON.parse(stored) as Record<string, boolean>) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const rememberGroup = useCallback((group: string, open: boolean) => {
+    setOpenGroups((current) => {
+      const next = { ...current, [group]: open };
+      try {
+        localStorage.setItem(GROUPS_KEY, JSON.stringify(next));
+      } catch {
+        // Private window, or storage turned off: the panel still works, it
+        // just forgets between visits.
+      }
+      return next;
+    });
+  }, []);
+
+  /** The palette: every action by name, for when the panel is too big to scan. */
+  const [palette, setPalette] = useState(false);
+  /** The keyboard-shortcut sheet. */
+  const [keysOpen, setKeysOpen] = useState(false);
+
   /** Running one action over many files at once. */
   const [batching, setBatching] = useState(false);
   const [batchAction, setBatchAction] = useState<BatchAction["kind"]>("number");
@@ -252,6 +286,34 @@ export function App() {
   const [digits, setDigits] = useState(0);
   const [stampSize, setStampSize] = useState(10);
   const [stampMargin, setStampMargin] = useState(36);
+
+  /**
+   * Shuts every panel. The panels are strips above the document, so two open at
+   * once pushes the document off the screen — opening one closes the rest.
+   */
+  const closePanels = useCallback(() => {
+    setMarking(false);
+    setLabelling(false);
+    setChecking(false);
+    setCleaning(false);
+    setHunting(false);
+    setDescribing(false);
+    setNumbering(false);
+    setBatching(false);
+    setShowingSignatures(false);
+    setStandard(null);
+    setDiff(undefined);
+    setAskProtect(false);
+  }, []);
+
+  /** Opens one panel, having closed the others. */
+  const openPanel = useCallback(
+    (open: (value: boolean) => void, already: boolean) => {
+      closePanels();
+      if (!already) open(true);
+    },
+    [closePanels],
+  );
 
   /** Right-click menu: where it is, and which page it was opened on. */
   const [menu, setMenu] = useState<{ x: number; y: number; position: number } | null>(null);
@@ -616,6 +678,7 @@ export function App() {
     async (kind: "pdfa" | "print") => {
       const issues = await checkStandard(kind);
       if (!issues) return;
+      closePanels();
       setStandard({ kind, issues });
       if (issues.length === 0) {
         setSaved(kind === "pdfa" ? "Nothing stands in the way of PDF/A" : "Ready for print");
@@ -625,6 +688,7 @@ export function App() {
   );
 
   const handleCheckAccessible = useCallback(async () => {
+    closePanels();
     setChecking(true);
     setIssues(undefined);
     const found = await checkAccessible();
@@ -642,6 +706,7 @@ export function App() {
 
   /** Opens the panel with a report of what is actually in this document. */
   const handleInspect = useCallback(async () => {
+    closePanels();
     setCleaning(true);
     const report = await findHidden();
     setHidden(report);
@@ -761,6 +826,18 @@ export function App() {
         if (positions.length === 0 || positions.length === pageCount) return;
         event.preventDefault();
         handleDelete();
+        return;
+      }
+      if (meta && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPalette(true);
+        return;
+      }
+      // "?" where nothing is being typed into, which is where every app puts
+      // its shortcut list.
+      if (!meta && event.key === "?" && !typing) {
+        event.preventDefault();
+        setKeysOpen((open) => !open);
         return;
       }
       if (meta && event.key.toLowerCase() === "f") {
@@ -1301,7 +1378,9 @@ export function App() {
     const picked = await pickFiles(false);
     if (!picked[0]) return;
     const found = await compare(picked[0].bytes);
-    if (found) setDiff({ against: picked[0].name, diff: found });
+    if (!found) return;
+    closePanels();
+    setDiff({ against: picked[0].name, diff: found });
   }, [compare]);
 
   const onCompareInput = useCallback(
@@ -1310,7 +1389,9 @@ export function App() {
       const [file] = await readFiles(files);
       if (!file) return;
       const found = await compare(file.bytes);
-      if (found) setDiff({ against: file.name, diff: found });
+      if (!found) return;
+      closePanels();
+      setDiff({ against: file.name, diff: found });
     },
     [compare],
   );
@@ -1462,6 +1543,385 @@ export function App() {
     },
   ];
 
+  /**
+   * Every action, by name. The palette searches this; the buttons are still
+   * where they were, because someone who knows where a thing is should not
+   * have to type its name.
+   */
+  const commands: Command[] = useMemo(() => {
+    const doc = !!info;
+    const list: Command[] = [
+      {
+        id: "open",
+        label: "Open a PDF",
+        group: "File",
+        shortcut: "⌘O",
+        run: () => void handleOpen(),
+      },
+      {
+        id: "batch",
+        label: "Do one thing to many files",
+        group: "File",
+        keywords: "batch action wizard",
+        run: () => openPanel(setBatching, batching),
+      },
+      {
+        id: "save",
+        label: "Save",
+        group: "File",
+        shortcut: "⌘S",
+        disabled: !doc,
+        run: () => void handleSave(),
+      },
+      {
+        id: "print",
+        label: "Print",
+        group: "File",
+        shortcut: "⌘P",
+        disabled: !doc,
+        run: () => void handlePrint(),
+      },
+      {
+        id: "properties",
+        label: "Document properties",
+        group: "File",
+        shortcut: "⌘D",
+        keywords: "title author subject keywords",
+        disabled: !doc,
+        run: () => openPanel(setDescribing, describing),
+      },
+      {
+        id: "merge",
+        label: "Merge another PDF in",
+        group: "File",
+        disabled: !doc,
+        run: () => void handleMerge(),
+      },
+      {
+        id: "images",
+        label: "Make a PDF from images",
+        group: "File",
+        run: () => void handleFromImages(),
+      },
+      {
+        id: "to-word",
+        label: "Save as Word",
+        group: "Export",
+        keywords: "docx text",
+        disabled: !doc,
+        run: () => void handleSaveDocx(),
+      },
+      {
+        id: "to-text",
+        label: "Save as plain text",
+        group: "Export",
+        disabled: !doc,
+        run: () => void handleSaveText(),
+      },
+      {
+        id: "to-images",
+        label: "Save pages as images",
+        group: "Export",
+        keywords: "png export",
+        disabled: !doc,
+        run: () => void handleExportImages(),
+      },
+      {
+        id: "compare",
+        label: "Compare with another version",
+        group: "Export",
+        keywords: "diff changes",
+        disabled: !doc,
+        run: () => void handleCompare(),
+      },
+
+      {
+        id: "edit-text",
+        label: "Edit text",
+        group: "Edit",
+        disabled: !doc,
+        run: () => {
+          setEditingText(true);
+          setEditingImages(false);
+          setTool(undefined);
+        },
+      },
+      {
+        id: "edit-images",
+        label: "Edit pictures",
+        group: "Edit",
+        keywords: "move resize replace",
+        disabled: !doc,
+        run: () => {
+          setEditingImages(true);
+          setEditingText(false);
+          setTool(undefined);
+        },
+      },
+      {
+        id: "undo",
+        label: "Undo",
+        group: "Edit",
+        shortcut: "⌘Z",
+        disabled: !canUndo,
+        run: () => void undo(),
+      },
+      {
+        id: "redo",
+        label: "Redo",
+        group: "Edit",
+        shortcut: "⇧⌘Z",
+        disabled: !canRedo,
+        run: () => void redo(),
+      },
+      {
+        id: "find",
+        label: "Find in the document",
+        group: "Edit",
+        shortcut: "⌘F",
+        disabled: !doc,
+        run: () => {
+          searchInput.current?.focus();
+          searchInput.current?.select();
+        },
+      },
+
+      {
+        id: "numbers",
+        label: "Add page numbers, headers and footers",
+        group: "Pages",
+        keywords: "bates stamp header footer",
+        disabled: !doc,
+        run: () => openPanel(setNumbering, numbering),
+      },
+      {
+        id: "labels",
+        label: "Page numbering shown in the page box",
+        group: "Pages",
+        keywords: "roman front matter labels",
+        disabled: !doc,
+        run: () => openPanel(setLabelling, labelling),
+      },
+      {
+        id: "watermark",
+        label: "Add a watermark",
+        group: "Pages",
+        keywords: "draft confidential background",
+        disabled: !doc,
+        run: () => openPanel(setMarking, marking),
+      },
+      {
+        id: "crop",
+        label: "Crop pages",
+        group: "Pages",
+        disabled: !doc,
+        run: () => setTool("crop"),
+      },
+      {
+        id: "rotate-left",
+        label: "Rotate left",
+        group: "Pages",
+        disabled: !doc,
+        run: () => void rotatePages(target, 270),
+      },
+      {
+        id: "rotate-right",
+        label: "Rotate right",
+        group: "Pages",
+        disabled: !doc,
+        run: () => void rotatePages(target, 90),
+      },
+      {
+        id: "delete-pages",
+        label: "Delete the selected pages",
+        group: "Pages",
+        shortcut: "Delete",
+        disabled: !doc || positions.length === 0,
+        run: handleDelete,
+      },
+      {
+        id: "extract",
+        label: "Extract the selected pages",
+        group: "Pages",
+        disabled: !doc || positions.length === 0,
+        run: () => void handleExtract(),
+      },
+      {
+        id: "split",
+        label: "Split into separate files",
+        group: "Pages",
+        disabled: !doc || positions.length === 0,
+        run: () => void handleSplit(),
+      },
+
+      {
+        id: "sanitise",
+        label: "Remove hidden information",
+        group: "Protect",
+        keywords: "metadata scripts attachments sanitize",
+        disabled: !doc,
+        run: () => void handleInspect(),
+      },
+      {
+        id: "redact-pattern",
+        label: "Redact Aadhaar, PAN, phone or email",
+        group: "Protect",
+        keywords: "find pattern personal",
+        disabled: !doc,
+        run: () => openPanel(setHunting, hunting),
+      },
+      {
+        id: "protect",
+        label: "Protect with a password",
+        group: "Protect",
+        keywords: "encrypt permissions",
+        disabled: !doc,
+        run: () => void handleProtect(),
+      },
+      {
+        id: "signatures",
+        label: "Signatures on this document",
+        group: "Protect",
+        disabled: !doc || info.signatures.length === 0,
+        run: () => openPanel(setShowingSignatures, showingSignatures),
+      },
+      {
+        id: "accessibility",
+        label: "Check accessibility",
+        group: "Protect",
+        keywords: "screen reader tagged language",
+        disabled: !doc,
+        run: () => void handleCheckAccessible(),
+      },
+      {
+        id: "pdfa",
+        label: "Check against PDF/A",
+        group: "Protect",
+        keywords: "archive standard",
+        disabled: !doc,
+        run: () => void handleStandard("pdfa"),
+      },
+      {
+        id: "print-check",
+        label: "Check for print",
+        group: "Protect",
+        keywords: "preflight dpi trim press",
+        disabled: !doc,
+        run: () => void handleStandard("print"),
+      },
+
+      {
+        id: "ocr",
+        label: "Recognise text in a scan",
+        group: "Content",
+        keywords: "ocr searchable",
+        disabled: !doc,
+        run: () => void handleOcr(),
+      },
+      {
+        id: "compress",
+        label: "Compress",
+        group: "Content",
+        keywords: "shrink smaller size",
+        disabled: !doc,
+        run: () => void compress(),
+      },
+      {
+        id: "downsample",
+        label: "Shrink the pictures",
+        group: "Content",
+        keywords: "downsample resolution dpi",
+        disabled: !doc,
+        run: () => void handleDownsample(),
+      },
+
+      {
+        id: "two-up",
+        label: facing ? "Stop showing two pages" : "Show two pages side by side",
+        group: "View",
+        disabled: !doc,
+        run: () => setFacing((on) => !on),
+      },
+      {
+        id: "single",
+        label: singlePage ? "Show every page" : "Show one page at a time",
+        group: "View",
+        disabled: !doc,
+        run: () => setSinglePage((on) => !on),
+      },
+      {
+        id: "shortcuts",
+        label: "Keyboard shortcuts",
+        group: "View",
+        shortcut: "?",
+        run: () => setKeysOpen(true),
+      },
+    ];
+
+    if (office) {
+      list.push({
+        id: "office",
+        label: "Open a Word or Excel file",
+        group: "File",
+        keywords: "docx xlsx convert libreoffice",
+        run: () => void handleOffice(),
+      });
+    }
+    if (scanner) {
+      list.push({
+        id: "scan",
+        label: "Scan a page",
+        group: "File",
+        disabled: !ready,
+        run: () => void handleScan(),
+      });
+    }
+    return list;
+  }, [
+    batching,
+    canRedo,
+    canUndo,
+    compress,
+    describing,
+    facing,
+    handleCheckAccessible,
+    handleCompare,
+    handleDelete,
+    handleDownsample,
+    handleExportImages,
+    handleExtract,
+    handleFromImages,
+    handleInspect,
+    handleMerge,
+    handleOcr,
+    handleOffice,
+    handleOpen,
+    handlePrint,
+    handleProtect,
+    handleSave,
+    handleSaveDocx,
+    handleSaveText,
+    handleScan,
+    handleSplit,
+    handleStandard,
+    hunting,
+    info,
+    labelling,
+    marking,
+    numbering,
+    office,
+    openPanel,
+    positions.length,
+    ready,
+    redo,
+    rotatePages,
+    scanner,
+    showingSignatures,
+    singlePage,
+    target,
+    undo,
+  ]);
+
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
@@ -1546,7 +2006,13 @@ export function App() {
                 },
               )
             : null}
-          {action("Batch…", () => setBatching((open) => !open), {
+          {action("⌘K Actions", () => setPalette(true), {
+            testId: "open-palette",
+            name: "All actions by name",
+            hint: "Every action by name (⌘K)",
+            off: !ready,
+          })}
+          {action("Batch…", () => openPanel(setBatching, batching), {
             testId: "batch",
             off: !ready,
             hint: "Do one thing to many files at once",
@@ -2275,6 +2741,32 @@ export function App() {
             <button type="button" className="action" onClick={() => setLabelling(false)}>
               Cancel
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {palette ? <CommandPalette commands={commands} onClose={() => setPalette(false)} /> : null}
+
+      {keysOpen ? (
+        <div className="palette-backdrop" data-testid="keys" onMouseDown={() => setKeysOpen(false)}>
+          <div
+            className="palette keys"
+            role="dialog"
+            aria-label="Keyboard shortcuts"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2>Keyboard shortcuts</h2>
+            <dl>
+              {SHORTCUTS.map(([keys, what]) => (
+                <div key={keys}>
+                  <dt>
+                    <kbd>{keys}</kbd>
+                  </dt>
+                  <dd>{what}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="palette-hint">Esc to close</p>
           </div>
         </div>
       ) : null}
@@ -3055,8 +3547,12 @@ export function App() {
           </div>
 
           <aside className="tools" aria-label="Tools">
-            <section className="tool-group">
-              <h2>Edit</h2>
+            <details
+              className="tool-group"
+              open={openGroups.edit !== false}
+              onToggle={(event) => rememberGroup("edit", event.currentTarget.open)}
+            >
+              <summary data-testid="group-edit">Edit</summary>
               <button
                 type="button"
                 className={editingText ? "edit-toggle edit-toggle-on" : "edit-toggle"}
@@ -3112,10 +3608,14 @@ export function App() {
                   A rotated one straightens when it is moved.
                 </p>
               ) : null}
-            </section>
+            </details>
 
-            <section className="tool-group">
-              <h2>Annotate</h2>
+            <details
+              className="tool-group"
+              open={openGroups.annotate !== false}
+              onToggle={(event) => rememberGroup("annotate", event.currentTarget.open)}
+            >
+              <summary data-testid="group-annotate">Annotate</summary>
               <div className="tool-grid">
                 {(["highlight", "underline", "strike", "note", "text"] as const).map(toolButton)}
               </div>
@@ -3220,10 +3720,14 @@ export function App() {
                     danger: true,
                   })
                 : null}
-            </section>
+            </details>
 
-            <section className="tool-group">
-              <h2>Pages</h2>
+            <details
+              className="tool-group"
+              open={openGroups.pages !== false}
+              onToggle={(event) => rememberGroup("pages", event.currentTarget.open)}
+            >
+              <summary data-testid="group-pages">Pages</summary>
               <p className="tool-hint">
                 {positions.length > 0
                   ? `${positions.length} selected`
@@ -3234,7 +3738,7 @@ export function App() {
                 {info.signatures.length > 0
                   ? action(
                       `${info.signatures.length} signature${info.signatures.length === 1 ? "" : "s"}…`,
-                      () => setShowingSignatures((open) => !open),
+                      () => openPanel(setShowingSignatures, showingSignatures),
                       {
                         testId: "signatures",
                         hint: "Who signed this document, and what their signature covers",
@@ -3257,7 +3761,7 @@ export function App() {
                   testId: "sanitise",
                   hint: "Metadata, attached files, scripts and actions — what travels unseen",
                 })}
-                {action("Redact by pattern…", () => setHunting((open) => !open), {
+                {action("Redact by pattern…", () => openPanel(setHunting, hunting), {
                   testId: "find-redact",
                   hint: "Find Aadhaar or PAN numbers, emails, phone numbers or words, and remove every one",
                 })}
@@ -3345,29 +3849,33 @@ export function App() {
                 { testId: "uncrop" },
               )}
               <div className="action-row">
-                {action("Watermark…", () => setMarking((open) => !open), {
+                {action("Watermark…", () => openPanel(setMarking, marking), {
                   testId: "watermark",
                   hint: "A word across the page, behind or over its text",
                 })}
-                {action("Page numbering…", () => setLabelling((open) => !open), {
+                {action("Page numbering…", () => openPanel(setLabelling, labelling), {
                   testId: "page-labels",
                   hint: "What the viewer's page box shows: i, ii, iii then 1, 2, 3",
                 })}
               </div>
               <div className="action-row">
-                {action("Page numbers…", () => setNumbering((open) => !open), {
+                {action("Page numbers…", () => openPanel(setNumbering, numbering), {
                   testId: "number-pages",
                   hint: "Headers, footers, page numbers and Bates numbering",
                 })}
-                {action("Properties…", () => setDescribing((open) => !open), {
+                {action("Properties…", () => openPanel(setDescribing, describing), {
                   testId: "properties",
                   hint: "Title, author, subject and keywords (⌘D)",
                 })}
               </div>
-            </section>
+            </details>
 
-            <section className="tool-group">
-              <h2>Recognise text</h2>
+            <details
+              className="tool-group"
+              open={openGroups.recognise !== false}
+              onToggle={(event) => rememberGroup("recognise", event.currentTarget.open)}
+            >
+              <summary data-testid="group-recognise">Recognise text</summary>
               <p className="tool-hint">Makes a scanned page searchable.</p>
               <div className="action-row">
                 <select
@@ -3396,10 +3904,14 @@ export function App() {
                 />
                 Clean up the scan first
               </label>
-            </section>
+            </details>
 
-            <section className="tool-group">
-              <h2>Convert &amp; protect</h2>
+            <details
+              className="tool-group"
+              open={openGroups.convert !== false}
+              onToggle={(event) => rememberGroup("convert", event.currentTarget.open)}
+            >
+              <summary data-testid="group-convert">Convert &amp; protect</summary>
               <div className="action-row">
                 {action("From images…", () => void handleFromImages(), {
                   testId: "images-to-pdf",
@@ -3434,7 +3946,7 @@ export function App() {
                   () => void handleProtect(),
                 )}
               </div>
-            </section>
+            </details>
           </aside>
         </div>
       ) : (
@@ -3464,7 +3976,10 @@ export function App() {
                   })
                 : null}
             </div>
-            <p className="empty-hint">or drop a file anywhere on this window</p>
+            <p className="empty-hint">
+              or drop a file anywhere on this window. Press <kbd>⌘K</kbd> at any time to find an
+              action by name, or <kbd>?</kbd> for the keys.
+            </p>
           </div>
         </main>
       )}
@@ -3682,6 +4197,21 @@ const PATTERN_CHOICES: { name: PatternName; label: string }[] = [
   { name: "email", label: "Email addresses" },
 ];
 
+/** The keys the app answers to, as the sheet lists them. */
+const SHORTCUTS: [string, string][] = [
+  ["⌘K", "Find any action by name"],
+  ["⌘O", "Open a PDF"],
+  ["⌘S", "Save"],
+  ["⌘P", "Print"],
+  ["⌘D", "Document properties"],
+  ["⌘F", "Find in the document"],
+  ["⌘Z", "Undo"],
+  ["⇧⌘Z", "Redo"],
+  ["⌘+ / ⌘− / ⌘0", "Zoom in, out, or fit"],
+  ["Delete", "Delete the selected pages"],
+  ["?", "This list"],
+];
+
 /** What a rubber stamp can say. Acrobat's own list, plus the registry's. */
 const STAMPS = [
   "Approved",
@@ -3700,6 +4230,9 @@ const STAMPS = [
  * unavailable, in which case the signature simply does not persist.
  */
 const SIGNATURE_KEY = "pdf-suite.signature";
+
+/** Which tool groups the reader left open, in this browser only. */
+const GROUPS_KEY = "pdf-suite.groups";
 
 function loadSignature(): { x: number; y: number }[][] | null {
   try {
