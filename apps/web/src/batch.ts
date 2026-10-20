@@ -1,3 +1,4 @@
+import { matchColumns, nameFor, parseCsv, valuesFor } from "@pdf-suite/core";
 import {
   createPdfWorkerClient,
   type PdfWorkerClient,
@@ -123,4 +124,70 @@ export async function runBatch(
   }
 
   return results;
+}
+
+/**
+ * One filled document per row of a spreadsheet — grade cards, certificates,
+ * hall tickets.
+ *
+ * The template is a form; the columns are matched to its fields by name. What
+ * does not match is reported before anything is produced, because a column
+ * nobody noticed was ignored is how two hundred certificates go out with a
+ * blank where the roll number should be.
+ */
+export interface MergeResult {
+  /** One finished document per row. */
+  documents: { name: string; bytes: ArrayBuffer }[];
+  /** Columns the template has no field for. */
+  unmatchedColumns: string[];
+  /** Fields the spreadsheet has no column for. */
+  unfilledFields: string[];
+  failures: { name: string; note: string }[];
+}
+
+export async function mailMerge(
+  template: PickedFile,
+  csv: string,
+  options: { flatten?: boolean } = {},
+  onProgress?: (progress: BatchProgress) => void,
+): Promise<MergeResult> {
+  const sheet = parseCsv(csv);
+  if (sheet.rows.length === 0) throw new Error("that spreadsheet has no rows in it");
+
+  const worker: PdfWorkerClient = createPdfWorkerClient();
+  const documents: MergeResult["documents"] = [];
+  const failures: MergeResult["failures"] = [];
+
+  try {
+    const wasm = await (await fetch(pdfiumWasmUrl)).arrayBuffer();
+    await worker.init(wasm, new URL(qpdfWasmUrl, location.href).href);
+
+    // The template is opened once to see what fields it has; each row then
+    // reopens it, because filling a form rewrites the document.
+    const first = await worker.open(template.bytes.slice(0));
+    const fields = first.form.fields.map((field) => field.name);
+    if (fields.length === 0) throw new Error("that template has no form fields to fill");
+    const { pairs, unmatchedColumns, unfilledFields } = matchColumns(sheet.columns, fields);
+    if (Object.keys(pairs).length === 0) {
+      throw new Error("none of the spreadsheet's columns match a field in the template");
+    }
+
+    for (const [index, row] of sheet.rows.entries()) {
+      const name = nameFor(row, index);
+      onProgress?.({ done: index, total: sheet.rows.length, name });
+      try {
+        const info = await worker.open(template.bytes.slice(0));
+        const order = info.pageSizes.map((page, at) => at);
+        await worker.fillForm(valuesFor(row, pairs), options.flatten ?? true, order, []);
+        documents.push({ name: `${name}.pdf`, bytes: await worker.save(order, []) });
+      } catch (error) {
+        failures.push({ name, note: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
+    onProgress?.({ done: sheet.rows.length, total: sheet.rows.length, name: "" });
+    return { documents, unmatchedColumns, unfilledFields, failures };
+  } finally {
+    worker.terminate();
+  }
 }

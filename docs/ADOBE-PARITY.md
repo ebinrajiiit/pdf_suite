@@ -170,6 +170,7 @@ What an Acrobat user would miss before anything subtle:
 | Tab order | Follows the order fields are created, which is what a reader uses when the page has no explicit `/Tabs`. Setting it by hand is missing |
 | Calculations and validation | Done, without document JavaScript: a small expression language — numbers, the four operators, brackets, field names, sum/avg/min/max — stored on the field and computed here. Another reader will not recompute, so the totals are written into the fields when the form is filled. Formatting scripts are missing |
 | Barcode fields | Missing |
+| Fill a form from a spreadsheet | Done: a template and a CSV give one filled, flattened document per row — grade cards, certificates, hall tickets. Columns match fields through the punctuation in field names, and a column with no field is reported rather than dropped |
 | Distribute, collect, track responses | Missing. The local half — export and merge FDF — is compatible with zero upload; the tracker is not |
 | XFA dynamic forms | Detected and reported, never rendered. Acrobat is retiring XFA too |
 

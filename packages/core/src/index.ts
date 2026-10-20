@@ -35,6 +35,8 @@ export type { PrintCheckInput, StandardIssue } from "./standards.js";
 export { isSigned, readSignatures } from "./signatures.js";
 export type { SignatureInfo } from "./signatures.js";
 export { checkAccessibility, fixAccessibility } from "./accessibility.js";
+export { matchColumns, nameFor, parseCsv, valuesFor } from "./csv.js";
+export type { Sheet } from "./csv.js";
 export { toDocx } from "./docx.js";
 export type { DocxOptions } from "./docx.js";
 export { crc32, zip } from "./zip.js";

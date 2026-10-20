@@ -1489,6 +1489,57 @@ test("carries a file inside the document, and gives it back", async ({ page }) =
   await expect(page.getByTestId("attachments-empty")).toBeVisible();
 });
 
+test("fills a form once per row of a spreadsheet", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A template with two fields, built the way the form builder builds one.
+  await openFixture(page, "card.pdf", await textFixture([["Grade card"]]));
+  await page.getByTestId("tab-form").click();
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  for (const [index, name] of ["student.name", "marks"].entries()) {
+    await page.getByTestId("add-field-tool").click();
+    await page.mouse.move(area.x + 60, area.y + 120 + index * 40);
+    await page.mouse.down();
+    await page.mouse.move(area.x + 260, area.y + 145 + index * 40, { steps: 4 });
+    await page.mouse.up();
+    await page.getByTestId("field-name").fill(name);
+    await page.getByTestId("add-field").click();
+    await expect(page.getByTestId("status")).toHaveText(`Added the field ${name}`, {
+      timeout: 30_000,
+    });
+  }
+  const template = await saveAndRead(page, "Save");
+
+  // Two rows, one with a comma in the name, and a column the template has no
+  // field for.
+  const downloads: Promise<unknown>[] = [];
+  page.on("download", (download) => downloads.push(download.path()));
+
+  await page.getByTestId("batch").click();
+  // Both files at once: the form to fill and the spreadsheet to fill it from.
+  await page.setInputFiles('[data-testid="fill-input"]', [
+    { name: "card.pdf", mimeType: "application/pdf", buffer: template },
+    {
+      name: "students.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from('Student Name,Marks,House\n"Student, A",88,Blue\nB Student,91,Red\n'),
+    },
+  ]);
+
+  const results = page.getByTestId("batch-results");
+  await expect(results).toBeVisible({ timeout: 60_000 });
+  // One document per row, named from the row.
+  await expect(results).toContainText("Student A.pdf");
+  await expect(results).toContainText("B Student.pdf");
+  // And the column nobody noticed is reported rather than dropped silently.
+  await expect(results).toContainText("Columns with no field");
+  await expect(results).toContainText("House");
+
+  await expect.poll(() => downloads.length, { timeout: 30_000 }).toBe(2);
+});
+
 test("the palette finds any action by name and runs it", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

@@ -63,7 +63,7 @@ import {
   suffixName,
 } from "./file-io.js";
 import { useDocument } from "./use-document.js";
-import { runBatch, type BatchAction, type BatchResult } from "./batch.js";
+import { mailMerge, runBatch, type BatchAction, type BatchResult } from "./batch.js";
 
 export function App() {
   const {
@@ -195,6 +195,8 @@ export function App() {
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const batchInput = useRef<HTMLInputElement>(null);
+  /** The template and the spreadsheet of a mail merge, chosen together. */
+  const fillInput = useRef<HTMLInputElement>(null);
 
   /** Whether this machine can turn an Office document into a PDF, or scan. */
   const [office, setOffice] = useState(false);
@@ -1299,6 +1301,73 @@ export function App() {
     [batchAction, markOpacity, markText],
   );
 
+  /**
+   * One filled document per row of a spreadsheet.
+   *
+   * Both files come from one picker — the template and the spreadsheet,
+   * together — rather than two dialogs in a row: two dialogs means holding the
+   * first choice while waiting for the second, and the file that arrives first
+   * is whichever the browser hands over first.
+   */
+  const onFillInput = useCallback(async (files: FileList | null) => {
+    if (!files?.length) return;
+    const picked = await readFiles(files);
+    const template = picked.find((file) => /\.pdf$/i.test(file.name));
+    const csv = picked.find((file) => /\.csv$/i.test(file.name));
+    if (!template || !csv) {
+      setSaved("Choose both the form to fill and the spreadsheet to fill it from");
+      return;
+    }
+
+    try {
+      const result = await mailMerge(
+        template,
+        new TextDecoder().decode(csv.bytes),
+        { flatten: true },
+        (progress) =>
+          setBatchBusy(
+            progress.name === ""
+              ? null
+              : `${progress.name} (${progress.done + 1} of ${progress.total})`,
+          ),
+      );
+      setBatchBusy(null);
+      setBatchResults([
+        ...result.documents.map((document) => ({
+          name: document.name,
+          note: "filled",
+          failed: false,
+        })),
+        ...result.failures.map((failure) => ({ ...failure, failed: true })),
+        ...(result.unmatchedColumns.length > 0
+          ? [
+              {
+                name: "Columns with no field",
+                note: result.unmatchedColumns.join(", "),
+                failed: true,
+              },
+            ]
+          : []),
+        ...(result.unfilledFields.length > 0
+          ? [
+              {
+                name: "Fields with no column",
+                note: result.unfilledFields.join(", "),
+                failed: true,
+              },
+            ]
+          : []),
+      ]);
+
+      for (const document of result.documents) {
+        await saveBytes(document.bytes, document.name, undefined, "application/pdf");
+      }
+    } catch (error) {
+      setBatchBusy(null);
+      setSaved(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
   const handleScan = useCallback(async () => {
     try {
       const page = await scanPage(300);
@@ -2155,6 +2224,15 @@ export function App() {
         onChange={(event) => void onCompareInput(event.target.files)}
       />
       <input
+        ref={fillInput}
+        type="file"
+        accept="application/pdf,.pdf,.csv,text/csv"
+        multiple
+        data-testid="fill-input"
+        className="visually-hidden"
+        onChange={(event) => void onFillInput(event.target.files)}
+      />
+      <input
         ref={batchInput}
         type="file"
         accept="application/pdf,.pdf"
@@ -2793,6 +2871,11 @@ export function App() {
             {action("Choose files…", () => batchInput.current?.click(), {
               testId: "batch-choose",
               off: batchBusy !== null,
+            })}
+            {action("Fill a form from a spreadsheet…", () => fillInput.current?.click(), {
+              testId: "merge-start",
+              off: batchBusy !== null,
+              hint: "Choose the form and the spreadsheet together: one document per row",
             })}
             <span className="hfnote">
               Each file is saved as a new document; the originals are not written over. A file that
