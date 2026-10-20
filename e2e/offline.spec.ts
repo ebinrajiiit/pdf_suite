@@ -974,6 +974,63 @@ test("a mark can be removed from the Marks panel", async ({ page }) => {
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
 });
 
+test("numbers the pages, and the numbers are in the document", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "report.pdf", await textFixture([["One"], ["Two"], ["Three"]]));
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.getByTestId("number-pages").click();
+  await expect(page.getByTestId("numbering-panel")).toBeVisible();
+
+  // The default is a centred footer; put the file name top right as well.
+  await page.getByTestId("header-2").click();
+  await page.getByTestId("token-file").click();
+  await expect(page.getByTestId("header-2")).toHaveValue("{file}");
+
+  await page.getByTestId("apply-numbering").click();
+  await expect(page.getByTestId("status")).toHaveText("Headers and footers added", {
+    timeout: 30_000,
+  });
+
+  // Drawn into the page, so the app's own search finds them.
+  await page.getByTestId("search-input").fill("Page 2 of 3");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  // And they are in the saved file, not only on screen.
+  const saved = await saveAndRead(page, "Save");
+  expect(saved.length).toBeGreaterThan(0);
+
+  // Numbering is a document change like any other, so it undoes.
+  await page.getByTestId("undo").click();
+  await page.getByTestId("search-input").fill("Page 2 of 3");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+});
+
+test("Bates numbering is a prefix and padding, starting where it is told", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "case.pdf", await textFixture([["One"], ["Two"]]));
+
+  await page.getByTestId("number-pages").click();
+  await page.getByTestId("footer-1").fill("");
+  await page.getByTestId("footer-2").fill("ACME-{n}");
+  await page.getByTestId("start-at").fill("500");
+  await page.getByTestId("pad-digits").fill("6");
+  await page.getByTestId("apply-numbering").click();
+  await expect(page.getByTestId("status")).toHaveText("Headers and footers added", {
+    timeout: 30_000,
+  });
+
+  await page.getByTestId("search-input").fill("ACME-000501");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
 test("right-clicking a page offers what can be done to it", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

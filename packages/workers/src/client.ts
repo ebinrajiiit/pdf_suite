@@ -10,6 +10,7 @@ import {
   type TextEdit,
   type TextEditResult,
   type SearchHit,
+  type StampOptions,
   type TextRun,
   type TerminalResponse,
   type WorkerRequest,
@@ -74,6 +75,8 @@ export interface PdfWorkerClient {
     addedLines: number;
     rejected: TextEditResult["rejected"];
   }>;
+  /** Draws headers, footers and page numbers into the pages. */
+  stamp(options: StampOptions, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /**
    * Steps back to the previous version of the document, or forward again. The
    * current page order and marks are sent so that the opposite step can restore
@@ -257,6 +260,9 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         addedLines: reply.addedLines,
         rejected: reply.rejected,
       };
+    },
+    async stamp(options, order, annotations) {
+      return expect(await send({ kind: "stamp", options, order, annotations }), "document").info;
     },
     async undo(order, annotations) {
       const reply = expect(await send({ kind: "undo", order, annotations }), "restored");

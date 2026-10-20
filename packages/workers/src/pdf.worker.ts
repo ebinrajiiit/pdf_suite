@@ -9,6 +9,7 @@ import {
   imagesToPdf,
   rotate,
   split,
+  stampPages,
   type Annotation,
   type Qpdf,
 } from "@pdf-suite/core";
@@ -266,6 +267,15 @@ async function handle(request: WorkerRequest): Promise<void> {
       const rotated = await rotate(base, request.positions, request.by);
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, rotated, request) });
+      return;
+    }
+    case "stamp": {
+      const base = await materialise(id, request.order, request.annotations);
+      // The stamp is applied after the display order, so "page 1" is the page
+      // the reader sees first rather than the first page of the original file.
+      const stamped = await stampPages(base, request.options);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, stamped, request) });
       return;
     }
     case "compress": {

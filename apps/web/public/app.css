@@ -284,6 +284,64 @@ textarea:focus-visible,
   color: inherit;
 }
 
+/* Headers, footers and page numbers: Acrobat's six boxes, in a strip rather
+   than a modal, so the document stays visible behind it. */
+.hfpanel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+.hfgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.hfrow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hflabel {
+  flex: 0 0 4rem;
+  font-weight: 600;
+}
+.hfslot {
+  flex: 1 1 10rem;
+  min-width: 7rem;
+}
+.hfoptions label,
+.hftokens .action {
+  font-size: 0.85rem;
+}
+.hfoptions label {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  color: var(--ink-soft);
+}
+.hfoptions input {
+  width: 4.5rem;
+}
+.hfoptions select {
+  font: inherit;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.hfnote {
+  flex: 1 1 20rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.hfnote code {
+  padding: 0 0.2rem;
+  border-radius: 3px;
+  background: var(--sunken);
+}
+
 /* ---------- workspace ---------- */
 
 .workspace {

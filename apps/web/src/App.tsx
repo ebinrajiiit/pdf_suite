@@ -14,6 +14,7 @@ import {
   type MenuItem,
   type TextEditCommit,
 } from "@pdf-suite/ui";
+import type { NumberFormat, Slots } from "@pdf-suite/workers";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
 import type { EditableText, SearchHit } from "@pdf-suite/workers";
 import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
@@ -44,6 +45,7 @@ export function App() {
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
+    stamp,
     pageText,
     setOrder,
     undo,
@@ -60,6 +62,18 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** Headers, footers and page numbers, Acrobat's six slots. */
+  const [numbering, setNumbering] = useState(false);
+  const [header, setHeader] = useState<Slots>(["", "", ""]);
+  const [footer, setFooter] = useState<Slots>(["", "Page {n} of {total}", ""]);
+  /** Which slot a token button writes into: the one last typed in. */
+  const [slot, setSlot] = useState<["header" | "footer", number]>(["footer", 1]);
+  const [numberFormat, setNumberFormat] = useState<NumberFormat>("1");
+  const [startAt, setStartAt] = useState(1);
+  const [digits, setDigits] = useState(0);
+  const [stampSize, setStampSize] = useState(10);
+  const [stampMargin, setStampMargin] = useState(36);
+
   /** Right-click menu: where it is, and which page it was opened on. */
   const [menu, setMenu] = useState<{ x: number; y: number; position: number } | null>(null);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
@@ -393,6 +407,39 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [handleDelete, handleOpen, handleSave, pageCount, positions.length, redo, stepZoom, undo]);
+
+  const handleStamp = useCallback(async () => {
+    const applied = await stamp({
+      header,
+      footer,
+      fontSize: stampSize,
+      margin: stampMargin,
+      startAt,
+      digits,
+      format: numberFormat,
+      name: name0,
+      // Numbering a selection is Acrobat's "Page Range"; no selection means all.
+      ...(positions.length > 0 ? { pages: positions } : {}),
+    });
+    if (!applied) return;
+    setNumbering(false);
+    setSaved(
+      positions.length > 0
+        ? `Numbered ${positions.length} ${positions.length === 1 ? "page" : "pages"}`
+        : "Headers and footers added",
+    );
+  }, [
+    digits,
+    footer,
+    header,
+    name0,
+    numberFormat,
+    positions,
+    stamp,
+    stampMargin,
+    stampSize,
+    startAt,
+  ]);
 
   const handleProtect = useCallback(async () => {
     if (info?.protected) {
@@ -850,6 +897,139 @@ export function App() {
         </form>
       ) : null}
 
+      {numbering && info ? (
+        <form
+          className="prompt hfpanel"
+          data-testid="numbering-panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleStamp();
+          }}
+        >
+          <div className="hfgrid">
+            {(["header", "footer"] as const).map((band) => (
+              <div className="hfrow" key={band}>
+                <span className="hflabel">{band === "header" ? "Header" : "Footer"}</span>
+                {[0, 1, 2].map((which) => (
+                  <input
+                    key={which}
+                    type="text"
+                    className="hfslot"
+                    data-testid={`${band}-${which}`}
+                    aria-label={`${band} ${["left", "centre", "right"][which]}`}
+                    placeholder={["left", "centre", "right"][which]}
+                    value={(band === "header" ? header : footer)[which]}
+                    onFocus={() => setSlot([band, which])}
+                    onChange={(event) => {
+                      const next = [...(band === "header" ? header : footer)] as Slots;
+                      next[which] = event.target.value;
+                      (band === "header" ? setHeader : setFooter)(next);
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div className="hfrow hftokens">
+            <span className="hflabel">Insert</span>
+            {TOKENS.map(({ token, label }) => (
+              <button
+                key={token}
+                type="button"
+                className="action"
+                data-testid={`token-${token.replace(/[{}]/g, "")}`}
+                title={`Add ${label} to the ${slot[0]} ${["left", "centre", "right"][slot[1]]} box`}
+                onClick={() => {
+                  const [band, which] = slot;
+                  const next = [...(band === "header" ? header : footer)] as Slots;
+                  next[which] = `${next[which]}${next[which] ? " " : ""}${token}`;
+                  (band === "header" ? setHeader : setFooter)(next);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="hfrow hfoptions">
+            <label>
+              Start at
+              <input
+                type="number"
+                min={0}
+                value={startAt}
+                data-testid="start-at"
+                onChange={(event) => setStartAt(event.target.valueAsNumber || 0)}
+              />
+            </label>
+            <label>
+              Style
+              <select
+                value={numberFormat}
+                data-testid="number-format"
+                onChange={(event) => setNumberFormat(event.target.value as NumberFormat)}
+              >
+                <option value="1">1, 2, 3</option>
+                <option value="i">i, ii, iii</option>
+                <option value="I">I, II, III</option>
+                <option value="a">a, b, c</option>
+                <option value="A">A, B, C</option>
+              </select>
+            </label>
+            <label title="Zero-pads the number, which is what Bates numbering is: ACME-000001">
+              Pad to
+              <input
+                type="number"
+                min={0}
+                max={12}
+                value={digits}
+                data-testid="pad-digits"
+                onChange={(event) => setDigits(event.target.valueAsNumber || 0)}
+              />
+              digits
+            </label>
+            <label>
+              Size
+              <input
+                type="number"
+                min={4}
+                max={48}
+                value={stampSize}
+                onChange={(event) => setStampSize(event.target.valueAsNumber || 10)}
+              />
+              pt
+            </label>
+            <label>
+              Margin
+              <input
+                type="number"
+                min={0}
+                max={200}
+                value={stampMargin}
+                onChange={(event) => setStampMargin(event.target.valueAsNumber || 36)}
+              />
+              pt
+            </label>
+          </div>
+
+          <div className="hfrow">
+            <span className="hfnote">
+              {positions.length > 0
+                ? `Applies to the ${positions.length} selected ${positions.length === 1 ? "page" : "pages"}.`
+                : "Applies to every page."}{" "}
+              Bates numbering is a prefix and padding — type <code>ACME-{"{n}"}</code> and pad to 6.
+            </span>
+            <button type="submit" className="action action-go" data-testid="apply-numbering">
+              Add
+            </button>
+            <button type="button" className="action" onClick={() => setNumbering(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       {info ? (
         <div className="workspace">
           <aside className="sidebar">
@@ -1067,6 +1247,12 @@ export function App() {
                   hint: "Each selected page starts a new file",
                 })}
               </div>
+              <div className="action-row">
+                {action("Page numbers…", () => setNumbering((open) => !open), {
+                  testId: "number-pages",
+                  hint: "Headers, footers, page numbers and Bates numbering",
+                })}
+              </div>
             </section>
 
             <section className="tool-group">
@@ -1240,6 +1426,14 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   ink: "Draw",
   redact: "Redact",
 };
+
+/** What a header or footer box can hold besides the words you type. */
+const TOKENS = [
+  { token: "{n}", label: "Page number" },
+  { token: "{total}", label: "Page count" },
+  { token: "{date}", label: "Date" },
+  { token: "{file}", label: "File name" },
+];
 
 /** A small fixed palette: a full picker is a dialog nobody asked for. */
 const COLOURS: { name: string; value: AnnotColor }[] = [

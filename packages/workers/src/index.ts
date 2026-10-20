@@ -12,6 +12,9 @@ export type {
   RedactRect,
   TextEdit,
   SearchHit,
+  NumberFormat,
+  Slots,
+  StampOptions,
   WorkerRequest,
   WorkerResponse,
 } from "./protocol.js";

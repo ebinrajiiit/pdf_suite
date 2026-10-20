@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
-import type { EditableText, RedactArea, TextEdit } from "@pdf-suite/workers";
+import type { EditableText, RedactArea, StampOptions, TextEdit } from "@pdf-suite/workers";
 import {
   createPdfWorkerClient,
   type DocumentInfo,
@@ -562,6 +562,30 @@ export function useDocument() {
     [remember],
   );
 
+  /**
+   * Draws headers, footers and page numbers into the document. Display
+   * positions, not source pages: "page 1" is the page the reader sees first.
+   */
+  const stamp = useCallback(
+    async (options: StampOptions) => {
+      const info = await run("Numbering pages", (worker) =>
+        worker.stamp(options, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!info) return false;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return true;
+    },
+    [run],
+  );
+
   /** Saves just the given source pages, leaving the open document alone. */
   const extract = useCallback(
     async (pages: number[]) =>
@@ -599,6 +623,7 @@ export function useDocument() {
     redact,
     editableText,
     editText,
+    stamp,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

@@ -4,7 +4,7 @@
 // The worker owns the document bytes: a 200 MB file is posted in once and never
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
-import type { Annotation, FieldValues, FormInfo } from "@pdf-suite/core";
+import type { Annotation, FieldValues, FormInfo, StampOptions } from "@pdf-suite/core";
 import type { OutlineItem, TextRun } from "@pdf-suite/engine";
 import type {
   EditableText,
@@ -41,7 +41,16 @@ export interface DocumentInfo {
  * `order` does, and are applied *before* the order is materialised: they are
  * keyed by source page index, which reordering would otherwise invalidate.
  */
-export type { Annotation, AnnotRect, FieldValues, FormField, FormInfo } from "@pdf-suite/core";
+export type {
+  Annotation,
+  AnnotRect,
+  FieldValues,
+  FormField,
+  FormInfo,
+  NumberFormat,
+  Slots,
+  StampOptions,
+} from "@pdf-suite/core";
 export type { OutlineItem, TextRun } from "@pdf-suite/engine";
 export type {
   EditableText,
@@ -92,6 +101,12 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /**
+     * Draws headers, footers and page numbers into the pages, then reopens the
+     * result. `options.pages` is display positions, like everything else the UI
+     * sends; the worker turns them into source pages.
+     */
+    | { kind: "stamp"; options: StampOptions; order: number[]; annotations: Annotation[] }
     /** Recompresses the document, reopening the result. */
     | { kind: "compress"; order: number[]; annotations: Annotation[] }
     /**

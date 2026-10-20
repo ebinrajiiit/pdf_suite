@@ -59,6 +59,8 @@ text, and the tools panel hides below 980 px instead of collapsing to icons.
 | Export pages as images | PNG per page |
 | Create PDF from images | JPEG and PNG, one page per image or fitted |
 | Repair a damaged file | qpdf repair pass on open |
+| Add header and footer | Six slots, with tokens for page number, page count, date and file name; size, margin, start number, numbering style, and a page range |
+| Bates numbering | A prefix and zero-padding on the same page-number token — `ACME-{n}` padded to 6 is `ACME-000001` |
 | Undo and redo | Both, over page order, marks and the document's bytes, with ⌘Z and ⇧⌘Z |
 | Right-click a page | Rotate, insert, extract, export, delete, in the panel and on the page |
 | Edit PDF (text) | Click a paragraph and type over it; it re-wraps to its own width, and a font with no glyph for what was typed is substituted |
@@ -115,8 +117,12 @@ text, and the tools panel hides below 980 px instead of collapsing to icons.
    and a reading-order editor. Phases 3 and 5.
 9. **Office → PDF** — desktop only, via LibreOffice. Phase 2, and blocked on the
    desktop shell actually building: it is scaffolded but has never been compiled.
-10. **Page-level polish** — crop, headers and footers, watermarks, Bates
-    numbering, page labels, background.
+10. **Page-level polish** — headers, footers, page numbers and Bates numbering
+    are done, drawn into the page content so they print and extract. What
+    remains: crop, watermarks and backgrounds, and page labels (the `/PageLabels`
+    tree, so the viewer's page box reads "iv" rather than "4"). Headers and
+    footers are Latin-only for now, because they are set in a standard font —
+    the same embedding problem as the text editor's font substitution.
 11. **Attachments and portfolios** — embedded file attachments.
 12. **Print production** — preflight, colour separations, ink manager. Niche for
     institutional use; low priority.
