@@ -72,6 +72,7 @@ export function App() {
     clearAnnotations,
     stamp,
     describe,
+    extractAllText,
     crop,
     addWatermark,
     setLabels,
@@ -188,6 +189,8 @@ export function App() {
   const [goTo, setGoTo] = useState<number | undefined>();
   /** The page the reader is looking at, as a display position. */
   const [firstVisible, setFirstVisible] = useState(0);
+  /** Two pages side by side, as a book opens. */
+  const [facing, setFacing] = useState(false);
 
   const info = state.info;
   const pageCount = state.order.length;
@@ -545,6 +548,19 @@ export function App() {
     setOrder(removePages(state.order, positions));
     setSelected(new Set());
   }, [pageCount, positions, setOrder, state.order]);
+
+  /** Saves the document's words as a plain text file. */
+  const handleSaveText = useCallback(async () => {
+    const text = await extractAllText();
+    if (text === undefined) return;
+    const written = await saveBytes(
+      new TextEncoder().encode(text).buffer as ArrayBuffer,
+      `${stripPdf(name0)}.txt`,
+      undefined,
+      "text/plain",
+    );
+    setSaved(written ? `Saved ${written}` : undefined);
+  }, [extractAllText, name0]);
 
   /** Prints what is on screen, marks and all, not the file as it was opened. */
   const handlePrint = useCallback(async () => {
@@ -1208,15 +1224,22 @@ export function App() {
           data-testid="protect-prompt"
           onSubmit={(event) => {
             event.preventDefault();
-            const field = new FormData(event.currentTarget).get("newPassword");
+            const form = new FormData(event.currentTarget);
+            const field = form.get("newPassword");
             if (typeof field === "string" && field !== "") {
-              void protect(field);
+              void protect(field, {
+                print: form.get("allowPrint") ? "full" : "none",
+                extract: form.get("allowCopy") !== null,
+                modify: form.get("allowChanges") ? "all" : "none",
+              });
               setAskProtect(false);
             }
           }}
         >
           <label htmlFor="newPassword">
             Password for the saved file. Keep it safe — a protected PDF cannot be opened without it.
+            What is allowed below is a request to the reader, which most honour; the file is
+            decrypted in their hands either way.
           </label>
           <input
             id="newPassword"
@@ -1225,6 +1248,20 @@ export function App() {
             autoFocus
             data-testid="new-password"
           />
+          <span className="hfrow">
+            <label className="hfcheck">
+              <input type="checkbox" name="allowPrint" defaultChecked data-testid="allow-print" />
+              Allow printing
+            </label>
+            <label className="hfcheck">
+              <input type="checkbox" name="allowCopy" defaultChecked data-testid="allow-copy" />
+              Allow copying text
+            </label>
+            <label className="hfcheck">
+              <input type="checkbox" name="allowChanges" data-testid="allow-changes" />
+              Allow changes
+            </label>
+          </span>
           <button type="submit" className="action action-go">
             Set password
           </button>
@@ -1971,6 +2008,7 @@ export function App() {
               text={textRuns}
               onNeedText={needText}
               onVisible={setFirstVisible}
+              facing={facing}
               editingImages={editingImages}
               images={imagesByPage}
               onNeedImages={needImages}
@@ -2233,6 +2271,10 @@ export function App() {
                   off: !ready,
                   hint: "Turn JPEG or PNG files into a PDF",
                 })}
+                {action("To text…", () => void handleSaveText(), {
+                  testId: "to-text",
+                  hint: "Save the document's words as a plain text file",
+                })}
                 {action("To images…", () => void handleExportImages(), {
                   testId: "pages-to-images",
                   hint: "Save pages as PNG",
@@ -2296,6 +2338,17 @@ export function App() {
               aria-label="Zoom in"
             >
               +
+            </button>
+            <button
+              type="button"
+              className={facing ? "on" : undefined}
+              aria-pressed={facing}
+              data-testid="facing"
+              onClick={() => setFacing((on) => !on)}
+              disabled={disabled}
+              title="Two pages side by side, as a book opens"
+            >
+              Two-up
             </button>
             <button type="button" onClick={() => setZoom("fit")} disabled={disabled}>
               Fit

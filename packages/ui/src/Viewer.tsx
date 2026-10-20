@@ -69,6 +69,8 @@ export interface ViewerProps {
   onNeedText?: ((page: number) => void) | undefined;
   /** The first page now in view, as a display position. */
   onVisible?: ((position: number) => void) | undefined;
+  /** Two pages side by side, as a book opens. */
+  facing?: boolean | undefined;
   /** Editing pictures: the images per source page, and what to do with them. */
   editingImages?: boolean | undefined;
   images?: ReadonlyMap<number, PageImage[]> | undefined;
@@ -109,6 +111,7 @@ export function Viewer({
   text,
   onNeedText,
   onVisible,
+  facing,
   editingImages,
   images,
   onNeedImages,
@@ -134,19 +137,37 @@ export function Viewer({
 
   const layout = useMemo(() => {
     const offsets = [0];
-    const boxes = order.map((page, position) => {
+    const sizes = order.map((page) => {
       const size = pageSizes[page] ?? { width: 612, height: 792 };
-      const box = {
-        page,
-        position,
+      return {
         width: Math.round(size.width * scale),
         height: Math.round(size.height * scale),
       };
-      offsets.push((offsets[position] ?? 0) + box.height + GAP);
-      return box;
+    });
+
+    const boxes = order.map((page, position) => {
+      const size = sizes[position]!;
+      // Facing pages share a row: the even one sits left of centre, the odd one
+      // right of it, and the row is as tall as the taller of the two.
+      const partner = facing ? sizes[position % 2 === 0 ? position + 1 : position - 1] : undefined;
+      const rowHeight = Math.max(size.height, partner?.height ?? 0);
+      const shift = !facing
+        ? 0
+        : position % 2 === 0
+          ? -(size.width / 2) - GAP / 2
+          : size.width / 2 + GAP / 2;
+
+      // In facing mode the second page of a row starts at the same offset as
+      // the first, and only the row advances.
+      offsets.push(
+        facing && position % 2 === 0
+          ? (offsets[position] ?? 0)
+          : (offsets[position] ?? 0) + rowHeight + GAP,
+      );
+      return { page, position, ...size, shift };
     });
     return { boxes, offsets };
-  }, [order, pageSizes, scale]);
+  }, [facing, order, pageSizes, scale]);
 
   /** Pending annotations grouped by source page, keeping their list index. */
   const byPage = useMemo(() => {
@@ -210,6 +231,7 @@ export function Viewer({
               top: `${layout.offsets[box.position] ?? 0}px`,
               width: `${box.width}px`,
               height: `${box.height}px`,
+              transform: `translateX(calc(-50% + ${box.shift}px))`,
             }}
             data-page-position={box.position}
             onContextMenu={(event) => {

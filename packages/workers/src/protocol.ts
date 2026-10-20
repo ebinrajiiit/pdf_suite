@@ -4,6 +4,7 @@
 // The worker owns the document bytes: a 200 MB file is posted in once and never
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
+import type { EncryptOptions } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
   Annotation,
@@ -61,6 +62,7 @@ export interface DocumentInfo {
  * `order` does, and are applied *before* the order is materialised: they are
  * keyed by source page index, which reordering would otherwise invalidate.
  */
+export type { EncryptOptions } from "@pdf-suite/core";
 export type {
   AccessibilityIssue,
   Annotation,
@@ -226,8 +228,11 @@ export type WorkerRequest = { id: number } &
     | { kind: "findPattern"; request: FindRequest; order: number[]; annotations: Annotation[] }
     /** Removes the content inside the given areas, then verifies it is gone. */
     | { kind: "redact"; areas: RedactArea[]; order: number[]; annotations: Annotation[] }
-    /** Sets the password the document is saved with, or null to remove protection. */
-    | { kind: "protect"; password: string | null }
+    /**
+     * Sets the password the document is saved with, or null to remove
+     * protection, and what a reader may do without the owner password.
+     */
+    | { kind: "protect"; password: string | null; allow?: EncryptOptions["allow"] }
     /**
      * Searches the pages in `order`, reporting progress per page. Long documents
      * are why the protocol has cancellation: a search over 500 pages extracts
@@ -242,6 +247,8 @@ export type WorkerRequest = { id: number } &
     | { kind: "split"; at: number[]; order: number[]; annotations: Annotation[] }
     /** Builds a document from images and opens it. */
     | { kind: "fromImages"; images: { bytes: ArrayBuffer; type: string }[] }
+    /** The document's text, in display order, for saving as a plain text file. */
+    | { kind: "toText"; order: number[] }
     /** Renders the given display positions to PNG, for export. */
     | { kind: "toImages"; positions: number[]; order: number[]; scale: number }
     /**
@@ -284,6 +291,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "runs"; runs: TextRun[] }
   | { kind: "editable"; runs: EditableText[] }
   | { kind: "pageImages"; images: PageImage[] }
+  | { kind: "text"; text: string }
   | {
       kind: "imagesEdited";
       info: DocumentInfo;
@@ -335,6 +343,7 @@ export type TerminalResponse = Extract<
       | "runs"
       | "editable"
       | "pageImages"
+      | "text"
       | "imagesEdited"
       | "found"
       | "hidden"

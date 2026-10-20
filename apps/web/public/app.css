@@ -801,6 +801,40 @@ textarea:focus-visible,
   border-left-color: #2a8a4a !important;
 }
 
+/* Working through a long list of marks. */
+.comment-filters {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.comment-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.comment-filters select {
+  font: inherit;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.comment-sort {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {

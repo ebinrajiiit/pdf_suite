@@ -16,8 +16,25 @@ export interface EncryptOptions {
   /** Needed to open the document. */
   userPassword: string;
   /** Needed to change permissions. Defaults to the user password. */
-  ownerPassword?: string;
-  bits?: 128 | 256;
+  ownerPassword?: string | undefined;
+  bits?: 128 | 256 | undefined;
+  /**
+   * What a reader may do without the owner password. Left out, everything is
+   * allowed and the password only controls opening.
+   *
+   * These are a request, not a guarantee: the PDF specification says a reader
+   * should honour them, and most do, but the file is decrypted in the reader's
+   * hands either way. Acrobat says the same thing in smaller type.
+   */
+  allow?:
+    | {
+        print?: "none" | "low" | "full" | undefined;
+        modify?: "none" | "annotate" | "form" | "assembly" | "all" | undefined;
+        extract?: boolean | undefined;
+        /** Extraction for a screen reader, which is worth keeping separate. */
+        accessibility?: boolean | undefined;
+      }
+    | undefined;
 }
 
 export class QpdfError extends Error {
@@ -124,8 +141,19 @@ export async function createQpdf(options: QpdfOptions): Promise<Qpdf> {
       return out;
     },
 
-    async encrypt(bytes, { userPassword, ownerPassword, bits = 256 }) {
+    async encrypt(bytes, { userPassword, ownerPassword, bits = 256, allow }) {
       if (userPassword === "") throw new Error("a user password is required");
+      // qpdf takes the permissions as flags between the key length and the --.
+      const flags: string[] = [];
+      if (allow?.print) flags.push(`--print=${allow.print}`);
+      if (allow?.modify) flags.push(`--modify=${allow.modify}`);
+      if (allow?.extract !== undefined) flags.push(`--extract=${allow.extract ? "y" : "n"}`);
+      if (allow?.accessibility !== undefined && bits === 128) {
+        // 256-bit encryption always allows extraction for accessibility, and
+        // qpdf refuses the flag there rather than pretending.
+        flags.push(`--accessibility=${allow.accessibility ? "y" : "n"}`);
+      }
+
       const { code, bytes: out } = await run(bytes, (i, o) => [
         i,
         o,
@@ -133,6 +161,7 @@ export async function createQpdf(options: QpdfOptions): Promise<Qpdf> {
         userPassword,
         ownerPassword ?? userPassword,
         String(bits),
+        ...flags,
         "--",
       ]);
       if (!out) throw new QpdfError("qpdf could not encrypt this document", code);

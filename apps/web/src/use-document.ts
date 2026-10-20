@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
+  EncryptOptions,
   Bookmark,
   Box,
   PageLabelRange,
@@ -275,8 +276,8 @@ export function useDocument() {
 
   /** Sets or clears the password the document is saved with. */
   const protect = useCallback(
-    async (password: string | null) => {
-      const info = await run("Updating protection", (worker) => worker.protect(password));
+    async (password: string | null, allow?: EncryptOptions["allow"]) => {
+      const info = await run("Updating protection", (worker) => worker.protect(password, allow));
       if (!info) return;
       setState((s) => ({ ...s, info, handle: undefined }));
     },
@@ -697,6 +698,12 @@ export function useDocument() {
     [run],
   );
 
+  /** The document's text, in the order on screen. */
+  const extractAllText = useCallback(
+    async () => run("Extracting text", (worker) => worker.toText(stateRef.current.order)),
+    [run],
+  );
+
   /** Crops pages, or puts the whole page back when the box is null. */
   const crop = useCallback(
     async (box: Box | null, pages?: number[]) =>
@@ -834,6 +841,7 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    extractAllText,
     crop,
     addWatermark,
     setLabels,

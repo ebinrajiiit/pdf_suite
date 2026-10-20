@@ -1008,6 +1008,90 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("the marks list filters, searches and sorts by page", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "review.pdf", await textFixture([["One"], ["Two"]]));
+
+  // A note on page two, then a box on page one: placed out of page order, so
+  // sorting has something to do.
+  await page.getByTestId("viewer").evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const second = page.getByTestId("annots-1");
+  await expect(second).toBeVisible();
+  await page.getByTestId("tool-note").click();
+  const secondBox = (await second.boundingBox())!;
+  // Near the bottom of the page: scrolled to the end, the top of a full-height
+  // page is above the window and a click there lands nowhere.
+  await page.mouse.click(secondBox.x + 60, secondBox.y + secondBox.height - 80);
+  await page.getByTestId("annotation-text").fill("Check the figures");
+  await page.getByRole("button", { name: "Place" }).click();
+
+  await page.getByTestId("viewer").evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await expect(page.getByTestId("annots-0")).toBeVisible();
+  const firstBox = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-square").click();
+  await page.mouse.move(firstBox.x + 20, firstBox.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(firstBox.x + 120, firstBox.y + 90, { steps: 4 });
+  await page.mouse.up();
+
+  await page.getByTestId("tab-comments").click();
+  // Sorted by page, so the box on page one comes first even though it was
+  // placed second.
+  await expect(page.getByTestId("comments").locator("li").first()).toContainText("Box");
+
+  // Searching the text of the marks.
+  await page.getByTestId("comment-search").fill("figures");
+  await expect(page.getByTestId("comments").locator("li")).toHaveCount(1);
+  await expect(page.getByTestId("comments")).toContainText("Note");
+
+  // And filtering by kind.
+  await page.getByTestId("comment-search").fill("");
+  await page.getByTestId("comment-kind").selectOption("square");
+  await expect(page.getByTestId("comments").locator("li")).toHaveCount(1);
+  await expect(page.getByTestId("comments")).toContainText("Box");
+
+  // A filter that matches nothing says so rather than looking empty.
+  await page.getByTestId("comment-search").fill("nothing here");
+  await expect(page.getByTestId("comments-none")).toBeVisible();
+});
+
+test("two-up puts a pair of pages side by side", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "book.pdf", await textFixture([["One"], ["Two"], ["Three"], ["Four"]]));
+  await expect(page.getByText("4 pages")).toBeVisible();
+
+  const pageBox = (position: number) =>
+    page.locator(`[data-page-position="${position}"]`).boundingBox();
+
+  // Continuous: the second page is below the first.
+  const firstDown = (await pageBox(0))!;
+  const secondDown = (await pageBox(1))!;
+  expect(secondDown.y).toBeGreaterThan(firstDown.y + firstDown.height / 2);
+
+  await page.getByTestId("facing").click();
+  await expect
+    .poll(async () => {
+      const first = await pageBox(0);
+      const second = await pageBox(1);
+      return first && second ? Math.abs(first.y - second.y) : 999;
+    })
+    .toBeLessThan(4);
+
+  // Side by side, and in reading order: page one on the left.
+  const first = (await pageBox(0))!;
+  const second = (await pageBox(1))!;
+  expect(first.x).toBeLessThan(second.x);
+  expect(second.x).toBeGreaterThan(first.x + first.width - 4);
+});
+
 test("crops the page, watermarks it, and numbers the front matter apart", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

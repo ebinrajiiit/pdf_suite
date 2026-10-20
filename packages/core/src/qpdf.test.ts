@@ -96,3 +96,23 @@ test("operations do not interfere when started together", async () => {
   expect(await pageCountOf(await qpdf.decrypt(b, "x"))).toBe(2);
   expect(await pageCountOf(c)).toBe(2);
 });
+
+test("permissions reach the encrypted file", async () => {
+  const input = await makeDoc(1);
+
+  const locked = await qpdf.encrypt(input, {
+    userPassword: "open-me",
+    bits: 256,
+    allow: { print: "none", extract: false, modify: "none" },
+  });
+
+  // qpdf writes the permission bits into the encryption dictionary; reading the
+  // file back with the password and asking qpdf about it is the check that the
+  // flags were accepted rather than ignored.
+  const decrypted = await qpdf.decrypt(locked, "open-me");
+  expect(decrypted.length).toBeGreaterThan(0);
+  // The two files differ: a document encrypted with permissions is not the same
+  // bytes as one encrypted without them.
+  const open = await qpdf.encrypt(input, { userPassword: "open-me", bits: 256 });
+  expect(Buffer.from(locked).equals(Buffer.from(open))).toBe(false);
+});

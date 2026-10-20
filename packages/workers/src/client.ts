@@ -5,6 +5,7 @@ import {
   type Bookmark,
   type Box,
   type DocumentInfo,
+  type EncryptOptions,
   type PageLabelRange,
   type WatermarkOptions,
   type FieldValues,
@@ -132,6 +133,8 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** The document's text in display order, for saving as a plain text file. */
+  toText(order: number[], onProgress?: OnProgress): Promise<string>;
   /** Crops pages, or puts the whole page back when the box is null. */
   crop(
     box: Box | null,
@@ -176,8 +179,11 @@ export interface PdfWorkerClient {
     verified: boolean;
     leftovers: RedactionResult["leftovers"];
   }>;
-  /** Sets the password applied when saving, or null to remove protection. */
-  protect(password: string | null): Promise<DocumentInfo>;
+  /**
+   * Sets the password applied when saving, or null to remove protection, with
+   * what a reader may do without the owner password.
+   */
+  protect(password: string | null, allow?: EncryptOptions["allow"]): Promise<DocumentInfo>;
   /** Searches the given display order, reporting progress per page. */
   search(
     query: string,
@@ -363,6 +369,9 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
       return expect(await send({ kind: "setOutline", bookmarks, order, annotations }), "document")
         .info;
     },
+    async toText(order, onProgress) {
+      return expect(await send({ kind: "toText", order }, [], onProgress), "text").text;
+    },
     async crop(box, pages, order, annotations) {
       return expect(
         await send({ kind: "crop", box, ...(pages ? { pages } : {}), order, annotations }),
@@ -410,8 +419,11 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         leftovers: reply.leftovers,
       };
     },
-    async protect(password) {
-      return expect(await send({ kind: "protect", password }), "document").info;
+    async protect(password, allow) {
+      return expect(
+        await send({ kind: "protect", password, ...(allow ? { allow } : {}) }),
+        "document",
+      ).info;
     },
     async search(query, order, onProgress) {
       const reply = expect(await send({ kind: "search", query, order }, [], onProgress), "hits");

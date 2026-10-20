@@ -6,6 +6,7 @@ export type {
   Bookmark,
   Box,
   DocumentInfo,
+  EncryptOptions,
   PageLabelRange,
   WatermarkOptions,
   DocumentProperties,

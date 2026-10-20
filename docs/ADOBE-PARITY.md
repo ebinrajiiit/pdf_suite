@@ -128,7 +128,8 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | PDF → Word, Excel, PowerPoint, RTF | Missing. Phase 4 lists Word and Excel as beta. Note the licence trap: `pdf2docx` pulls PyMuPDF and is banned |
-| PDF → HTML, XML, plain text | Missing. Plain text is nearly free — the engine already extracts it |
+| PDF → plain text | Done, in display order with a page break and number per page |
+| PDF → HTML, XML | Missing |
 | PDF → images | Done (PNG) |
 | PDF/A, PDF/X, PDF/E conversion and validation | Missing. veraPDF is the usual validator and it is Apache-2.0, so it is allowed; conversion is the harder half |
 
@@ -147,7 +148,7 @@ What an Acrobat user would miss before anything subtle:
 | Attach a file or audio as a comment | Missing |
 | Comment opacity, default properties, author name | Colour only |
 | Replies, status (accepted, rejected, completed), resolved | Missing — `/IRT` and `/RT` |
-| Comment list: filter, sort, search, summarise | Lists and jumps; none of the four |
+| Comment list: filter, sort, search | Done: by kind, by text, and in page order. A printed summary is missing |
 | Import/export comments (FDF, XFDF) | Missing, and worth having: it is how review happens without a server, which fits this product exactly |
 | Shared review, Send for comment | Will not do — it uploads |
 | Measuring tools (distance, perimeter, area, scale, snap) | Missing. Engineering and architecture drawings need these |
@@ -170,7 +171,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Password encryption | Done, AES-256 via qpdf |
-| Permissions (printing, copying, editing) separately from opening | Missing — qpdf supports the flags; the UI does not expose them |
+| Permissions (printing, copying, editing) separately from opening | Done: printing, copying and changes, set with the password. The panel says what they are — a request the reader honours, not a lock |
 | Certificate encryption | Missing |
 | Security policies | Missing |
 | Redact | Done, with true content removal and a verification pass |
@@ -230,7 +231,7 @@ come from the same work.
 | Action Wizard (batch) | Missing. Phase 4 covers the institutional version: grade cards from a template and a CSV |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
-| View modes: single page, two-up, facing, full screen, split | Missing — continuous scroll and zoom only, though the status bar now says which page is being read |
+| View modes | Two-up (facing) and continuous, with the page box saying which page is being read. Single page, full screen and split are missing |
 | Print: booklets, posters, scaling, print comments, print a range | Missing — printing hands the whole document to the platform's viewer, which brings its own dialog |
 | Snapshot tool, rulers, guides, grid | Missing |
 | Geospatial PDF | Missing |

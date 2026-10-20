@@ -20,6 +20,7 @@ import {
   split,
   stampPages,
   uncropPages,
+  type EncryptOptions,
   watermark,
   type Annotation,
   type Qpdf,
@@ -50,6 +51,8 @@ let bytes: Uint8Array | undefined;
  * opening a protected document and saving it would quietly strip its password.
  */
 let protection: string | null = null;
+/** What a reader may do without the owner password, when one is set. */
+let permissions: EncryptOptions["allow"];
 /**
  * Undo history. The worker already holds every version of the document, so this
  * is where undo costs least: a step is the bytes as they were before an
@@ -172,6 +175,7 @@ async function openBytes(
 async function openChosen(id: number, input: Uint8Array): Promise<DocumentInfo> {
   repaired = false;
   protection = null;
+  permissions = undefined;
   locked = undefined;
   // Another document is not another step in this one's history.
   past = [];
@@ -317,6 +321,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       // Protection is applied on save, not now: the working copy has to stay
       // readable by pdf-lib for every other operation.
       protection = request.password;
+      permissions = request.password === null ? undefined : request.allow;
       if (!doc) throw new Error("no document is open");
       post({ id, kind: "document", info: await info(doc, bytes) });
       return;
@@ -372,6 +377,19 @@ async function handle(request: WorkerRequest): Promise<void> {
       protection = null;
       repaired = false;
       post({ id, kind: "document", info: await openBytes(id, built) });
+      return;
+    }
+    case "toText": {
+      if (!doc) throw new Error("no document is open");
+      const pages: string[] = [];
+      for (const [position, page] of request.order.entries()) {
+        throwIfCancelled(id);
+        const runs = await doc.extractText(page).catch(() => []);
+        // A page break, and a number, because a text file loses both otherwise.
+        pages.push(`[Page ${position + 1}]\n${runs.map((run) => run.text).join("\n")}`);
+        post({ id, kind: "progress", done: position + 1, total: request.order.length });
+      }
+      post({ id, kind: "text", text: pages.join("\n\n") });
       return;
     }
     case "toImages": {
@@ -634,7 +652,12 @@ async function handle(request: WorkerRequest): Promise<void> {
       const out =
         protection === null
           ? materialised
-          : await (await qpdf()).encrypt(materialised, { userPassword: protection });
+          : await (
+              await qpdf()
+            ).encrypt(materialised, {
+              userPassword: protection,
+              ...(permissions ? { allow: permissions } : {}),
+            });
       throwIfCancelled(id);
       // An op's output is ours to give away; the open document's own bytes have
       // to be copied, because transferring would detach them.
