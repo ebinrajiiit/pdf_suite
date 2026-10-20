@@ -18,6 +18,8 @@ export { readProperties, setProperties } from "./properties.js";
 export { attachFile, listAttachments, readAttachment, removeAttachment } from "./attachments.js";
 export type { Attachment } from "./attachments.js";
 export { checkAccessibility, fixAccessibility } from "./accessibility.js";
+export { diffDocuments, diffWords } from "./diff.js";
+export type { DocumentDiff, PageDiff } from "./diff.js";
 export { cropPages, setPageLabels, uncropPages, watermark } from "./pages.js";
 export type { Box, PageLabelRange, WatermarkOptions } from "./pages.js";
 export type { AccessibilityIssue, CheckOptions, FixOptions } from "./accessibility.js";

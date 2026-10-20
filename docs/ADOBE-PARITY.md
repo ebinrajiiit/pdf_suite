@@ -227,7 +227,7 @@ come from the same work.
 
 | Acrobat | Here |
 | --- | --- |
-| Compare two documents | Missing. Phase 3 |
+| Compare two documents | Text comparison, page by page, with the words that went and the words that arrived. Pages are paired by position, not matched up, and the panel says so. A visual diff is missing |
 | Action Wizard (batch) | Missing. Phase 4 covers the institutional version: grade cards from a template and a CSV |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |

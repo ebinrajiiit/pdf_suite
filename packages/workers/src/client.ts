@@ -5,6 +5,7 @@ import {
   type Attachment,
   type Bookmark,
   type Box,
+  type DocumentDiff,
   type DocumentInfo,
   type EncryptOptions,
   type NewField,
@@ -72,6 +73,13 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** Compares another document with this one and reports what differs. */
+  compare(
+    other: ArrayBuffer,
+    order: number[],
+    annotations: Annotation[],
+    onProgress?: OnProgress,
+  ): Promise<DocumentDiff>;
   /** Files carried inside the document. */
   attachments(order: number[], annotations: Annotation[]): Promise<Attachment[]>;
   attach(
@@ -338,6 +346,12 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async compare(other, order, annotations, onProgress) {
+      return expect(
+        await send({ kind: "compare", other, order, annotations }, [other], onProgress),
+        "compared",
+      ).diff;
     },
     async attachments(order, annotations) {
       return expect(await send({ kind: "attachments", order, annotations }), "attached").files;

@@ -25,6 +25,7 @@ import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/co
 import type {
   AccessibilityIssue,
   Attachment,
+  DocumentDiff,
   EditableText,
   PageLabelRange,
   Found,
@@ -77,6 +78,7 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    compare,
     attachments,
     attach,
     readAttachment,
@@ -100,6 +102,7 @@ export function App() {
   const searchInput = useRef<HTMLInputElement>(null);
   const mergeInput = useRef<HTMLInputElement>(null);
   const attachInput = useRef<HTMLInputElement>(null);
+  const compareInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -189,6 +192,8 @@ export function App() {
   );
   /** Files carried inside the document, read when the panel is opened. */
   const [attached, setAttached] = useState<Attachment[]>([]);
+  /** What a comparison found, and the name of what it was compared with. */
+  const [diff, setDiff] = useState<{ against: string; diff: DocumentDiff } | undefined>();
   const [colour, setColour] = useState<AnnotColor>(COLOURS[0]!.value);
   const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
   /** Areas marked for redaction, by source page, before they are applied. */
@@ -924,6 +929,29 @@ export function App() {
     void attachments().then(setAttached);
   }, [attachments, info]);
 
+  /** Compares the open document with another file the user picks. */
+  const handleCompare = useCallback(async () => {
+    if (!canUsePicker()) {
+      compareInput.current?.click();
+      return;
+    }
+    const picked = await pickFiles(false);
+    if (!picked[0]) return;
+    const found = await compare(picked[0].bytes);
+    if (found) setDiff({ against: picked[0].name, diff: found });
+  }, [compare]);
+
+  const onCompareInput = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      const [file] = await readFiles(files);
+      if (!file) return;
+      const found = await compare(file.bytes);
+      if (found) setDiff({ against: file.name, diff: found });
+    },
+    [compare],
+  );
+
   const attachOne = useCallback(
     async (file: { name: string; bytes: ArrayBuffer; type?: string | undefined }) => {
       const done = await attach(file);
@@ -1252,6 +1280,14 @@ export function App() {
         className="visually-hidden"
         onChange={(event) => void onAttachInput(event.target.files)}
       />
+      <input
+        ref={compareInput}
+        type="file"
+        accept="application/pdf,.pdf"
+        data-testid="compare-input"
+        className="visually-hidden"
+        onChange={(event) => void onCompareInput(event.target.files)}
+      />
 
       {state.needsPassword ? (
         <form
@@ -1434,6 +1470,58 @@ export function App() {
             </button>
           </div>
         </form>
+      ) : null}
+
+      {diff ? (
+        <div className="prompt hfpanel" data-testid="diff-panel">
+          <div className="hfrow">
+            <span className="hflabel">Changes</span>
+            <span className="hfnote" data-testid="diff-summary">
+              {diff.diff.changed === 0 &&
+              diff.diff.onlyHere.length === 0 &&
+              diff.diff.onlyThere.length === 0
+                ? `Nothing differs from ${diff.against}.`
+                : `${diff.diff.changed} page${diff.diff.changed === 1 ? "" : "s"} differ from ${
+                    diff.against
+                  }` +
+                  (diff.diff.onlyHere.length > 0
+                    ? `, and ${diff.diff.onlyHere.length} page${
+                        diff.diff.onlyHere.length === 1 ? " is" : "s are"
+                      } only here`
+                    : "") +
+                  (diff.diff.onlyThere.length > 0
+                    ? `, and ${diff.diff.onlyThere.length} page${
+                        diff.diff.onlyThere.length === 1 ? " is" : "s are"
+                      } only in that one`
+                    : "") +
+                  ". Pages are paired by position, not matched up."}
+            </span>
+            <button type="button" className="action" onClick={() => setDiff(undefined)}>
+              Close
+            </button>
+          </div>
+          <ul className="difflist" data-testid="diff-list">
+            {diff.diff.pages
+              .filter((page) => !page.same)
+              .map((page) => (
+                <li key={page.page} data-testid={`diff-page-${page.page}`}>
+                  <button type="button" className="diff-page" onClick={() => setGoTo(page.page)}>
+                    Page {page.page + 1}
+                  </button>
+                  {page.removed.map((text, index) => (
+                    <span key={`-${index}`} className="diff-removed">
+                      {text}
+                    </span>
+                  ))}
+                  {page.added.map((text, index) => (
+                    <span key={`+${index}`} className="diff-added">
+                      {text}
+                    </span>
+                  ))}
+                </li>
+              ))}
+          </ul>
+        </div>
       ) : null}
 
       {pendingField && info ? (
@@ -2478,6 +2566,10 @@ export function App() {
                   testId: "images-to-pdf",
                   off: !ready,
                   hint: "Turn JPEG or PNG files into a PDF",
+                })}
+                {action("Compare with…", () => void handleCompare(), {
+                  testId: "compare",
+                  hint: "What changed between this document and another version of it",
                 })}
                 {action("To text…", () => void handleSaveText(), {
                   testId: "to-text",

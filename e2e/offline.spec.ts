@@ -1008,6 +1008,52 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("compares two versions and says what changed", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // The newer version is the one open.
+  await openFixture(
+    page,
+    "circular-v2.pdf",
+    await textFixture([["Circular 12 of 2026"], ["Fees are due in June"], ["Signed"]]),
+  );
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.setInputFiles('[data-testid="compare-input"]', {
+    name: "circular-v1.pdf",
+    mimeType: "application/pdf",
+    buffer: await textFixture([["Circular 12 of 2026"], ["Fees are due in May"], ["Signed"]]),
+  });
+
+  await expect(page.getByTestId("diff-summary")).toContainText("1 page differ", {
+    timeout: 30_000,
+  });
+  // Only the page that changed is listed, with the words either way round.
+  await expect(page.getByTestId("diff-page-1")).toContainText("May");
+  await expect(page.getByTestId("diff-page-1")).toContainText("June");
+  await expect(page.getByTestId("diff-page-0")).toBeHidden();
+});
+
+test("comparing against a shorter document says which pages are new", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "long.pdf", await textFixture([["One"], ["Two"], ["Three"]]));
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.setInputFiles('[data-testid="compare-input"]', {
+    name: "short.pdf",
+    mimeType: "application/pdf",
+    buffer: await textFixture([["One"]]),
+  });
+
+  await expect(page.getByTestId("diff-summary")).toContainText("2 pages are only here", {
+    timeout: 30_000,
+  });
+});
+
 test("carries a file inside the document, and gives it back", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

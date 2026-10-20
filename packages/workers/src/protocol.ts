@@ -9,6 +9,7 @@ import type {
   AccessibilityIssue,
   Annotation,
   Attachment,
+  DocumentDiff,
   NewField,
   Bookmark,
   Box,
@@ -69,6 +70,8 @@ export type {
   AccessibilityIssue,
   Annotation,
   Attachment,
+  DocumentDiff,
+  PageDiff,
   NewField,
   AnnotRect,
   Bookmark,
@@ -216,6 +219,8 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Compares another document with this one, page by page, and reports. */
+    | { kind: "compare"; other: ArrayBuffer; order: number[]; annotations: Annotation[] }
     /** Files carried inside the document. */
     | { kind: "attachments"; order: number[]; annotations: Annotation[] }
     | {
@@ -311,6 +316,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "pageImages"; images: PageImage[] }
   | { kind: "text"; text: string }
   | { kind: "attached"; files: Attachment[] }
+  | { kind: "compared"; diff: DocumentDiff }
   | { kind: "attachment"; name: string; bytes: ArrayBuffer }
   | {
       kind: "imagesEdited";
@@ -366,6 +372,7 @@ export type TerminalResponse = Extract<
       | "text"
       | "attached"
       | "attachment"
+      | "compared"
       | "imagesEdited"
       | "found"
       | "hidden"

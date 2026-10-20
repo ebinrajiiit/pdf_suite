@@ -3,6 +3,7 @@ import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
   Attachment,
+  DocumentDiff,
   EncryptOptions,
   Bookmark,
   Box,
@@ -700,6 +701,15 @@ export function useDocument() {
     [run],
   );
 
+  /** Compares another document with this one. Changes nothing. */
+  const compare = useCallback(
+    async (other: ArrayBuffer): Promise<DocumentDiff | undefined> =>
+      run("Comparing", (worker) =>
+        worker.compare(other, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
   /** The files carried inside the document. */
   const attachments = useCallback(async (): Promise<Attachment[]> => {
     const worker = client.current;
@@ -895,6 +905,7 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    compare,
     attachments,
     attach,
     readAttachment,

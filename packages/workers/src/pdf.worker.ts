@@ -3,6 +3,7 @@ import {
   addField,
   annotate,
   attachFile,
+  diffDocuments,
   listAttachments,
   readAttachment,
   removeAttachment,
@@ -496,6 +497,36 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "compare": {
+      if (!engine) throw new Error("worker not initialised");
+      if (!doc) throw new Error("no document is open");
+
+      /** Every page's text, in display order, as one string per page. */
+      const textOf = async (handle: DocHandle, pages: number[]) => {
+        const out: string[] = [];
+        for (const [position, page] of pages.entries()) {
+          throwIfCancelled(id);
+          const runs = await handle.extractText(page).catch(() => []);
+          out.push(runs.map((run) => run.text).join(" "));
+          post({ id, kind: "progress", done: position + 1, total: pages.length * 2 });
+        }
+        return out;
+      };
+
+      // An empty order means the caller has no page order of its own yet — a
+      // comparison asked for before the UI caught up. Comparing nothing against
+      // something is never the question, so this falls back to every page.
+      const pages = request.order.length > 0 ? request.order : [...Array(doc.pageCount()).keys()];
+      const ours = await textOf(doc, pages);
+      const otherHandle = await engine.open(request.other);
+      try {
+        const theirs = await textOf(otherHandle, [...Array(otherHandle.pageCount()).keys()]);
+        post({ id, kind: "compared", diff: diffDocuments(theirs, ours) });
+      } finally {
+        otherHandle.close();
+      }
       return;
     }
     case "attachments": {
