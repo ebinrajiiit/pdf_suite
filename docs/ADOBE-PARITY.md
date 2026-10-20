@@ -229,7 +229,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Compare two documents | Text comparison, page by page, with the words that went and the words that arrived. Pages are paired by position, not matched up, and the panel says so. A visual diff is missing |
-| Action Wizard (batch) | Missing. Phase 4 covers the institutional version: grade cards from a template and a CSV |
+| Action Wizard (batch) | One action over many files: page numbers, watermark, remove hidden information, redact by pattern, compress. Each file is saved as a new document and a failure does not stop the rest. Recorded multi-step actions, and grade cards from a template and a CSV, are still to come |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
 | View modes | Continuous, two-up and single page, with the page box as the way through the document, and full screen. Split view is missing |

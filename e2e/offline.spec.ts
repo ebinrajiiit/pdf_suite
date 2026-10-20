@@ -1489,6 +1489,52 @@ test("carries a file inside the document, and gives it back", async ({ page }) =
   await expect(page.getByTestId("attachments-empty")).toBeVisible();
 });
 
+test("does one thing to many files at once", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await page.getByTestId("batch").click();
+  await expect(page.getByTestId("batch-panel")).toBeVisible();
+  await page.getByTestId("batch-action").selectOption("redact");
+
+  // Three documents, two with an Aadhaar number in them.
+  const downloads: Promise<unknown>[] = [];
+  page.on("download", (download) => downloads.push(download.path()));
+
+  await page.setInputFiles('[data-testid="batch-input"]', [
+    {
+      name: "one.pdf",
+      mimeType: "application/pdf",
+      buffer: await textFixture([["Name: A", "Aadhaar: 1234 5678 9012"]]),
+    },
+    {
+      name: "two.pdf",
+      mimeType: "application/pdf",
+      buffer: await textFixture([["Name: B", "Aadhaar 2345-6789-0123"]]),
+    },
+    {
+      name: "three.pdf",
+      mimeType: "application/pdf",
+      buffer: await textFixture([["Name: C", "No number here"]]),
+    },
+  ]);
+
+  const results = page.getByTestId("batch-results");
+  await expect(results).toBeVisible({ timeout: 60_000 });
+  await expect(results).toContainText("one.pdf");
+  await expect(results).toContainText("removed 1 match");
+  // The one with nothing to redact says so rather than failing.
+  await expect(results).toContainText("nothing matched");
+
+  // Each finished file is saved as its own document.
+  await expect.poll(() => downloads.length, { timeout: 30_000 }).toBe(3);
+
+  // And the document that was open — none — is still none: a batch does not
+  // disturb what you are working on.
+  await expect(page.getByTestId("dropzone")).toBeHidden();
+});
+
 test("a calculated field adds up the others, and is written into the file", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

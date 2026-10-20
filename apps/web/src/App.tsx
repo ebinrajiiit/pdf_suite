@@ -61,6 +61,7 @@ import {
   suffixName,
 } from "./file-io.js";
 import { useDocument } from "./use-document.js";
+import { runBatch, type BatchAction, type BatchResult } from "./batch.js";
 
 export function App() {
   const {
@@ -153,6 +154,13 @@ export function App() {
     kind: "pdfa" | "print";
     issues: StandardIssue[];
   } | null>(null);
+
+  /** Running one action over many files at once. */
+  const [batching, setBatching] = useState(false);
+  const [batchAction, setBatchAction] = useState<BatchAction["kind"]>("number");
+  const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
+  const [batchBusy, setBatchBusy] = useState<string | null>(null);
+  const batchInput = useRef<HTMLInputElement>(null);
 
   /** Whether this machine can turn an Office document into a PDF, or scan. */
   const [office, setOffice] = useState(false);
@@ -1171,6 +1179,49 @@ export function App() {
     void canScan().then(setScanner);
   }, []);
 
+  /** One action over every file chosen, each saved as it finishes. */
+  const onBatchInput = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      const picked = await readFiles(files);
+      setBatchResults(null);
+
+      const action: BatchAction =
+        batchAction === "number"
+          ? { kind: "number", options: { footer: ["", "Page {n} of {total}", ""] } }
+          : batchAction === "watermark"
+            ? { kind: "watermark", options: { text: markText, opacity: markOpacity / 100 } }
+            : batchAction === "redact"
+              ? { kind: "redact", patterns: ["aadhaar", "pan", "phone", "email"] }
+              : batchAction === "compress"
+                ? { kind: "compress" }
+                : { kind: "sanitise" };
+
+      const results = await runBatch(picked, action, (progress) =>
+        setBatchBusy(
+          progress.name === ""
+            ? null
+            : `${progress.name} (${progress.done + 1} of ${progress.total})`,
+        ),
+      );
+      setBatchBusy(null);
+      setBatchResults(results);
+
+      // Each finished file is saved as its own document; nothing is written
+      // over the originals.
+      for (const result of results) {
+        if (!result.bytes) continue;
+        await saveBytes(
+          result.bytes,
+          suffixName(result.name, batchAction),
+          undefined,
+          "application/pdf",
+        );
+      }
+    },
+    [batchAction, markOpacity, markText],
+  );
+
   const handleScan = useCallback(async () => {
     try {
       const page = await scanPage(300);
@@ -1495,6 +1546,11 @@ export function App() {
                 },
               )
             : null}
+          {action("Batch…", () => setBatching((open) => !open), {
+            testId: "batch",
+            off: !ready,
+            hint: "Do one thing to many files at once",
+          })}
           {info
             ? action("Save", () => void handleSave(), { hint: "Save the document (⌘S)" })
             : null}
@@ -1631,6 +1687,15 @@ export function App() {
         data-testid="compare-input"
         className="visually-hidden"
         onChange={(event) => void onCompareInput(event.target.files)}
+      />
+      <input
+        ref={batchInput}
+        type="file"
+        accept="application/pdf,.pdf"
+        multiple
+        data-testid="batch-input"
+        className="visually-hidden"
+        onChange={(event) => void onBatchInput(event.target.files)}
       />
       <input
         ref={pictureInput}
@@ -2211,6 +2276,57 @@ export function App() {
               Cancel
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {batching ? (
+        <div className="prompt hfpanel" data-testid="batch-panel">
+          <div className="hfrow">
+            <span className="hflabel">Batch</span>
+            <label className="hfcheck">
+              Do this
+              <select
+                aria-label="What to do to each file"
+                data-testid="batch-action"
+                value={batchAction}
+                onChange={(event) => setBatchAction(event.target.value as BatchAction["kind"])}
+              >
+                <option value="number">Add page numbers</option>
+                <option value="watermark">Add the watermark</option>
+                <option value="sanitise">Remove hidden information</option>
+                <option value="redact">Redact Aadhaar, PAN, phone and email</option>
+                <option value="compress">Compress</option>
+              </select>
+            </label>
+            {action("Choose files…", () => batchInput.current?.click(), {
+              testId: "batch-choose",
+              off: batchBusy !== null,
+            })}
+            <span className="hfnote">
+              Each file is saved as a new document; the originals are not written over. A file that
+              fails does not stop the rest.
+            </span>
+            <button type="button" className="action" onClick={() => setBatching(false)}>
+              Close
+            </button>
+          </div>
+          {batchBusy ? (
+            <div className="hfrow">
+              <span className="hfnote" data-testid="batch-busy">
+                Working on {batchBusy}
+              </span>
+            </div>
+          ) : null}
+          {batchResults ? (
+            <ul className="a11ylist" data-testid="batch-results">
+              {batchResults.map((result) => (
+                <li key={result.name} className={result.failed ? "a11y-fail" : "a11y-ok"}>
+                  <strong>{result.name}</strong>
+                  <span>{result.note}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
