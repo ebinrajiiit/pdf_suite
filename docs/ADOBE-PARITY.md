@@ -175,9 +175,9 @@ What an Acrobat user would miss before anything subtle:
 | Certificate encryption | Missing |
 | Security policies | Missing |
 | Redact | Done, with true content removal and a verification pass |
-| Mark for redaction, then apply | Missing: ours removes immediately. Acrobat's two-step lets you review first |
+| Mark for redaction, then apply | Done: marks are `/Redact` annotations written into the file, so the clerk who marks need not be the registrar who applies. Removing immediately is still there for when nobody needs to review |
 | Find text or patterns and redact all | Done: Aadhaar, PAN, phone and email, plus any words. Matches are counted and sampled before anything is destroyed |
-| Redaction codes and overlay text | Missing |
+| Redaction codes and overlay text | Done: the code is printed in the box, sized to fit it |
 | Sanitise / remove hidden information | Done for the description, XMP, embedded files, scripts and actions, with comments and links optional. Hidden layers and deleted-but-present content are still missing |
 
 ### Sign

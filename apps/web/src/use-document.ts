@@ -18,6 +18,7 @@ import type {
   Link,
   LinkTarget,
   PageImage,
+  RedactionMark,
   Reply,
   SanitiseOptions,
   SanitiseReport,
@@ -704,6 +705,33 @@ export function useDocument() {
     [run],
   );
 
+  /** Writes redaction marks into the document, destroying nothing yet. */
+  const markRedactions = useCallback(
+    async (marks: RedactionMark[]) =>
+      rewrite("Marking", (worker) =>
+        worker.markRedactions(marks, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  /** Applies every mark waiting in the document. */
+  const applyRedactions = useCallback(async () => {
+    const result = await run("Removing the marked content", (worker) =>
+      worker.applyRedactions(stateRef.current.order, stateRef.current.annotations),
+    );
+    if (!result) return undefined;
+    setDocVersion((v) => v + 1);
+    setState((s) => ({
+      ...s,
+      info: result.info,
+      order: result.info.pageSizes.map((_, i) => i),
+      annotations: [],
+      handle: undefined,
+      path: undefined,
+    }));
+    return result;
+  }, [run]);
+
   /** Turns layers on and off. */
   const setLayers = useCallback(
     async (visibility: Record<string, boolean>) =>
@@ -991,6 +1019,8 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    markRedactions,
+    applyRedactions,
     setLayers,
     links,
     addPageLink,

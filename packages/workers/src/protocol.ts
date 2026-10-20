@@ -12,6 +12,7 @@ import type {
   ExistingAnnotation,
   Layer,
   Link,
+  RedactionMark,
   LinkTarget,
   Reply,
   DocumentDiff,
@@ -67,6 +68,8 @@ export interface DocumentInfo {
   marks: ExistingAnnotation[];
   /** Optional content groups — layers — with whether each is on. */
   layers: Layer[];
+  /** Redaction marks waiting in the document, which nothing has applied yet. */
+  redactions: RedactionMark[];
 }
 
 /**
@@ -82,6 +85,7 @@ export type {
   ExistingAnnotation,
   Layer,
   Link,
+  RedactionMark,
   LinkTarget,
   Reply,
   DocumentDiff,
@@ -233,6 +237,15 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Writes redaction marks into the document, destroying nothing. */
+    | {
+        kind: "markRedactions";
+        marks: RedactionMark[];
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Applies every redaction mark waiting in the document, and verifies it. */
+    | { kind: "applyRedactions"; order: number[]; annotations: Annotation[] }
     /** Turns layers on and off, by the ids the info reported. */
     | {
         kind: "setLayers";

@@ -376,3 +376,47 @@ describe("the shapes a reviewer rings things with", () => {
     expect(caret.ops).toContain(" f");
   });
 });
+
+test("a measured line says how long it is, and is marked as a dimension", async () => {
+  const out = await annotate(await makeDoc(1), [
+    {
+      kind: "line",
+      page: 0,
+      x1: 50,
+      y1: 100,
+      x2: 194,
+      y2: 100,
+      arrow: "both",
+      measurement: "2.00 in",
+    },
+  ]);
+  const doc = await PDFDocument.load(out);
+  const annot = doc.context.lookup(doc.getPage(0).node.Annots()!.get(0)) as PDFDict;
+  expect(annot.get(PDFName.of("IT"))?.toString()).toBe("/LineDimension");
+  expect(String(annot.lookup(PDFName.of("Contents")))).toContain("2.00 in");
+
+  const form = (annot.lookup(PDFName.of("AP")) as PDFDict).lookup(PDFName.of("N")) as PDFRawStream;
+  const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+  // Drawn on the page, not only recorded in the dictionary.
+  expect(ops).toContain("(2.00 in) Tj");
+  // On a plate, or it disappears into the drawing underneath.
+  expect(ops).toContain("1 1 1 rg");
+});
+
+test("a measured area carries its number too", async () => {
+  const out = await annotate(await makeDoc(1), [
+    {
+      kind: "polygon",
+      page: 0,
+      points: [
+        { x: 0, y: 0 },
+        { x: 72, y: 0 },
+        { x: 72, y: 72 },
+      ],
+      measurement: "0.50 in²",
+    },
+  ]);
+  const doc = await PDFDocument.load(out);
+  const annot = doc.context.lookup(doc.getPage(0).node.Annots()!.get(0)) as PDFDict;
+  expect(annot.get(PDFName.of("IT"))?.toString()).toBe("/PolygonDimension");
+});

@@ -21,7 +21,16 @@ import {
 } from "@pdf-suite/ui";
 import type { Bookmark, NumberFormat, Slots } from "@pdf-suite/workers";
 import type { OutlineItem } from "@pdf-suite/engine";
-import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
+import {
+  area as areaOf,
+  distance as distanceOf,
+  formatMeasurement,
+  isSupportedImage,
+  perimeter,
+  SCALES,
+  type AnnotColor,
+  type AnnotRect,
+} from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
   Attachment,
@@ -79,6 +88,8 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    markRedactions,
+    applyRedactions,
     setLayers,
     links,
     addPageLink,
@@ -121,6 +132,13 @@ export function App() {
   /** The document's links, read with it, and one waiting to be opened. */
   const [pageLinks, setPageLinks] = useState<Link[]>([]);
   const [following, setFollowing] = useState<string | null>(null);
+
+  /** What a redaction box should say, if anything — the code a law requires. */
+  const [redactionCode, setRedactionCode] = useState("");
+
+  /** The drawing's scale, which turns points into something useful on site. */
+  const [scaleUnit, setScaleUnit] = useState<keyof typeof SCALES>("cm");
+  const [scalePerUnit, setScalePerUnit] = useState(1);
 
   /** A link box drawn but not yet told where to go. */
   const [pendingLink, setPendingLink] = useState<{
@@ -441,6 +459,38 @@ export function App() {
    * failed verification — a redaction the user believes happened but did not is
    * the worst possible outcome.
    */
+  /** Writes the boxes drawn here into the document as marks, removing nothing. */
+  const handleMarkRedactions = useCallback(async () => {
+    const marks = [...redactions.entries()].flatMap(([page, rects]) =>
+      rects.map((rect) => ({
+        page,
+        ...rect,
+        ...(redactionCode.trim() ? { overlayText: redactionCode.trim() } : {}),
+      })),
+    );
+    if (marks.length === 0) return;
+    const done = await markRedactions(marks);
+    if (!done) return;
+    setRedactions(new Map());
+    setSaved(
+      `Marked ${marks.length} area${marks.length === 1 ? "" : "s"} — nothing is removed until you apply them`,
+    );
+  }, [markRedactions, redactionCode, redactions]);
+
+  /** Applies the marks waiting in the document, and reports the verification. */
+  const handleApplyRedactions = useCallback(async () => {
+    const result = await applyRedactions();
+    if (!result) return;
+    const removed = Object.values(result.removed).reduce((n, c) => n + c, 0);
+    setSaved(
+      result.verified
+        ? `Removed ${removed} object${removed === 1 ? "" : "s"}; no text left in the redacted areas`
+        : `WARNING: text is still present after redacting (${result.leftovers.length} run${
+            result.leftovers.length === 1 ? "" : "s"
+          }). Do not share this file.`,
+    );
+  }, [applyRedactions]);
+
   const handleRedact = useCallback(async () => {
     const areas = [...redactions.entries()].map(([page, rects]) => ({ page, rects }));
     if (areas.length === 0) return;
@@ -851,6 +901,31 @@ export function App() {
         return;
       }
       if (shape.kind === "vector") {
+        if (tool === "measure") {
+          // A measurement is a line that says how long it is, which is what
+          // makes it a measurement rather than a line.
+          const scale = {
+            pointsPerUnit: SCALES[scaleUnit]!.pointsPerUnit * scalePerUnit,
+            unit: SCALES[scaleUnit]!.unit,
+          };
+          const length = distanceOf(
+            { x: shape.x1, y: shape.y1 },
+            { x: shape.x2, y: shape.y2 },
+            scale,
+          );
+          addAnnotation({
+            kind: "line",
+            page,
+            x1: shape.x1,
+            y1: shape.y1,
+            x2: shape.x2,
+            y2: shape.y2,
+            arrow: "both",
+            color: colour,
+            measurement: formatMeasurement(length, scale.unit),
+          });
+          return;
+        }
         addAnnotation({
           kind: "line",
           page,
@@ -864,6 +939,24 @@ export function App() {
         return;
       }
       if (shape.kind === "path") {
+        if (tool === "measurearea") {
+          const scale = {
+            pointsPerUnit: SCALES[scaleUnit]!.pointsPerUnit * scalePerUnit,
+            unit: SCALES[scaleUnit]!.unit,
+          };
+          const size = areaOf(shape.points, scale);
+          const round = perimeter(shape.points, scale, true);
+          addAnnotation({
+            kind: "polygon",
+            page,
+            points: shape.points,
+            color: colour,
+            measurement:
+              `${formatMeasurement(size, scale.unit, true)} · ` +
+              `${formatMeasurement(round, scale.unit)} round`,
+          });
+          return;
+        }
         addAnnotation(
           tool === "polyline"
             ? { kind: "polyline", page, points: shape.points, color: colour }
@@ -915,7 +1008,18 @@ export function App() {
       // A note or a text box needs its words before it is worth creating.
       setPendingPoint({ page, x: shape.x, y: shape.y });
     },
-    [addAnnotation, colour, crop, placeMarkup, positions, signature, stampLabel, tool],
+    [
+      addAnnotation,
+      colour,
+      crop,
+      placeMarkup,
+      positions,
+      scalePerUnit,
+      scaleUnit,
+      signature,
+      stampLabel,
+      tool,
+    ],
   );
 
   const commitPending = useCallback(
@@ -2660,6 +2764,39 @@ export function App() {
               <div className="tool-grid">
                 {(["polygon", "cloud", "polyline", "callout", "caret"] as const).map(toolButton)}
               </div>
+              <div className="tool-grid">
+                {(["measure", "measurearea"] as const).map(toolButton)}
+              </div>
+              {tool === "measure" || tool === "measurearea" ? (
+                <div className="tool-options" data-testid="scale-options">
+                  <span className="tool-options-label">Scale</span>
+                  <span className="hfcheck">
+                    1
+                    <select
+                      aria-label="Drawing unit"
+                      data-testid="scale-unit"
+                      value={scaleUnit}
+                      onChange={(event) => setScaleUnit(event.target.value as keyof typeof SCALES)}
+                    >
+                      {Object.keys(SCALES).map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    =
+                    <input
+                      type="number"
+                      min={0.001}
+                      step={0.5}
+                      value={scalePerUnit}
+                      data-testid="scale-per-unit"
+                      onChange={(event) => setScalePerUnit(event.target.valueAsNumber || 1)}
+                    />
+                    on the drawing
+                  </span>
+                </div>
+              ) : null}
               <div className="tool-grid">{(["stamp", "signature"] as const).map(toolButton)}</div>
               {tool && ["polygon", "cloud", "polyline"].includes(tool) ? (
                 <p className="tool-hint" data-testid="path-hint">
@@ -2746,17 +2883,53 @@ export function App() {
                   hint: "Find Aadhaar or PAN numbers, emails, phone numbers or words, and remove every one",
                 })}
               </div>
-              {redactionCount > 0
-                ? action(
-                    `Remove ${redactionCount} area${redactionCount === 1 ? "" : "s"}`,
+              {tool === "redact" || redactionCount > 0 ? (
+                <div className="tool-options">
+                  <span className="tool-options-label">Says</span>
+                  <input
+                    className="hfslot"
+                    placeholder="Code to print in the box, e.g. s.8(1)(j)"
+                    data-testid="redaction-code"
+                    value={redactionCode}
+                    onChange={(event) => setRedactionCode(event.target.value)}
+                  />
+                </div>
+              ) : null}
+              {redactionCount > 0 ? (
+                <div className="action-row">
+                  {action(
+                    `Mark ${redactionCount} area${redactionCount === 1 ? "" : "s"}`,
+                    () => void handleMarkRedactions(),
+                    {
+                      testId: "mark-redaction",
+                      hint: "Writes the marks into the document; nothing is removed yet",
+                    },
+                  )}
+                  {action(
+                    `Remove ${redactionCount} area${redactionCount === 1 ? "" : "s"} now`,
                     () => void handleRedact(),
                     {
                       testId: "apply-redaction",
                       danger: true,
-                      hint: "Delete the marked content permanently",
+                      hint: "Delete the marked content permanently, without marking it first",
                     },
-                  )
-                : null}
+                  )}
+                </div>
+              ) : null}
+              {info.redactions.length > 0 ? (
+                <div className="action-row" data-testid="pending-redactions">
+                  <span className="tool-hint">
+                    {info.redactions.length} area
+                    {info.redactions.length === 1 ? " is" : "s are"} marked for removal in this
+                    document.
+                  </span>
+                  {action("Apply the marks", () => void handleApplyRedactions(), {
+                    testId: "apply-marks",
+                    danger: true,
+                    hint: "Removes the marked content and blacks out where it was",
+                  })}
+                </div>
+              ) : null}
               <div className="action-row">
                 {action("↺ Left", () => void rotatePages(target, 270), { name: "Rotate left" })}
                 {action("↻ Right", () => void rotatePages(target, 90), { name: "Rotate right" })}
@@ -2990,6 +3163,8 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   arrow: "↗",
   polygon: "⬠",
   cloud: "☁",
+  measure: "↔",
+  measurearea: "▧",
   polyline: "〰",
   callout: "🗩",
   caret: "^",
@@ -3012,6 +3187,8 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   link: "Drag a box, then say where it should go",
   line: "Drag to draw a line",
   arrow: "Drag to draw an arrow, pointing where you finish",
+  measure: "Drag along what you want the length of",
+  measurearea: "Click each corner of an area, double-click to close it",
   polygon: "Click each corner, double-click to close the shape",
   cloud: "Click each corner, double-click to close it as a cloud",
   polyline: "Click each point, double-click to finish the path",
@@ -3038,6 +3215,8 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   arrow: "Arrow",
   polygon: "Shape",
   cloud: "Cloud",
+  measure: "Distance",
+  measurearea: "Area",
   polyline: "Path",
   callout: "Callout",
   caret: "Insert",

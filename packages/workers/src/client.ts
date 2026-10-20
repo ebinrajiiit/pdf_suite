@@ -22,6 +22,7 @@ import {
   type Link,
   type LinkTarget,
   type RedactArea,
+  type RedactionMark,
   type Reply,
   type RedactionResult,
   type TextEdit,
@@ -76,6 +77,22 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** Writes redaction marks, destroying nothing. */
+  markRedactions(
+    marks: RedactionMark[],
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Applies every mark waiting in the document, and checks the text is gone. */
+  applyRedactions(
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{
+    info: DocumentInfo;
+    removed: Record<number, number>;
+    verified: boolean;
+    leftovers: RedactionResult["leftovers"];
+  }>;
   /** Turns layers on and off. */
   setLayers(
     visibility: Record<string, boolean>,
@@ -380,6 +397,19 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async markRedactions(marks, order, annotations) {
+      return expect(await send({ kind: "markRedactions", marks, order, annotations }), "document")
+        .info;
+    },
+    async applyRedactions(order, annotations) {
+      const reply = expect(await send({ kind: "applyRedactions", order, annotations }), "redacted");
+      return {
+        info: reply.info,
+        removed: reply.removed,
+        verified: reply.verified,
+        leftovers: reply.leftovers,
+      };
     },
     async setLayers(visibility, order, annotations) {
       return expect(await send({ kind: "setLayers", visibility, order, annotations }), "document")

@@ -5,15 +5,19 @@ import {
   addReply,
   annotate,
   asAnnotations,
+  clearRedactionMarks,
+  drawRedactionBoxes,
   attachFile,
   deleteAnnotation,
   diffDocuments,
   fromXfdf,
   listAttachments,
+  markForRedaction,
   readAnnotations,
   readAttachment,
   readLayers,
   readLinks,
+  readRedactionMarks,
   removeAttachment,
   createQpdf,
   fillForm,
@@ -129,6 +133,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   // placed in this session but not yet written.
   const marks = bytesForForm ? await readAnnotations(bytesForForm).catch(() => []) : [];
   const layers = bytesForForm ? await readLayers(bytesForForm).catch(() => []) : [];
+  const redactions = bytesForForm ? await readRedactionMarks(bytesForForm).catch(() => []) : [];
   return {
     pageCount,
     pageSizes,
@@ -139,6 +144,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
     properties,
     marks,
     layers,
+    redactions,
     undo: past.length,
     redo: future.length,
   };
@@ -513,6 +519,45 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "markRedactions": {
+      const base = await materialise(id, request.order, request.annotations);
+      const marked = await markForRedaction(base, request.marks);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, marked, request) });
+      return;
+    }
+    case "applyRedactions": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      const marks = await readRedactionMarks(base);
+      if (marks.length === 0) throw new Error("there are no redaction marks to apply");
+
+      // Remove the content, then draw the boxes and their codes over where it
+      // was, then take the marks away: a mark that has been applied is a note
+      // about something that is no longer there.
+      const areas = [...new Map(marks.map((mark) => [mark.page, mark.page])).keys()].map(
+        (page) => ({
+          page,
+          rects: marks
+            .filter((mark) => mark.page === page)
+            .map((mark) => ({ x: mark.x, y: mark.y, w: mark.w, h: mark.h })),
+        }),
+      );
+      const result = await engine.redact(base, areas);
+      throwIfCancelled(id);
+      const boxed = await drawRedactionBoxes(result.bytes, marks);
+      const cleaned = await clearRedactionMarks(boxed);
+
+      post({
+        id,
+        kind: "redacted",
+        info: await openBytes(id, cleaned, request),
+        removed: result.removed,
+        verified: result.verified,
+        leftovers: result.leftovers,
+      });
       return;
     }
     case "setLayers": {

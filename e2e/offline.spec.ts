@@ -1008,6 +1008,83 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("marks a redaction for review, then applies it with its code", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "rti.pdf",
+    await textFixture([["Applicant: A Student", "Aadhaar: 1234 5678 9012"]]),
+  );
+
+  // Mark, with the code a public authority has to print in the box.
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-redact").click();
+  await page.getByTestId("redaction-code").fill("s.8(1)(j)");
+  await page.mouse.move(area.x + 40, area.y + 38);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 260, area.y + 58, { steps: 5 });
+  await page.mouse.up();
+  await page.getByTestId("mark-redaction").click();
+  await expect(page.getByTestId("status")).toContainText("nothing is removed until you apply", {
+    timeout: 30_000,
+  });
+
+  // The mark is in the document and the words are still there: this step is a
+  // promise, not an act.
+  await expect(page.getByTestId("pending-redactions")).toBeVisible();
+  await page.getByTestId("search-input").fill("5678");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  const marked = await saveAndRead(page, "Save");
+  expect((await annotationsOf(marked))[0]).toEqual(["/Redact"]);
+
+  // Apply: now the content goes, and the box says why.
+  await page.getByTestId("apply-marks").click();
+  await expect(page.getByTestId("status")).toContainText("no text left in the redacted areas", {
+    timeout: 60_000,
+  });
+  await page.getByTestId("search-input").fill("5678");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+
+  // The mark itself is gone — it described something that is no longer there.
+  await expect(page.getByTestId("pending-redactions")).toBeHidden();
+  const applied = await saveAndRead(page, "Save");
+  expect((await annotationsOf(applied))[0]).toEqual([]);
+});
+
+test("measures a distance on a drawing, in the drawing's own units", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "plan.pdf", await textFixture([["Site plan"]]));
+
+  await page.getByTestId("tool-measure").click();
+  await expect(page.getByTestId("scale-options")).toBeVisible();
+  // One centimetre on the page is five metres on site.
+  await page.getByTestId("scale-unit").selectOption("cm");
+  await page.getByTestId("scale-per-unit").fill("0.2");
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.move(area.x + 60, area.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 260, area.y + 120, { steps: 6 });
+  await page.mouse.up();
+
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comments")).toContainText("Line");
+
+  // The measurement is on the page, and the file says it is a dimension.
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  const annot = doc.context.lookup(doc.getPage(0).node.Annots()!.get(0)) as PDFDict;
+  expect(annot.get(PDFName.of("IT"))?.toString()).toBe("/LineDimension");
+  expect(String(annot.lookup(PDFName.of("Contents")))).toMatch(/\d+(\.\d+)? cm/);
+});
+
 test("lists a drawing's layers and turns one off", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

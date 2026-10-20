@@ -34,6 +34,12 @@ interface Common {
   color?: AnnotColor;
   /** Shown as the annotation's author in other viewers. */
   author?: string;
+  /**
+   * A measurement this mark reports — "3.40 m", "8.25 m² · 12.0 m round".
+   * Written as the mark's contents and drawn beside it, which is what makes a
+   * line a dimension rather than a line.
+   */
+  measurement?: string | undefined;
 }
 
 /** The quad-based markup kinds, which differ only in subtype and colour. */
@@ -293,6 +299,28 @@ function cloudOperators(points: InkPoint[], width: number, colour: AnnotColor): 
   return `${ops}S\nQ\n`;
 }
 
+/**
+ * The measurement written beside the mark that measured it, on a pale plate so
+ * it stays readable over a drawing.
+ */
+async function measurementLabel(
+  doc: PDFDocument,
+  x: number,
+  y: number,
+  text: string,
+  colour: AnnotColor,
+): Promise<string> {
+  const font = await stampFont(doc);
+  const size = 9;
+  const width = font.font.widthOfTextAtSize(text, size);
+  const [r, g, b] = colour;
+  return (
+    `q\n1 1 1 rg\n${n(x - width / 2 - 2)} ${n(y - 2)} ${n(width + 4)} ${n(size + 3)} re f\n` +
+    `${n(r)} ${n(g)} ${n(b)} rg BT /F1 ${n(size)} Tf ` +
+    `1 0 0 1 ${n(x - width / 2)} ${n(y)} Tm (${escape(text)}) Tj ET\nQ\n`
+  );
+}
+
 /** Greedy wrapping for the text inside a callout box. */
 function wrapToWidth(
   text: string,
@@ -502,6 +530,9 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
             Vertices: points.flatMap((point) => [point.x, point.y]),
             C: colour,
             BS: { W: width, S: "S" },
+            ...(annotation.measurement
+              ? { Contents: PDFString.of(annotation.measurement), IT: "PolygonDimension" }
+              : {}),
             // The border effect is what makes a polygon a cloud: C for cloudy,
             // with an intensity. Readers that ignore it still see the shape,
             // because the appearance below draws the bumps itself.
@@ -511,9 +542,19 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
               N: appearance(
                 doc,
                 rect,
-                cloudy
+                (cloudy
                   ? cloudOperators(points, width, colour)
-                  : polyOperators(points, width, colour, closed),
+                  : polyOperators(points, width, colour, closed)) +
+                  (annotation.measurement
+                    ? await measurementLabel(
+                        doc,
+                        xs.reduce((sum, value) => sum + value, 0) / xs.length,
+                        ys.reduce((sum, value) => sum + value, 0) / ys.length,
+                        annotation.measurement,
+                        colour,
+                      )
+                    : ""),
+                annotation.measurement ? { F1: (await stampFont(doc)).ref } : undefined,
               ),
             },
           }),
@@ -630,6 +671,16 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
         Math.max(annotation.x1, annotation.x2) + pad,
         Math.max(annotation.y1, annotation.y2) + pad,
       ];
+      const label = annotation.measurement
+        ? await measurementLabel(
+            doc,
+            (annotation.x1 + annotation.x2) / 2,
+            (annotation.y1 + annotation.y2) / 2,
+            annotation.measurement,
+            colour,
+          )
+        : "";
+
       page.node.addAnnot(
         context.register(
           context.obj({
@@ -644,6 +695,15 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
             IC: colour,
             BS: { W: width, S: "S" },
             CA: 1,
+            ...(annotation.measurement
+              ? {
+                  Contents: PDFString.of(annotation.measurement),
+                  // What Acrobat marks a dimension line with, so its own
+                  // measuring tool recognises one of ours.
+                  IT: "LineDimension",
+                  Cap: true,
+                }
+              : {}),
             AP: {
               N: appearance(
                 doc,
@@ -656,7 +716,8 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
                   width,
                   colour,
                   arrow,
-                ),
+                ) + label,
+                annotation.measurement ? { F1: (await stampFont(doc)).ref } : undefined,
               ),
             },
           }),

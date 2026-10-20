@@ -15,6 +15,8 @@ export type AnnotationTool =
   | "polygon"
   | "cloud"
   | "polyline"
+  | "measure"
+  | "measurearea"
   | "callout"
   | "caret"
   | "stamp"
@@ -29,7 +31,7 @@ export type AnnotationTool =
   | "link";
 
 /** Tools drawn by dragging from one point to another, where direction matters. */
-const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow"]);
+const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow", "measure"]);
 /** Tools placed with a single click. */
 const POINT_TOOLS = new Set<AnnotationTool>([
   "note",
@@ -41,7 +43,7 @@ const POINT_TOOLS = new Set<AnnotationTool>([
 ]);
 
 /** Tools built point by point: click each corner, double-click to finish. */
-const PATH_TOOLS = new Set<AnnotationTool>(["polygon", "cloud", "polyline"]);
+const PATH_TOOLS = new Set<AnnotationTool>(["polygon", "cloud", "polyline", "measurearea"]);
 
 /** Tools that are drawn by dragging a box. */
 const BOX_TOOLS = new Set<AnnotationTool>([
@@ -283,6 +285,28 @@ export function AnnotationLayer({
               width="100%"
               height="100%"
             >
+              {annotation.measurement ? (
+                <text
+                  x={
+                    (annotation.points.reduce((sum, point) => sum + point.x, 0) /
+                      annotation.points.length) *
+                    scale
+                  }
+                  y={top(
+                    annotation.points.reduce((sum, point) => sum + point.y, 0) /
+                      annotation.points.length,
+                    0,
+                  )}
+                  fontSize={9 * scale}
+                  textAnchor="middle"
+                  fill={rgb(annotation.color)}
+                  stroke="white"
+                  strokeWidth={3 * scale}
+                  paintOrder="stroke"
+                >
+                  {annotation.measurement}
+                </text>
+              ) : null}
               <polygon
                 points={points}
                 fill="none"
@@ -382,6 +406,20 @@ export function AnnotationLayer({
               height="100%"
               style={{ left: 0, top: 0, width: "100%", height: "100%" }}
             >
+              {annotation.measurement ? (
+                <text
+                  x={((annotation.x1 + annotation.x2) / 2) * scale}
+                  y={top((annotation.y1 + annotation.y2) / 2, 0)}
+                  fontSize={9 * scale}
+                  textAnchor="middle"
+                  fill={rgb(annotation.color)}
+                  stroke="white"
+                  strokeWidth={3 * scale}
+                  paintOrder="stroke"
+                >
+                  {annotation.measurement}
+                </text>
+              ) : null}
               <line
                 x1={annotation.x1 * scale}
                 y1={top(annotation.y1, 0)}

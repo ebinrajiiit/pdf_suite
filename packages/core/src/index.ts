@@ -1,6 +1,13 @@
 export { merge, reorder, rotate, split } from "./ops.js";
 export type { PageRange, PdfBytes } from "./ops.js";
 export { annotate } from "./annotate.js";
+export {
+  clearRedactionMarks,
+  drawRedactionBoxes,
+  markForRedaction,
+  readRedactionMarks,
+} from "./redact-marks.js";
+export type { RedactionMark } from "./redact-marks.js";
 export { addReply, deleteAnnotation, readAnnotations } from "./read-annots.js";
 export { asAnnotations, fromXfdf, toXfdf } from "./xfdf.js";
 export type { XfdfImport, XfdfMark } from "./xfdf.js";
@@ -27,6 +34,8 @@ export type { DocumentDiff, PageDiff } from "./diff.js";
 export { cropPages, setPageLabels, uncropPages, watermark } from "./pages.js";
 export type { Box, PageLabelRange, WatermarkOptions } from "./pages.js";
 export type { AccessibilityIssue, CheckOptions, FixOptions } from "./accessibility.js";
+export { area, distance, formatMeasurement, perimeter, SCALES } from "./measure.js";
+export type { Scale } from "./measure.js";
 export { readLayers, setLayerVisibility } from "./layers.js";
 export type { Layer } from "./layers.js";
 export { addLink, readDestinations, readLinks, setDestinations } from "./links.js";

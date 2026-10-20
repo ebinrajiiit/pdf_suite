@@ -11,6 +11,7 @@ export type {
   ExistingAnnotation,
   Layer,
   Link,
+  RedactionMark,
   LinkTarget,
   Reply,
   EncryptOptions,
