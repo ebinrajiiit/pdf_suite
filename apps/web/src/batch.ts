@@ -45,7 +45,8 @@ export interface BatchProgress {
 }
 
 /**
- * Runs one action over each file in turn, and reports what happened to each.
+ * Runs the actions, in order, over each file in turn, and reports what
+ * happened to each.
  *
  * A file that fails does not stop the batch: a folder of two hundred where one
  * is damaged should produce a hundred and ninety-nine finished documents and a
@@ -53,7 +54,7 @@ export interface BatchProgress {
  */
 export async function runBatch(
   files: PickedFile[],
-  action: BatchAction,
+  actions: BatchAction[],
   onProgress?: (progress: BatchProgress) => void,
 ): Promise<BatchResult[]> {
   const worker: PdfWorkerClient = createPdfWorkerClient();
@@ -67,47 +68,66 @@ export async function runBatch(
       onProgress?.({ done: index, total: files.length, name: file.name });
       try {
         const info = await worker.open(file.bytes);
-        const order = info.pageSizes.map((_, page) => page);
-        let note = "done";
+        let order = info.pageSizes.map((_, page) => page);
+        const notes: string[] = [];
 
-        switch (action.kind) {
-          case "number":
-            await worker.stamp(action.options, order, []);
-            note = `numbered ${order.length} page${order.length === 1 ? "" : "s"}`;
-            break;
-          case "watermark":
-            await worker.watermark(action.options, order, []);
-            note = "watermarked";
-            break;
-          case "sanitise": {
-            const { removed } = await worker.sanitise(
-              { metadata: true, attachments: true, scripts: true },
-              order,
-              [],
-            );
-            const went = (removed.metadata ? 1 : 0) + removed.attachments + removed.scripts;
-            note = went === 0 ? "nothing hidden to remove" : `removed ${went} hidden item(s)`;
-            break;
-          }
-          case "compress":
-            await worker.compress(order, []);
-            note = "compressed";
-            break;
-          case "redact": {
-            const found = await worker.findPattern({ patterns: action.patterns }, order, []);
-            if (found.count === 0) {
-              note = "nothing matched";
+        for (const action of actions) {
+          // Each step works on what the last one produced, which is what makes
+          // a sequence a sequence rather than three separate runs.
+          let note = "done";
+          switch (action.kind) {
+            case "number": {
+              const after = await worker.stamp(action.options, order, []);
+              order = after.pageSizes.map((_, page) => page);
+              note = `numbered ${order.length} page${order.length === 1 ? "" : "s"}`;
               break;
             }
-            const result = await worker.redact(found.areas, order, []);
-            note = result.verified
-              ? `removed ${found.count} match${found.count === 1 ? "" : "es"}`
-              : `WARNING: ${found.count} match(es) marked but text remains — do not share`;
-            break;
+            case "watermark": {
+              const after = await worker.watermark(action.options, order, []);
+              order = after.pageSizes.map((_, page) => page);
+              note = "watermarked";
+              break;
+            }
+            case "sanitise": {
+              const { removed, info: after } = await worker.sanitise(
+                { metadata: true, attachments: true, scripts: true },
+                order,
+                [],
+              );
+              order = after.pageSizes.map((_, page) => page);
+              const went = (removed.metadata ? 1 : 0) + removed.attachments + removed.scripts;
+              note = went === 0 ? "nothing hidden to remove" : `removed ${went} hidden item(s)`;
+              break;
+            }
+            case "compress": {
+              const after = await worker.compress(order, []);
+              order = after.pageSizes.map((_, page) => page);
+              note = "compressed";
+              break;
+            }
+            case "redact": {
+              const found = await worker.findPattern({ patterns: action.patterns }, order, []);
+              if (found.count === 0) {
+                note = "nothing matched";
+                break;
+              }
+              const result = await worker.redact(found.areas, order, []);
+              order = result.info.pageSizes.map((_, page) => page);
+              note = result.verified
+                ? `removed ${found.count} match${found.count === 1 ? "" : "es"}`
+                : `WARNING: ${found.count} match(es) marked but text remains — do not share`;
+              break;
+            }
           }
+          notes.push(note);
         }
 
-        results.push({ name: file.name, bytes: await worker.save(order, []), note, failed: false });
+        results.push({
+          name: file.name,
+          bytes: await worker.save(order, []),
+          note: notes.join(" · "),
+          failed: false,
+        });
       } catch (error) {
         results.push({
           name: file.name,

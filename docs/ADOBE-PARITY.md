@@ -121,7 +121,7 @@ What an Acrobat user would miss before anything subtle:
 | Page labels (`/PageLabels`) | Done: runs of pages numbered 1,2,3 or i,ii,iii or a,b,c, each with a prefix, which is what the viewer's page box reads |
 | Rotate, reorder, insert, extract, delete, split | Done |
 | Replace pages | Missing, though it is delete + insert |
-| Links | Draw a box and point it at a page or a web address; a reader can follow it. A web address is never opened on the document's say-so — the reader is shown where it goes and decides. Editing an existing link is missing |
+| Links | Draw a box and point it at a page or a web address; a reader follows it, and a web address is never opened on the document's say-so. With the Link tool in hand, clicking an existing link changes or removes it instead of following it |
 | Bookmarks | Add, rename, move, nest under another or lift back out, and remove — written as a real `/Outlines` tree |
 | Named destinations | Written and read, sorted as a name tree has to be. Pointing a bookmark at one is missing |
 | Attachments (embedded files) | Done: attach, list, extract and remove, in a panel of their own. Sanitising removes them, which is the same feature read the other way |
@@ -238,7 +238,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Compare two documents | Text comparison, page by page, with the words that went and the words that arrived. Pages are paired by position, not matched up, and the panel says so. A visual diff is missing |
-| Action Wizard (batch) | One action over many files: page numbers, watermark, remove hidden information, redact by pattern, compress. Each file is saved as a new document and a failure does not stop the rest. Recorded multi-step actions, and grade cards from a template and a CSV, are still to come |
+| Action Wizard (batch) | A sequence of steps over many files — each step works on what the last produced — plus filling a form once per spreadsheet row. Each file is saved as a new document and a failure does not stop the rest. Saving a named sequence for next time is still missing |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
 | View modes | Continuous, two-up and single page, with the page box as the way through the document, and full screen. Split view is missing |

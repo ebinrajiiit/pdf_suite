@@ -1263,6 +1263,10 @@ test("draws a link to another page, and one to a web address", async ({ page }) 
   await page.getByTestId("add-link").click();
   await expect(page.getByTestId("status")).toHaveText("Link added", { timeout: 30_000 });
 
+  // Put the tool down: with it in hand a click edits the link rather than
+  // following it, which is what the next block checks.
+  await page.getByTestId("tool-link").click();
+
   // A reader can follow the internal one: it scrolls to the page it names.
   const before = await page.getByTestId("viewer").evaluate((el) => el.scrollTop);
   await page.getByTestId("link-0-0").click();
@@ -1276,15 +1280,28 @@ test("draws a link to another page, and one to a web address", async ({ page }) 
   await expect(page.getByTestId("follow-url")).toHaveText("https://iiitkottayam.ac.in");
   await page.getByRole("button", { name: "Cancel" }).click();
 
+  // With the tool in hand, clicking a link edits it rather than following it.
+  await page.getByTestId("tool-link").click();
+  await page.getByTestId("link-0-0").click();
+  await expect(page.getByTestId("link-prompt")).toContainText("instead");
+  await page.getByTestId("link-page").fill("1");
+  await page.getByTestId("add-link").click();
+  await expect(page.getByTestId("status")).toHaveText("Link changed", { timeout: 30_000 });
+
   // Both are in the file as Link annotations with their actions.
   const saved = await saveAndRead(page, "Save");
   expect((await annotationsOf(saved))[0]).toEqual(["/Link", "/Link"]);
   const doc = await PDFDocument.load(saved);
   const annots = doc.getPage(0).node.Annots()!;
-  const second = doc.context.lookup(annots.get(1)) as PDFDict;
-  const action = second.lookup(PDFName.of("A"), PDFDict);
-  expect(action.get(PDFName.of("S"))?.toString()).toBe("/URI");
-  expect(String(action.get(PDFName.of("URI")))).toContain("iiitkottayam.ac.in");
+  // Found by what it is rather than by where it sits: changing a link removes
+  // and rewrites it, so the order is not the order they were drawn in.
+  const actions = annots
+    .asArray()
+    .map((ref) => (doc.context.lookup(ref) as PDFDict).lookup(PDFName.of("A"), PDFDict));
+  const web = actions.find((one) => one.get(PDFName.of("S"))?.toString() === "/URI");
+  expect(web).toBeDefined();
+  expect(String(web!.get(PDFName.of("URI")))).toContain("iiitkottayam.ac.in");
+  expect(actions.some((one) => one.get(PDFName.of("S"))?.toString() === "/GoTo")).toBe(true);
 });
 
 test("nests a bookmark under another, and lifts it out again", async ({ page }) => {
@@ -1709,7 +1726,15 @@ test("does one thing to many files at once", async ({ page }) => {
 
   await page.getByTestId("batch").click();
   await expect(page.getByTestId("batch-panel")).toBeVisible();
+
+  // Two steps, in order: take the numbers out, then strip what the file
+  // carries unseen.
   await page.getByTestId("batch-action").selectOption("redact");
+  await page.getByTestId("batch-add-step").click();
+  await page.getByTestId("batch-action").selectOption("sanitise");
+  await page.getByTestId("batch-add-step").click();
+  await expect(page.getByTestId("batch-steps")).toContainText("1. Redact personal numbers");
+  await expect(page.getByTestId("batch-steps")).toContainText("2. Remove hidden information");
 
   // Three documents, two with an Aadhaar number in them.
   const downloads: Promise<unknown>[] = [];
@@ -1739,6 +1764,8 @@ test("does one thing to many files at once", async ({ page }) => {
   await expect(results).toContainText("removed 1 match");
   // The one with nothing to redact says so rather than failing.
   await expect(results).toContainText("nothing matched");
+  // And each file reports both steps, in the order they ran.
+  await expect(results).toContainText("removed 1 match · removed");
 
   // Each finished file is saved as its own document.
   await expect.poll(() => downloads.length, { timeout: 30_000 }).toBe(3);

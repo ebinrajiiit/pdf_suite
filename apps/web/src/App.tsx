@@ -195,6 +195,8 @@ export function App() {
   /** Running one action over many files at once. */
   const [batching, setBatching] = useState(false);
   const [batchAction, setBatchAction] = useState<BatchAction["kind"]>("number");
+  /** The steps to run, in order, over each file. */
+  const [batchSteps, setBatchSteps] = useState<BatchAction["kind"][]>([]);
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const batchInput = useRef<HTMLInputElement>(null);
@@ -215,13 +217,17 @@ export function App() {
   const [scaleUnit, setScaleUnit] = useState<keyof typeof SCALES>("cm");
   const [scalePerUnit, setScalePerUnit] = useState(1);
 
-  /** A link box drawn but not yet told where to go. */
+  /**
+   * A link box drawn but not yet told where to go, or an existing one being
+   * changed — which carries the index of the link it replaces.
+   */
   const [pendingLink, setPendingLink] = useState<{
     page: number;
     x: number;
     y: number;
     w: number;
     h: number;
+    replaces?: number;
   } | null>(null);
   const [linkKind, setLinkKind] = useState<"page" | "url">("page");
 
@@ -1346,18 +1352,22 @@ export function App() {
       const picked = await readFiles(files);
       setBatchResults(null);
 
-      const action: BatchAction =
-        batchAction === "number"
+      // The steps built up in the panel, or the one in the dropdown when
+      // nobody has built a sequence.
+      const steps = batchSteps.length > 0 ? batchSteps : [batchAction];
+      const actions: BatchAction[] = steps.map((step) =>
+        step === "number"
           ? { kind: "number", options: { footer: ["", "Page {n} of {total}", ""] } }
-          : batchAction === "watermark"
+          : step === "watermark"
             ? { kind: "watermark", options: { text: markText, opacity: markOpacity / 100 } }
-            : batchAction === "redact"
+            : step === "redact"
               ? { kind: "redact", patterns: ["aadhaar", "pan", "phone", "email"] }
-              : batchAction === "compress"
+              : step === "compress"
                 ? { kind: "compress" }
-                : { kind: "sanitise" };
+                : { kind: "sanitise" },
+      );
 
-      const results = await runBatch(picked, action, (progress) =>
+      const results = await runBatch(picked, actions, (progress) =>
         setBatchBusy(
           progress.name === ""
             ? null
@@ -1373,13 +1383,13 @@ export function App() {
         if (!result.bytes) continue;
         await saveBytes(
           result.bytes,
-          suffixName(result.name, batchAction),
+          suffixName(result.name, batchSteps.length > 1 ? "batch" : batchAction),
           undefined,
           "application/pdf",
         );
       }
     },
-    [batchAction, markOpacity, markText],
+    [batchAction, batchSteps, markOpacity, markText],
   );
 
   /**
@@ -2609,15 +2619,27 @@ export function App() {
               linkKind === "url"
                 ? { url: String(form.get("linkUrl") ?? "").trim() }
                 : { page: Math.max(0, Number(form.get("linkPage") ?? 1) - 1) };
-            void addPageLink({ ...pendingLink, target })
+            const { replaces, ...box } = pendingLink;
+            // Changing one is removing it and drawing it again, which is what
+            // the format leaves available: a link's action is not editable in
+            // place without rewriting the annotation anyway.
+            const write = async () => {
+              if (replaces !== undefined) await deleteMark(pendingLink.page, replaces);
+              return addPageLink({ ...box, target });
+            };
+            void write()
               .then((done) => {
                 setPendingLink(null);
-                if (done) setSaved("Link added");
+                if (done) setSaved(replaces === undefined ? "Link added" : "Link changed");
               })
               .catch(() => setPendingLink(null));
           }}
         >
-          <label htmlFor="linkPage">Where should this box take the reader?</label>
+          <label htmlFor="linkPage">
+            {pendingLink.replaces === undefined
+              ? "Where should this box take the reader?"
+              : "Where should this link take the reader instead?"}
+          </label>
           <select
             aria-label="Kind of link"
             data-testid="link-kind"
@@ -2647,8 +2669,21 @@ export function App() {
             />
           )}
           <button type="submit" className="action action-go" data-testid="add-link">
-            Add the link
+            {pendingLink.replaces === undefined ? "Add the link" : "Change the link"}
           </button>
+          {pendingLink.replaces !== undefined
+            ? action(
+                "Remove the link",
+                () => {
+                  const at = pendingLink.replaces!;
+                  setPendingLink(null);
+                  void deleteMark(pendingLink.page, at).then(
+                    (done) => done && setSaved("Link removed"),
+                  );
+                },
+                { testId: "remove-link", danger: true },
+              )
+            : null}
           <button type="button" className="action" onClick={() => setPendingLink(null)}>
             Cancel
           </button>
@@ -2951,6 +2986,11 @@ export function App() {
                 <option value="compress">Compress</option>
               </select>
             </label>
+            {action("Add this step", () => setBatchSteps((steps) => [...steps, batchAction]), {
+              testId: "batch-add-step",
+              hint: "Builds a sequence: each step works on what the last one produced",
+              off: batchBusy !== null,
+            })}
             {action("Choose files…", () => batchInput.current?.click(), {
               testId: "batch-choose",
               off: batchBusy !== null,
@@ -2968,6 +3008,15 @@ export function App() {
               Close
             </button>
           </div>
+          {batchSteps.length > 0 ? (
+            <div className="hfrow">
+              <span className="hflabel">Steps</span>
+              <span className="hfnote" data-testid="batch-steps">
+                {batchSteps.map((step, index) => `${index + 1}. ${BATCH_LABELS[step]}`).join("  ")}
+              </span>
+              {action("Clear the steps", () => setBatchSteps([]), { testId: "batch-clear" })}
+            </div>
+          ) : null}
           {batchBusy ? (
             <div className="hfrow">
               <span className="hfnote" data-testid="batch-busy">
@@ -3705,6 +3754,20 @@ export function App() {
               {...(singlePage ? { only: Math.min(firstVisible, pageCount - 1) } : {})}
               links={pageLinks}
               onFollow={(link) => {
+                // With the Link tool in hand, clicking a link is editing it,
+                // not following it.
+                if (tool === "link") {
+                  setLinkKind(link.target.url ? "url" : "page");
+                  setPendingLink({
+                    page: link.page,
+                    x: link.x,
+                    y: link.y,
+                    w: link.w,
+                    h: link.h,
+                    replaces: link.index,
+                  });
+                  return;
+                }
                 if (link.target.page !== undefined) {
                   const position = state.order.indexOf(link.target.page);
                   if (position >= 0) setGoTo(position);
@@ -4385,6 +4448,15 @@ const PATTERN_CHOICES: { name: PatternName; label: string }[] = [
   { name: "phone", label: "Phone numbers" },
   { name: "email", label: "Email addresses" },
 ];
+
+/** What each batch step is called, where a sequence is listed. */
+const BATCH_LABELS: Record<BatchAction["kind"], string> = {
+  number: "Add page numbers",
+  watermark: "Add the watermark",
+  sanitise: "Remove hidden information",
+  redact: "Redact personal numbers",
+  compress: "Compress",
+};
 
 /** The keys the app answers to, as the sheet lists them. */
 const SHORTCUTS: [string, string][] = [
