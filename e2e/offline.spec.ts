@@ -2996,3 +2996,48 @@ test("a batch sequence can be named, kept and used again", async ({ page }) => {
   await page.getByTestId("sequence-remove-Before circulation").click();
   await expect(page.getByTestId("sequence-Before circulation")).toBeHidden();
 });
+
+test("a mark sheet exports to Word as a table, under its own heading", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A heading, then a grid. Paragraphs of a mark sheet are unusable, and a
+  // heading sitting in the first cell of the table is a thing someone then has
+  // to undo by hand.
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const sheet = doc.addPage([595, 842]);
+  sheet.drawText("Annexure A", { x: 60, y: 790, size: 14, font: bold });
+  [
+    ["Roll", "Name", "Marks"],
+    ["21CS01", "A Student", "88"],
+    ["21CS02", "B Student", "91"],
+  ].forEach((row, index) => {
+    const y = 740 - index * 24;
+    sheet.drawText(row[0]!, { x: 60, y, size: 12, font });
+    sheet.drawText(row[1]!, { x: 160, y, size: 12, font });
+    sheet.drawText(row[2]!, { x: 380, y, size: 12, font });
+  });
+  await openFixture(page, "marks.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("to-docx").click(),
+  ]);
+  const xml = (await readFile((await download.path())!))
+    .toString("latin1")
+    .replace(/^[\s\S]*?(<w:document)/, "$1");
+
+  // A real Word table of three rows and nine cells.
+  expect(xml).toContain("<w:tbl>");
+  expect(xml.match(/<w:tr>/g)).toHaveLength(3);
+  expect(xml.match(/<w:tc>/g)).toHaveLength(9);
+  expect(xml).toContain("21CS02");
+
+  // The heading is a heading, before the table, at the size it had.
+  expect(xml.indexOf("Annexure A")).toBeLessThan(xml.indexOf("<w:tbl>"));
+  expect(xml).toContain('<w:b/><w:sz w:val="28"/>');
+});

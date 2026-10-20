@@ -45,7 +45,7 @@ export { matchColumns, nameFor, parseCsv, valuesFor } from "./csv.js";
 export { lines, tableFrom, toCsv } from "./tables.js";
 export type { Table, TableOptions, TextRunLike } from "./tables.js";
 export type { Sheet } from "./csv.js";
-export { toDocx } from "./docx.js";
+export { blocksFromGrid, toDocx } from "./docx.js";
 export type { DocxBlock, DocxOptions, DocxPage } from "./docx.js";
 export { crc32, zip } from "./zip.js";
 export type { ZipEntry } from "./zip.js";

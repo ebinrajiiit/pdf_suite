@@ -142,6 +142,51 @@ function table(rows: string[][]): string {
   );
 }
 
+/**
+ * Splits a detected grid into the table itself and the lines around it.
+ *
+ * A page with a table on it is rarely only a table: there is a heading above
+ * it and often a note below. The detector sees those as rows with one cell
+ * filled, and a heading sitting in the first cell of a table is the kind of
+ * thing someone then has to undo by hand. A row that fills fewer than two
+ * columns is therefore a paragraph, and the rows between them are the table.
+ *
+ * `styleOf` gives back the size and weight the text had in the PDF, where it is
+ * known — the heading above a table is usually larger than the table.
+ */
+export function blocksFromGrid(
+  rows: string[][],
+  styleOf?: (text: string) => { size?: number | undefined; bold?: boolean | undefined } | undefined,
+): DocxBlock[] {
+  const blocks: DocxBlock[] = [];
+  let run: string[][] = [];
+
+  const line = (row: string[]): void => {
+    const text = row
+      .filter((cell) => cell.trim() !== "")
+      .join(" ")
+      .trim();
+    if (text !== "") blocks.push({ kind: "paragraph", text, ...(styleOf?.(text) ?? {}) });
+  };
+
+  const flush = (): void => {
+    // One row is not a table, whatever its shape; it is a line with a gap in it.
+    if (run.length >= 2) blocks.push({ kind: "table", rows: run });
+    else for (const row of run) line(row);
+    run = [];
+  };
+
+  for (const row of rows) {
+    if (row.filter((cell) => cell.trim() !== "").length >= 2) run.push(row);
+    else {
+      flush();
+      line(row);
+    }
+  }
+  flush();
+  return blocks;
+}
+
 /** A4 portrait, for a document that does not say what size its pages are. */
 const A4 = { width: 595, height: 842 };
 

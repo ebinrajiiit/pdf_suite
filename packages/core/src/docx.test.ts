@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vitest";
-import { toDocx } from "./docx.js";
+import { blocksFromGrid, toDocx } from "./docx.js";
 import { crc32, zip } from "./zip.js";
 
 const run = promisify(execFile);
@@ -152,4 +152,50 @@ test("characters XML cannot carry are escaped or dropped, not written raw", asyn
 test("an empty document is still a document", async () => {
   const stdout = await documentXml(toDocx([], {}), "empty.docx");
   expect(stdout).toContain("<w:body>");
+});
+
+test("the heading above a table is a heading, not a cell of it", () => {
+  const blocks = blocksFromGrid(
+    [
+      ["Annexure A", "", "", ""],
+      ["Roll", "Name", "Internal", "Total"],
+      ["21001", "Anita", "38", "90"],
+      ["21002", "Bimal", "35", "85"],
+      ["Checked by the office", "", "", ""],
+    ],
+    (text) => (text === "Annexure A" ? { size: 14, bold: true } : undefined),
+  );
+
+  expect(blocks.map((block) => block.kind)).toEqual(["paragraph", "table", "paragraph"]);
+  expect(blocks[0]).toEqual({ kind: "paragraph", text: "Annexure A", size: 14, bold: true });
+  expect(blocks[1]).toEqual({
+    kind: "table",
+    rows: [
+      ["Roll", "Name", "Internal", "Total"],
+      ["21001", "Anita", "38", "90"],
+      ["21002", "Bimal", "35", "85"],
+    ],
+  });
+  expect(blocks[2]).toEqual({ kind: "paragraph", text: "Checked by the office" });
+});
+
+test("a single row with a gap in it is a line, not a one-row table", () => {
+  const blocks = blocksFromGrid([
+    ["Date", "20 October"],
+    ["Signed at the office of the registrar", "", ""],
+  ]);
+  // The first row fills two columns, but one row on its own is not a table.
+  expect(blocks.map((block) => block.kind)).toEqual(["paragraph", "paragraph"]);
+  expect(blocks[0]).toEqual({ kind: "paragraph", text: "Date 20 October" });
+});
+
+test("a row that breaks a table in two leaves two tables", () => {
+  const blocks = blocksFromGrid([
+    ["Roll", "Marks"],
+    ["1", "90"],
+    ["Second semester", ""],
+    ["Roll", "Marks"],
+    ["2", "85"],
+  ]);
+  expect(blocks.map((block) => block.kind)).toEqual(["table", "paragraph", "table"]);
 });

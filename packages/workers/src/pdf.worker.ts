@@ -5,6 +5,7 @@ import {
   addReply,
   annotate,
   asAnnotations,
+  blocksFromGrid,
   clearRedactionMarks,
   drawRedactionBoxes,
   attachFile,
@@ -496,13 +497,21 @@ async function handle(request: WorkerRequest): Promise<void> {
         // A page whose columns line up every row is a table, and a table of
         // text in paragraphs is unusable. The threshold is the one the
         // spreadsheet export uses, for the same reason.
+        const paragraphs = blocks[position] ?? [];
         const grid = tableFrom(runs);
         if (grid && grid.confidence >= 0.5) {
-          pages.push({ blocks: [{ kind: "table", rows: grid.rows }], ...size });
+          // The heading above a table and the note below it are not table rows,
+          // and they keep the size and weight they had in the PDF.
+          const styleOf = (text: string) => {
+            const block = paragraphs.find((candidate) => candidate.text === text);
+            return block
+              ? { size: block.fontSize, bold: /bold|black|heavy|semib/i.test(block.fontName) }
+              : undefined;
+          };
+          pages.push({ blocks: blocksFromGrid(grid.rows, styleOf), ...size });
           continue;
         }
 
-        const paragraphs = blocks[position] ?? [];
         pages.push({
           blocks:
             paragraphs.length > 0
