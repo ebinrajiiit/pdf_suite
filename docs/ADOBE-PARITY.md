@@ -65,69 +65,170 @@ text, and the tools panel hides below 980 px instead of collapsing to icons.
 | Right-click a page | Rotate, insert, extract, export, delete, in the panel and on the page |
 | Edit PDF (text) | Click a paragraph and type over it; it re-wraps to its own width, and a font with no glyph for what was typed is substituted |
 
-## Missing for English parity, in the order I would build it
+## What is missing, audited against Acrobat's own tool list
 
-1. **Edit text and images in place** — Acrobat's "Edit PDF". **Text done;
-   images not.** Clicking a paragraph and typing over it changes the words in the
-   content stream, keeping font, size, colour and position. The block re-wraps to
-   its own width: lines that already exist are reused, lines the new text needs
-   are added, surplus ones removed. Search, extraction and copy all see the new
-   text, and nothing is drawn over the old.
+Checked on 2026-10-20 against Adobe's documentation (the Standard/Pro comparison,
+the Acrobat features page, and the help topics for preflight, accessibility,
+forms, comments, page tools, signatures, sanitising and the Action Wizard) rather
+than from memory. Status is what this repository actually does, read from the
+code: the worker's operation list, `packages/core`'s exports and the engine's
+interface.
 
-   Paragraph detection is a heuristic — runs that share a left edge, a size and a
-   line spacing — so the editor outlines the block it found before anything is
-   typed, which makes a wrong guess (tables, columns) visible rather than
-   surprising.
+### The first hour
 
-   Font substitution: a character the document's font has no glyph for is set in
-   Helvetica instead, for the whole block, and the swap is reported in the status
-   line. A character no standard font can draw (an emoji, say) is refused rather
-   than written as empty boxes.
+What an Acrobat user would miss before anything subtle:
 
-   What Acrobat still does that this does not:
-   - **Push content aside.** A block that grows lays its extra lines below itself
-     and can overlap what follows; the status line says how many lines were
-     added. Acrobat behaves the same way.
-   - **Match the substituted font.** Acrobat looks for a system font resembling
-     the original; we always use Helvetica, because a font the user has is not a
-     font the next reader has. Setting a face by hand is limited to the standard
-     fourteen for the same reason — embedding an arbitrary system font is a
-     separate piece of work.
-   - **Format a selection.** Size and face apply to the whole block, not to the
-     words you have selected inside it.
-   - **Mixed fonts in one block.** Substitution replaces the whole paragraph's
-     font, not only the characters that needed it.
-   - **Images.** Moving, resizing and replacing images in place is untouched.
-   - **Adding a new paragraph** in the document's own font, as opposed to a text
-     annotation.
-2. **Digital signatures** — sign, certify, and a validation panel. Phase 3; needs
-   the signing-library ADR and, on desktop, PKCS#11 for USB tokens.
-3. **Comment workflow** — the list and colours are done; what remains is reply
-   threads and a resolved state (`/IRT` and `/RT` on the annotation), plus
-   import/export of annotations (XFDF).
-4. **Lines, arrows, callouts and stamps** — freehand, boxes and ovals are done.
-   Lines and arrows wait on `/AP` generation, because PDFium does not synthesise
-   an appearance for `/Line`: the annotation would be in the file and invisible
-   in our own viewer.
-5. **Form builder** — create and name fields, set tab order, validation; today
-   only existing fields can be filled.
-6. **Export to Word, Excel, PowerPoint** — Phase 4 lists PDF → Word/Excel as beta.
-7. **Compare two documents** — text and visual diff. Phase 3.
-8. **PDF/A and PDF/UA** — conversion and validation, plus accessibility tagging
-   and a reading-order editor. Phases 3 and 5.
-9. **Office → PDF** — desktop only, via LibreOffice. Phase 2, and blocked on the
-   desktop shell actually building: it is scaffolded but has never been compiled.
-10. **Page-level polish** — headers, footers, page numbers and Bates numbering
-    are done, drawn into the page content so they print and extract. What
-    remains: crop, watermarks and backgrounds, and page labels (the `/PageLabels`
-    tree, so the viewer's page box reads "iv" rather than "4"). Headers and
-    footers are Latin-only for now, because they are set in a standard font —
-    the same embedding problem as the text editor's font substitution.
-11. **Attachments and portfolios** — embedded file attachments.
-12. **Print production** — preflight, colour separations, ink manager. Niche for
-    institutional use; low priority.
-13. **Action wizard / batch** — Phase 4 covers the institutional version (grade
-    cards from templates and CSV).
+| Missing | Why it bites | What it needs |
+| --- | --- | --- |
+| **Print** | There is no print path at all. A PDF suite that cannot print is not one | A print view: render pages at print resolution into a document the browser prints, or on desktop hand the file to the OS printer. Half a day |
+| **Select and copy text** | Pages are canvas; the words cannot be selected, copied or quoted. Search finds text and edit mode replaces it, but neither lets you take a sentence out | A transparent text layer over each page, positioned from the runs the engine already extracts — the same geometry the search highlighter uses |
+| **Edit images in place** | "Edit PDF" moves, resizes, replaces and deletes images too; here only text | PDFium exposes image objects the same way it exposes text ones. The matrix work is done (text reflow uses it) |
+| **A signature you can draw** | Acrobat's Fill & Sign puts a drawn or typed signature on the page in two clicks. Ink annotation is close, but it is not the workflow | A saved signature (drawn once, kept locally) placed as a stamp. Days, and no crypto involved — this is not a digital signature |
+| **Lines and arrows** | The commonest markup after highlight | `/AP` generation: PDFium draws no appearance for `/Line`, so the annotation would be in the file and invisible in our own viewer |
+| **Stamps** | Approved, Draft, Received — institutional paperwork runs on them | Appearance streams again, plus a stamp library. Dynamic stamps (name, date) are template text on top |
+| **Bookmarks you can edit** | The panel reads them; it cannot add, rename, reorder or point one somewhere | Writing the `/Outlines` tree. pdf-lib has no helper, so it is raw dictionary work |
+| **Document properties** | Title, author, subject, keywords; what a library catalogue reads | pdf-lib sets these directly. An hour, plus the XMP side if we want it done properly |
+
+### Create
+
+| Acrobat | Here |
+| --- | --- |
+| From file (Office, images, text, HTML) | Images only. Office → PDF is planned for desktop via LibreOffice (ADR pending), and is blocked on nothing but the work |
+| From scanner | Missing. The browser cannot reach a scanner; on desktop this is ICA (macOS), WIA/TWAIN (Windows), SANE (Linux) — a Rust-side job per platform |
+| From web page (Web Capture) | Missing, and in tension with the privacy invariants: fetching a page is a network call. It would need its own ADR |
+| From clipboard, blank page | Missing. Both are small |
+| Combine files | Merge and insert-at-position are done |
+| PDF Portfolio | Missing. A portfolio is a container document with an embedded file tree and a Flash-era navigator; the sane subset is "embedded files with a list view" |
+| PostScript → PDF (Distiller) | Missing, and likely permanent: the usable interpreters are Ghostscript (AGPL) and MuPDF, both banned by `docs/LICENSE-POLICY.md` |
+
+### Edit and organise
+
+| Acrobat | Here |
+| --- | --- |
+| Edit text | Done, with paragraph reflow and font substitution |
+| Edit images | Missing — see above |
+| Add a new paragraph in the document's own font | Missing. A text annotation is not the same thing |
+| Crop pages | Missing. `/CropBox` per page, with a dialog and a drag handle |
+| Watermark and background | Missing. The stamping engine built for headers and footers is most of it: it already measures, places and rotates text. Images and opacity are the new parts |
+| Headers, footers, page numbers, Bates | Done |
+| Page labels (`/PageLabels`) | Missing. This is what makes the viewer's page box read "iv" — a different thing from printing a number on the page |
+| Rotate, reorder, insert, extract, delete, split | Done |
+| Replace pages | Missing, though it is delete + insert |
+| Links | Missing entirely: no creating, editing or following. Link annotations are also how a table of contents works |
+| Bookmarks | Read-only — see above |
+| Named destinations | Missing |
+| Attachments (embedded files) | Missing |
+| Layers (OCG) | Missing: no panel, no toggling, no flattening |
+| Article threads | Missing. Rare outside journals |
+| Rich media (video, audio, 3D, buttons) | Missing, and 3D is not worth it |
+| Optimise (PDF Optimizer) | Partial: qpdf recompresses streams. No image downsampling, no font subsetting, no object discarding, no space audit |
+
+### Export
+
+| Acrobat | Here |
+| --- | --- |
+| PDF → Word, Excel, PowerPoint, RTF | Missing. Phase 4 lists Word and Excel as beta. Note the licence trap: `pdf2docx` pulls PyMuPDF and is banned |
+| PDF → HTML, XML, plain text | Missing. Plain text is nearly free — the engine already extracts it |
+| PDF → images | Done (PNG) |
+| PDF/A, PDF/X, PDF/E conversion and validation | Missing. veraPDF is the usual validator and it is Apache-2.0, so it is allowed; conversion is the harder half |
+
+### Comment and review
+
+| Acrobat | Here |
+| --- | --- |
+| Sticky note, highlight, underline, strike-through, text box | Done |
+| Insert/replace text markup (caret) | Missing |
+| Callout | Missing |
+| Line, arrow, polygon, polyline, cloud | Missing — appearance streams |
+| Rectangle, oval, pencil | Done |
+| Eraser for ink | Missing |
+| Stamps, including dynamic and custom | Missing |
+| Attach a file or audio as a comment | Missing |
+| Comment opacity, default properties, author name | Colour only |
+| Replies, status (accepted, rejected, completed), resolved | Missing — `/IRT` and `/RT` |
+| Comment list: filter, sort, search, summarise | Lists and jumps; none of the four |
+| Import/export comments (FDF, XFDF) | Missing, and worth having: it is how review happens without a server, which fits this product exactly |
+| Shared review, Send for comment | Will not do — it uploads |
+| Measuring tools (distance, perimeter, area, scale, snap) | Missing. Engineering and architecture drawings need these |
+
+### Forms
+
+| Acrobat | Here |
+| --- | --- |
+| Fill in fields, flatten | Done (text, checkbox, radio, dropdown, button, signature read) |
+| Create and edit fields | Missing — the form builder |
+| Automatic field recognition | Missing |
+| Tab order | Missing |
+| Calculations, validation, formatting scripts | Missing. These are document JavaScript; see the non-goals |
+| Barcode fields | Missing |
+| Distribute, collect, track responses | Missing. The local half — export and merge FDF — is compatible with zero upload; the tracker is not |
+| XFA dynamic forms | Detected and reported, never rendered. Acrobat is retiring XFA too |
+
+### Protect
+
+| Acrobat | Here |
+| --- | --- |
+| Password encryption | Done, AES-256 via qpdf |
+| Permissions (printing, copying, editing) separately from opening | Missing — qpdf supports the flags; the UI does not expose them |
+| Certificate encryption | Missing |
+| Security policies | Missing |
+| Redact | Done, with true content removal and a verification pass |
+| Mark for redaction, then apply | Missing: ours removes immediately. Acrobat's two-step lets you review first |
+| Find text or patterns and redact all | Missing, and this is the one institutions actually need — redacting every Aadhaar number in a 200-page file by hand is how mistakes happen |
+| Redaction codes and overlay text | Missing |
+| Sanitise / remove hidden information | Missing: metadata, embedded files, hidden layers, scripts, deleted-but-present content. A separate job from redaction and arguably more important |
+
+### Sign
+
+| Acrobat | Here |
+| --- | --- |
+| Fill & Sign: draw or type a signature | Missing — see above |
+| Certificate-based signature | Missing. Phase 3: needs the signing-library ADR, and on desktop PKCS#11 for USB DSC tokens |
+| Certify (visible or hidden) | Missing |
+| Validate signatures, trust, signature panel | Missing. Validation matters even if signing never ships: institutions receive signed PDFs |
+| Timestamp (RFC 3161), LTV | Missing. The timestamp call is already allowed by the privacy invariants — it sends only a hash |
+| Digital ID management | Missing |
+| Compare signed version to current | Missing |
+| Send for e-signature | Will not do — it uploads |
+
+### Scan and recognise
+
+| Acrobat | Here |
+| --- | --- |
+| OCR to searchable PDF | Done (English, Malayalam, Hindi) |
+| Enhance scans: despeckle | Done |
+| Deskew, sharpen, background removal, auto-contrast | Missing. Measured in ADR 0004: speckle was the failure mode, skew was not, so this is lower value than it looks |
+| Recognise text in several files at once | Missing — batch |
+| Scanner acquisition | Missing — see Create |
+
+### Accessibility
+
+Entirely missing, and the only group where that is true. Autotag, Accessibility
+Check, the Reading Order tool, the Tags panel, the table editor, alt text,
+PDF/UA validation, Read Out Loud, reflow view. For a public institution this is
+not a nicety: accessible documents are a legal expectation. It is also a large
+piece of work — the tag tree is a second document structure to build and edit.
+
+### Print production (Acrobat Pro)
+
+Preflight with profiles and fixups, output preview, separations, ink manager,
+colour conversion, transparency flattening, trap presets, printer marks, the
+trim/bleed/art boxes. All missing. Niche for a university, which is why
+`docs/ROADMAP.md` has it last — but note that `/CropBox` editing and PDF/X would
+come from the same work.
+
+### Everything else
+
+| Acrobat | Here |
+| --- | --- |
+| Compare two documents | Missing. Phase 3 |
+| Action Wizard (batch) | Missing. Phase 4 covers the institutional version: grade cards from a template and a CSV |
+| Catalog: full-text index across many files | Missing |
+| Search across several files | Missing — one document at a time |
+| View modes: single page, two-up, facing, full screen, split | Missing — continuous scroll and zoom only |
+| Snapshot tool, rulers, guides, grid | Missing |
+| Geospatial PDF | Missing |
+| Document JavaScript | Will not do — see below |
 
 ## Will not do, deliberately
 
@@ -137,10 +238,36 @@ real-time collaboration, and anything that uploads a document. These are what
 leave the device, and that claim is worth more to a university than feature
 parity on items that require a server.
 
+
+Two more, on the same principle:
+
+**Document JavaScript.** Acrobat runs JavaScript embedded in a PDF: form
+calculations, validation, auto-fill, and historically a long line of exploits.
+Running a document's own code on a machine holding student records is a bad
+trade for the convenience of a calculated field. Form calculations can be done
+instead by our own code over the field values, with no script from the file ever
+executing.
+
+**The AI features.** Acrobat Studio's summaries, chat and generative edits all
+send the document to Adobe. `docs/PRODUCT.md` Phase 4 keeps the idea and moves
+the model onto the device — if it cannot run locally, it does not ship.
+
 ## How to use this list
 
-Items 1–5 are what an institutional user notices first. Items 10 and 11 are cheap
-and visible, so they are good candidates whenever a bigger item stalls. Nothing
-here is blocked on Indic support, which is the point of the English-first
-decision — but note that the OCR and search work already handles Malayalam, so
-"English first" means "do not wait for Malayalam scans", not "remove it".
+The first-hour table is the order to work in: those eight are what makes the
+difference between a tool someone tries and a tool someone switches to. After
+them, three things are worth more than their position in Acrobat's own menus
+suggests, for an institution specifically:
+
+1. **Find-and-redact by pattern** — redacting by hand is where leaks come from.
+2. **Sanitise / remove hidden information** — a redacted document that still
+   carries its metadata and its deleted text is not redacted.
+3. **Accessibility tagging** — a public university is expected to publish
+   documents people can actually read.
+
+Nothing here is blocked on Indic support, which is the point of the English-first
+decision — but note that OCR and search already handle Malayalam, so "English
+first" means "do not wait for Malayalam scans", not "remove it". The one place
+the language question is now blocking is headers, footers and the text editor's
+font substitution: both are limited to the PDF standard fonts, so neither can set
+Malayalam. Embedding a Unicode font is the single change that fixes both.
