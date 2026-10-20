@@ -3,6 +3,7 @@ export type { OnProgress, PdfWorkerClient } from "./client.js";
 export { CancelledError } from "./protocol.js";
 export type {
   DocumentInfo,
+  DocumentProperties,
   FieldValues,
   FormField,
   FormInfo,
@@ -11,6 +12,7 @@ export type {
   RedactArea,
   RedactRect,
   TextEdit,
+  TextRun,
   SearchHit,
   NumberFormat,
   Slots,

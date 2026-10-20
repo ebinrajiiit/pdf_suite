@@ -9,6 +9,7 @@ import {
   type RedactionResult,
   type TextEdit,
   type TextEditResult,
+  type DocumentProperties,
   type SearchHit,
   type StampOptions,
   type TextRun,
@@ -75,6 +76,12 @@ export interface PdfWorkerClient {
     addedLines: number;
     rejected: TextEditResult["rejected"];
   }>;
+  /** Writes the document's title, author, subject and keywords. */
+  setProperties(
+    properties: Partial<DocumentProperties>,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
   /** Draws headers, footers and page numbers into the pages. */
   stamp(options: StampOptions, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /**
@@ -260,6 +267,12 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         addedLines: reply.addedLines,
         rejected: reply.rejected,
       };
+    },
+    async setProperties(properties, order, annotations) {
+      return expect(
+        await send({ kind: "setProperties", properties, order, annotations }),
+        "document",
+      ).info;
     },
     async stamp(options, order, annotations) {
       return expect(await send({ kind: "stamp", options, order, annotations }), "document").info;

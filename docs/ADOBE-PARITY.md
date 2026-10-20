@@ -80,14 +80,14 @@ What an Acrobat user would miss before anything subtle:
 
 | Missing | Why it bites | What it needs |
 | --- | --- | --- |
-| **Print** | There is no print path at all. A PDF suite that cannot print is not one | A print view: render pages at print resolution into a document the browser prints, or on desktop hand the file to the OS printer. Half a day |
-| **Select and copy text** | Pages are canvas; the words cannot be selected, copied or quoted. Search finds text and edit mode replaces it, but neither lets you take a sentence out | A transparent text layer over each page, positioned from the runs the engine already extracts — the same geometry the search highlighter uses |
+| ~~Print~~ | **Done.** ⌘P opens the document, marks and all, in the browser's own PDF viewer — vector, not a rasterised copy. The desktop shell has no print dialog in its webview, so it hands the file to the system viewer instead | |
+| ~~Select and copy text~~ | **Done.** A transparent text layer over each page, laid out from the runs the engine extracts, so selection, copy and the browser's own find all work on real text | |
 | **Edit images in place** | "Edit PDF" moves, resizes, replaces and deletes images too; here only text | PDFium exposes image objects the same way it exposes text ones. The matrix work is done (text reflow uses it) |
 | **A signature you can draw** | Acrobat's Fill & Sign puts a drawn or typed signature on the page in two clicks. Ink annotation is close, but it is not the workflow | A saved signature (drawn once, kept locally) placed as a stamp. Days, and no crypto involved — this is not a digital signature |
 | **Lines and arrows** | The commonest markup after highlight | `/AP` generation: PDFium draws no appearance for `/Line`, so the annotation would be in the file and invisible in our own viewer |
 | **Stamps** | Approved, Draft, Received — institutional paperwork runs on them | Appearance streams again, plus a stamp library. Dynamic stamps (name, date) are template text on top |
 | **Bookmarks you can edit** | The panel reads them; it cannot add, rename, reorder or point one somewhere | Writing the `/Outlines` tree. pdf-lib has no helper, so it is raw dictionary work |
-| **Document properties** | Title, author, subject, keywords; what a library catalogue reads | pdf-lib sets these directly. An hour, plus the XMP side if we want it done properly |
+| ~~Document properties~~ | **Done.** ⌘D reads and rewrites title, author, subject and keywords. XMP is still untouched | |
 
 ### Create
 
@@ -226,6 +226,7 @@ come from the same work.
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
 | View modes: single page, two-up, facing, full screen, split | Missing — continuous scroll and zoom only |
+| Print: booklets, posters, scaling, print comments, print a range | Missing — printing hands the whole document to the platform's viewer, which brings its own dialog |
 | Snapshot tool, rulers, guides, grid | Missing |
 | Geospatial PDF | Missing |
 | Document JavaScript | Will not do — see below |

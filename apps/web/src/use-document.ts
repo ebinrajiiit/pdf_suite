@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
-import type { EditableText, RedactArea, StampOptions, TextEdit } from "@pdf-suite/workers";
+import type {
+  DocumentProperties,
+  EditableText,
+  RedactArea,
+  StampOptions,
+  TextEdit,
+} from "@pdf-suite/workers";
 import {
   createPdfWorkerClient,
   type DocumentInfo,
@@ -586,6 +592,27 @@ export function useDocument() {
     [run],
   );
 
+  /** Writes the document's title, author, subject and keywords. */
+  const describe = useCallback(
+    async (properties: Partial<DocumentProperties>) => {
+      const info = await run("Saving the description", (worker) =>
+        worker.setProperties(properties, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!info) return false;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return true;
+    },
+    [run],
+  );
+
   /** Saves just the given source pages, leaving the open document alone. */
   const extract = useCallback(
     async (pages: number[]) =>
@@ -624,6 +651,7 @@ export function useDocument() {
     editableText,
     editText,
     stamp,
+    describe,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

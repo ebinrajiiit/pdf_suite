@@ -578,6 +578,27 @@ textarea:focus-visible,
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* Invisible text over the canvas, so the page can be selected and copied. It
+   sits under the annotation layer: drawing a mark must still win. */
+.textlayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  user-select: text;
+}
+.textlayer span {
+  position: absolute;
+  color: transparent;
+  transform-origin: 0 0;
+  white-space: pre;
+  cursor: text;
+}
+.textlayer ::selection,
+.textlayer span::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {

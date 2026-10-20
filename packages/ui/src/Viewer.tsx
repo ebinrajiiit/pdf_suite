@@ -2,7 +2,9 @@ import { useEffect, useMemo } from "react";
 import type { Annotation } from "@pdf-suite/core";
 import { AnnotationLayer, type AnnotationTool, type PlacedShape } from "./AnnotationLayer.js";
 import { TextEditLayer, type TextEditCommit } from "./TextEditLayer.js";
+import { TextLayer } from "./TextLayer.js";
 import type { EditableText } from "@pdf-suite/engine/pdfium";
+import type { TextRun } from "@pdf-suite/engine";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
 
@@ -57,6 +59,13 @@ export interface ViewerProps {
   onEditText?: ((page: number, edit: TextEditCommit) => void) | undefined;
   /** Right-click on a page, for the actions that apply to it. */
   onPageMenu?: ((position: number, x: number, y: number) => void) | undefined;
+  /**
+   * Extracted text per source page, laid over the canvas so it can be selected
+   * and copied. Undefined for a page whose text has not been read yet.
+   */
+  text?: ReadonlyMap<number, TextRun[]> | undefined;
+  /** Asked for the text of a page that has come into view. */
+  onNeedText?: ((page: number) => void) | undefined;
 }
 
 const GAP = 16;
@@ -86,6 +95,8 @@ export function Viewer({
   onNeedEditableText,
   onEditText,
   onPageMenu,
+  text,
+  onNeedText,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -142,6 +153,14 @@ export function Viewer({
     }
   }, [editing, editableText, layout.boxes, onNeedEditableText, range.end, range.start]);
 
+  // Selecting text needs the text of the pages on screen, read once each.
+  useEffect(() => {
+    if (!onNeedText) return;
+    for (const box of layout.boxes.slice(range.start, range.end + 1)) {
+      if (!text?.has(box.page)) onNeedText(box.page);
+    }
+  }, [layout.boxes, onNeedText, range.end, range.start, text]);
+
   // Jumping to a search hit scrolls the page into view; the window of mounted
   // pages follows from the new scroll position as usual.
   useEffect(() => {
@@ -175,6 +194,12 @@ export function Viewer({
               pixelRatio={scale * pixelRatio}
               render={render}
               label={`Page ${box.position + 1}`}
+            />
+            <TextLayer
+              page={box.page}
+              pageHeight={pageSizes[box.page]?.height ?? 792}
+              scale={scale}
+              runs={text?.get(box.page)}
             />
             {editing ? (
               <TextEditLayer

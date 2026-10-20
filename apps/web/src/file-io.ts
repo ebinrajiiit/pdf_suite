@@ -52,6 +52,40 @@ async function tauri() {
   return { dialog, invoke: core.invoke };
 }
 
+/**
+ * Prints a document, by the only route each platform actually offers.
+ *
+ * In a browser the document is opened in a new tab, where the browser's own PDF
+ * viewer prints it as vector — rasterising the pages ourselves would be a step
+ * down in quality for no gain. The blob URL is local; nothing is uploaded.
+ *
+ * In the desktop shell there is no PDF viewer and no print dialog in the
+ * webview, so the shell hands the file to the system viewer instead.
+ *
+ * Returns what to tell the user, or undefined when the print started cleanly.
+ */
+export async function printBytes(bytes: ArrayBuffer, name: string): Promise<string | undefined> {
+  if (isDesktop()) {
+    const { invoke } = await tauri();
+    await invoke<string>("print_document", {
+      name: name.toLowerCase().endsWith(".pdf") ? name : `${name}.pdf`,
+      bytes: [...new Uint8Array(bytes)],
+    });
+    return "Opened in your PDF viewer — print from there";
+  }
+
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const tab = window.open(url, "_blank");
+  if (!tab) {
+    URL.revokeObjectURL(url);
+    return "Allow pop-ups for this page to print, or save the file and print it";
+  }
+  // The tab needs the URL until it has loaded; a minute is more than enough and
+  // leaking it for the life of the page would hold the document in memory.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return "Opened in a new tab — print from there for full quality";
+}
+
 const PDF_FILTER = [{ name: "PDF document", extensions: ["pdf"] }];
 const IMAGE_FILTER = [{ name: "Image", extensions: ["jpg", "jpeg", "png"] }];
 

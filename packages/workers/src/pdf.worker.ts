@@ -7,7 +7,9 @@ import {
   merge,
   reorder,
   imagesToPdf,
+  readProperties,
   rotate,
+  setProperties,
   split,
   stampPages,
   type Annotation,
@@ -91,6 +93,9 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   const form = bytesForForm
     ? await readForm(bytesForForm).catch(() => ({ fields: [], hasXfa: false }))
     : { fields: [], hasXfa: false };
+  const properties = bytesForForm
+    ? await readProperties(bytesForForm).catch(() => blankProperties())
+    : blankProperties();
   return {
     pageCount,
     pageSizes,
@@ -98,9 +103,15 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
     form,
     repaired,
     protected: protection !== null,
+    properties,
     undo: past.length,
     redo: future.length,
   };
+}
+
+/** A document that could not be read for its description still has one. */
+function blankProperties() {
+  return { title: "", author: "", subject: "", keywords: "" };
 }
 
 function post(message: WorkerResponse, transfer: Transferable[] = []): void {
@@ -267,6 +278,13 @@ async function handle(request: WorkerRequest): Promise<void> {
       const rotated = await rotate(base, request.positions, request.by);
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, rotated, request) });
+      return;
+    }
+    case "setProperties": {
+      const base = await materialise(id, request.order, request.annotations);
+      const described = await setProperties(base, request.properties);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, described, request) });
       return;
     }
     case "stamp": {

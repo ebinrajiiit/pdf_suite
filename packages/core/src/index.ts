@@ -7,6 +7,8 @@ export type { FieldKind, FieldValues, FillOptions, FormField, FormInfo } from ".
 export { imagesToPdf, isSupportedImage } from "./images.js";
 export type { ImagesToPdfOptions, PageBox, SourceImage } from "./images.js";
 export { formatNumber, letters, place, roman, stampPages } from "./stamp.js";
+export { readProperties, setProperties } from "./properties.js";
+export type { DocumentProperties } from "./properties.js";
 export type { NumberFormat, Slots, StampOptions } from "./stamp.js";
 export { createQpdf, QpdfError, WrongPasswordError } from "./qpdf.js";
 export type { EncryptOptions, Qpdf, QpdfOptions } from "./qpdf.js";

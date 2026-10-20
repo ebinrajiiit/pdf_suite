@@ -9,6 +9,7 @@ export { ContextMenu, type ContextMenuProps, type MenuItem } from "./ContextMenu
 export { FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { Outline, type OutlineProps } from "./Outline.js";
 export { TextEditLayer, type TextEditCommit, type TextEditLayerProps } from "./TextEditLayer.js";
+export { TextLayer, type TextLayerProps } from "./TextLayer.js";
 export { PageCanvas, type PageCanvasProps } from "./PageCanvas.js";
 export { insertPages, isIdentity, movePage, pagesAt, removePages } from "./page-order.js";
 export { Thumbnails, type ThumbnailsProps } from "./Thumbnails.js";

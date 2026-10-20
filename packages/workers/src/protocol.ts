@@ -4,7 +4,13 @@
 // The worker owns the document bytes: a 200 MB file is posted in once and never
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
-import type { Annotation, FieldValues, FormInfo, StampOptions } from "@pdf-suite/core";
+import type {
+  Annotation,
+  DocumentProperties,
+  FieldValues,
+  FormInfo,
+  StampOptions,
+} from "@pdf-suite/core";
 import type { OutlineItem, TextRun } from "@pdf-suite/engine";
 import type {
   EditableText,
@@ -34,6 +40,8 @@ export interface DocumentInfo {
   outline: OutlineItem[];
   /** The document's form fields, if it has an AcroForm. */
   form: FormInfo;
+  /** Title, author, subject, keywords — what the file says about itself. */
+  properties: DocumentProperties;
 }
 
 /**
@@ -44,6 +52,7 @@ export interface DocumentInfo {
 export type {
   Annotation,
   AnnotRect,
+  DocumentProperties,
   FieldValues,
   FormField,
   FormInfo,
@@ -107,6 +116,13 @@ export type WorkerRequest = { id: number } &
      * sends; the worker turns them into source pages.
      */
     | { kind: "stamp"; options: StampOptions; order: number[]; annotations: Annotation[] }
+    /** Writes the document's title, author, subject and keywords. */
+    | {
+        kind: "setProperties";
+        properties: Partial<DocumentProperties>;
+        order: number[];
+        annotations: Annotation[];
+      }
     /** Recompresses the document, reopening the result. */
     | { kind: "compress"; order: number[]; annotations: Annotation[] }
     /**

@@ -30,13 +30,70 @@ async fn write_document(path: PathBuf, bytes: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
+/// Hands a document to whatever this machine prints PDFs with.
+///
+/// A webview has no print dialog of its own — WKWebView does not implement
+/// `window.print()` at all — so the shell writes the document to its own
+/// temporary directory and asks the system to open it. The user prints from the
+/// viewer they already have, which also means vector output rather than a
+/// rasterised page.
+///
+/// The file goes to the OS temporary directory rather than anywhere the user
+/// chose, is named after the document, and nothing here reaches the network.
+#[tauri::command]
+async fn print_document(name: String, bytes: Vec<u8>) -> Result<String, String> {
+    // The name comes from the open document, so it is sanitised rather than
+    // trusted: no separators, no parent traversal, no empty string.
+    let safe: String = name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
+        .collect();
+    let safe = safe.trim_matches(['.', ' ']).to_owned();
+    let file = if safe.is_empty() {
+        "document.pdf".to_owned()
+    } else {
+        safe
+    };
+    let path = std::env::temp_dir().join(file);
+
+    std::fs::write(&path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&path);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", ""]).arg(&path);
+        c
+    };
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let mut command = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&path);
+        c
+    };
+
+    command
+        .spawn()
+        .map_err(|e| format!("could not open {} to print: {e}", path.display()))?;
+    Ok(path.display().to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         // Native open and save dialogs. WKWebView has no File System Access API,
         // so without these the desktop app would fall back to a hidden file
         // input and browser downloads.
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_document, write_document])
+        .invoke_handler(tauri::generate_handler![
+            read_document,
+            write_document,
+            print_document
+        ])
         .run(tauri::generate_context!())
         .expect("the PDF suite window failed to start");
 }

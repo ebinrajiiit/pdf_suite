@@ -92,6 +92,9 @@ async function outlineFixture(): Promise<Buffer> {
 /** A document with real text, for search. One line per entry, per page. */
 async function textFixture(pages: string[][], face = StandardFonts.Helvetica): Promise<Buffer> {
   const doc = await PDFDocument.create();
+  // What a document converted from Word actually carries.
+  doc.setTitle("Microsoft Word - final(2).docx");
+  doc.setAuthor("Lab Laptop");
   const font = await doc.embedFont(face);
   for (const lines of pages) {
     const page = doc.addPage([595, 842]);
@@ -972,6 +975,101 @@ test("a mark can be removed from the Marks panel", async ({ page }) => {
   await expect(page.getByTestId("comments-empty")).toBeVisible();
 
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
+});
+
+test("the document's description can be read and corrected", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "minutes.pdf", await textFixture([["Minutes"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("properties").click();
+  // What the file says about itself, which is usually wrong after a conversion.
+  await expect(page.getByTestId("prop-title")).toHaveValue("Microsoft Word - final(2).docx");
+  await expect(page.getByTestId("prop-author")).toHaveValue("Lab Laptop");
+
+  await page.getByTestId("prop-title").fill("Minutes of the Academic Council");
+  await page.getByTestId("prop-author").fill("");
+  await page.getByTestId("prop-keywords").fill("council, minutes");
+  await page.getByTestId("apply-properties").click();
+  await expect(page.getByTestId("status")).toHaveText("Description saved", { timeout: 30_000 });
+
+  // Reopening the panel reads it back from the document, not from the form.
+  await page.getByTestId("properties").click();
+  await expect(page.getByTestId("prop-title")).toHaveValue("Minutes of the Academic Council");
+  await expect(page.getByTestId("prop-author")).toHaveValue("");
+  await expect(page.getByTestId("prop-keywords")).toHaveValue("council, minutes");
+
+  // And it is in the file, which is what a catalogue will read.
+  await page.getByTestId("properties-panel").getByRole("button", { name: "Cancel" }).click();
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  expect(doc.getTitle()).toBe("Minutes of the Academic Council");
+  expect(doc.getAuthor() ?? "").toBe("");
+});
+
+test("print hands the document to the browser's own PDF viewer", async ({ page, context }) => {
+  await withoutFilePickers(page);
+  // Record what print opens. Headless Chromium has no PDF viewer, so the new
+  // tab never commits a URL to read back; what matters is what it was given.
+  await page.addInitScript(() => {
+    const open = window.open.bind(window);
+    (window as unknown as { printed: string[] }).printed = [];
+    window.open = (url?: string | URL, ...rest: unknown[]) => {
+      (window as unknown as { printed: string[] }).printed.push(String(url));
+      return open(url, ...(rest as [string?, string?]));
+    };
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "letter.pdf", await textFixture([["Dear Sir or Madam"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  const opened = context.waitForEvent("page");
+  await page.getByTestId("print").click();
+  const tab = await opened;
+
+  // A local blob of the document itself, not a rasterised copy and not a
+  // request to anywhere: printing must not be the one feature that uploads.
+  const printed = await page.evaluate(() => (window as unknown as { printed: string[] }).printed);
+  expect(printed[0]).toMatch(/^blob:/);
+  await expect(page.getByTestId("status")).toContainText("print from there", {
+    timeout: 30_000,
+  });
+  await tab.close();
+});
+
+test("the words on the page can be selected and copied", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "letter.pdf", await textFixture([["Dear Sir or Madam"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  // The text sits over the canvas, invisible, in the document's own order.
+  const layer = page.getByTestId("text-0");
+  await expect(layer).toContainText("Dear Sir or Madam", { timeout: 30_000 });
+
+  // Double-clicking a word selects it, which is what proves this is real text
+  // and not a label: the browser's own selection is doing the work.
+  await layer.getByText("Dear Sir or Madam").dblclick();
+  const selected = await page.evaluate(() => window.getSelection()?.toString() ?? "");
+  expect(selected.trim().length).toBeGreaterThan(0);
+  expect("Dear Sir or Madam").toContain(selected.trim());
+
+  // And a whole-page selection reads the page back in order.
+  const all = await page.evaluate(() => {
+    const node = document.querySelector('[data-testid="text-0"]');
+    if (!node) return "";
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    return selection?.toString() ?? "";
+  });
+  expect(all).toContain("Dear Sir or Madam");
 });
 
 test("numbers the pages, and the numbers are in the document", async ({ page }) => {

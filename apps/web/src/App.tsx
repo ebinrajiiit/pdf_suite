@@ -16,8 +16,15 @@ import {
 } from "@pdf-suite/ui";
 import type { NumberFormat, Slots } from "@pdf-suite/workers";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
-import type { EditableText, SearchHit } from "@pdf-suite/workers";
-import { canUsePicker, pickFiles, readFiles, saveBytes, suffixName } from "./file-io.js";
+import type { EditableText, SearchHit, TextRun } from "@pdf-suite/workers";
+import {
+  canUsePicker,
+  pickFiles,
+  printBytes,
+  readFiles,
+  saveBytes,
+  suffixName,
+} from "./file-io.js";
 import { useDocument } from "./use-document.js";
 
 export function App() {
@@ -46,6 +53,7 @@ export function App() {
     removeAnnotation,
     clearAnnotations,
     stamp,
+    describe,
     pageText,
     setOrder,
     undo,
@@ -62,6 +70,9 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** File ▸ Properties: what the document says about itself. */
+  const [describing, setDescribing] = useState(false);
+
   /** Headers, footers and page numbers, Acrobat's six slots. */
   const [numbering, setNumbering] = useState(false);
   const [header, setHeader] = useState<Slots>(["", "", ""]);
@@ -80,6 +91,8 @@ export function App() {
   /** Edit-text mode, which is a different thing from the annotation tools. */
   const [editingText, setEditingText] = useState(false);
   const [editRuns, setEditRuns] = useState<Map<number, EditableText[]>>(new Map());
+  /** Extracted text per page, for the selectable layer over the canvas. */
+  const [textRuns, setTextRuns] = useState<Map<number, TextRun[]>>(new Map());
   const [sidebar, setSidebar] = useState<"pages" | "outline" | "form" | "comments">("pages");
   const [colour, setColour] = useState<AnnotColor>(COLOURS[0]!.value);
   const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
@@ -135,6 +148,7 @@ export function App() {
   useEffect(() => {
     setFieldValues({});
     setEditRuns(new Map());
+    setTextRuns(new Map());
     setRedactions(new Map());
     setSelected(new Set());
     setHits([]);
@@ -353,6 +367,13 @@ export function App() {
     setSelected(new Set());
   }, [pageCount, positions, setOrder, state.order]);
 
+  /** Prints what is on screen, marks and all, not the file as it was opened. */
+  const handlePrint = useCallback(async () => {
+    const bytes = await save(state.order);
+    if (!bytes) return;
+    setSaved(await printBytes(bytes, name0));
+  }, [name0, save, state.order]);
+
   // Ctrl/Cmd+F goes to our search, not the browser's, which cannot see inside a
   // canvas anyway. The rest are the ones every editor has — open, save, undo,
   // redo, zoom, and Delete for the pages that are selected.
@@ -393,6 +414,18 @@ export function App() {
         void handleSave();
         return;
       }
+      if (event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        setDescribing((open) => !open);
+        return;
+      }
+      if (event.key.toLowerCase() === "p") {
+        // The browser's own print would print the app's chrome, not the
+        // document, so this takes the key.
+        event.preventDefault();
+        void handlePrint();
+        return;
+      }
       if (event.key === "=" || event.key === "+") {
         event.preventDefault();
         stepZoom(1);
@@ -406,7 +439,17 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleDelete, handleOpen, handleSave, pageCount, positions.length, redo, stepZoom, undo]);
+  }, [
+    handleDelete,
+    handleOpen,
+    handlePrint,
+    handleSave,
+    pageCount,
+    positions.length,
+    redo,
+    stepZoom,
+    undo,
+  ]);
 
   const handleStamp = useCallback(async () => {
     const applied = await stamp({
@@ -577,6 +620,21 @@ export function App() {
     [addAnnotation, colour, pendingPoint, tool],
   );
 
+  /** Reads a page's text once, when it first comes into view, so it can be
+   *  selected and copied. */
+  const needText = useCallback(
+    (page: number) => {
+      setTextRuns((current) => {
+        if (current.has(page)) return current;
+        const next = new Map(current);
+        next.set(page, []);
+        void pageText(page).then((runs) => setTextRuns((later) => new Map(later).set(page, runs)));
+        return next;
+      });
+    },
+    [pageText],
+  );
+
   /** Reads a page's editable runs once, when it first comes into view. */
   const needEditableText = useCallback(
     (page: number) => {
@@ -706,6 +764,12 @@ export function App() {
             : null}
           {info
             ? action("Save", () => void handleSave(), { hint: "Save the document (⌘S)" })
+            : null}
+          {info
+            ? action("Print", () => void handlePrint(), {
+                testId: "print",
+                hint: "Print the document as it is now (⌘P)",
+              })
             : null}
           {info ? (
             <span className="topbar-history">
@@ -894,6 +958,77 @@ export function App() {
           <button type="button" className="action" onClick={() => setAskProtect(false)}>
             Cancel
           </button>
+        </form>
+      ) : null}
+
+      {describing && info ? (
+        <form
+          className="prompt hfpanel"
+          data-testid="properties-panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const text = (name: string) => String(form.get(name) ?? "");
+            void describe({
+              title: text("title"),
+              author: text("author"),
+              subject: text("subject"),
+              keywords: text("keywords"),
+            }).then((done) => {
+              if (done) {
+                setDescribing(false);
+                setSaved("Description saved");
+              }
+            });
+          }}
+        >
+          <div className="hfrow">
+            <span className="hflabel">Title</span>
+            <input
+              className="hfslot"
+              name="title"
+              data-testid="prop-title"
+              defaultValue={info.properties.title}
+              placeholder="What this document is called"
+            />
+            <span className="hflabel">Author</span>
+            <input
+              className="hfslot"
+              name="author"
+              data-testid="prop-author"
+              defaultValue={info.properties.author}
+              placeholder="Who wrote it"
+            />
+          </div>
+          <div className="hfrow">
+            <span className="hflabel">Subject</span>
+            <input
+              className="hfslot"
+              name="subject"
+              data-testid="prop-subject"
+              defaultValue={info.properties.subject}
+            />
+            <span className="hflabel">Keywords</span>
+            <input
+              className="hfslot"
+              name="keywords"
+              data-testid="prop-keywords"
+              defaultValue={info.properties.keywords}
+              placeholder="Separated by commas"
+            />
+          </div>
+          <div className="hfrow">
+            <span className="hfnote">
+              What a catalogue, a search index and a file browser read.
+              {info.properties.producer ? ` Made by ${info.properties.producer}.` : ""}
+            </span>
+            <button type="submit" className="action action-go" data-testid="apply-properties">
+              Save description
+            </button>
+            <button type="button" className="action" onClick={() => setDescribing(false)}>
+              Cancel
+            </button>
+          </div>
         </form>
       ) : null}
 
@@ -1141,6 +1276,8 @@ export function App() {
               onNeedEditableText={needEditableText}
               onEditText={(page, edit) => void handleEditText(page, edit)}
               onPageMenu={openMenu}
+              text={textRuns}
+              onNeedText={needText}
             />
           </div>
 
@@ -1251,6 +1388,10 @@ export function App() {
                 {action("Page numbers…", () => setNumbering((open) => !open), {
                   testId: "number-pages",
                   hint: "Headers, footers, page numbers and Bates numbering",
+                })}
+                {action("Properties…", () => setDescribing((open) => !open), {
+                  testId: "properties",
+                  hint: "Title, author, subject and keywords (⌘D)",
                 })}
               </div>
             </section>
