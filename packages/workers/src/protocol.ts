@@ -5,6 +5,7 @@
 // posted back, only derived results (page sizes, bitmaps, saved bytes) are.
 
 import type {
+  AccessibilityIssue,
   Annotation,
   Bookmark,
   DocumentProperties,
@@ -58,6 +59,7 @@ export interface DocumentInfo {
  * keyed by source page index, which reordering would otherwise invalidate.
  */
 export type {
+  AccessibilityIssue,
   Annotation,
   AnnotRect,
   Bookmark,
@@ -152,6 +154,19 @@ export type WorkerRequest = { id: number } &
       }
     /** Replaces the document's bookmarks with the tree given. */
     | { kind: "setOutline"; bookmarks: Bookmark[]; order: number[]; annotations: Annotation[] }
+    /**
+     * Checks whether the document can be read by a screen reader. Reports only;
+     * `fixAccessible` is what changes anything.
+     */
+    | { kind: "checkAccessible"; order: number[]; annotations: Annotation[] }
+    /** Sets the title, language and window-title flag. */
+    | {
+        kind: "fixAccessible";
+        title: string;
+        language: string;
+        order: number[];
+        annotations: Annotation[];
+      }
     /** Reports what is hidden in the document, changing nothing. */
     | { kind: "findHidden"; order: number[]; annotations: Annotation[] }
     /** Recompresses the document, reopening the result. */
@@ -249,6 +264,7 @@ export type WorkerResponse = { id: number } & (
     }
   | { kind: "found"; found: Found }
   | { kind: "hidden"; report: SanitiseReport }
+  | { kind: "accessibility"; issues: AccessibilityIssue[] }
   | { kind: "sanitised"; info: DocumentInfo; removed: SanitiseReport; wasClean: boolean }
   | {
       kind: "edited";
@@ -294,6 +310,7 @@ export type TerminalResponse = Extract<
       | "imagesEdited"
       | "found"
       | "hidden"
+      | "accessibility"
       | "sanitised"
       | "edited"
       | "parts"

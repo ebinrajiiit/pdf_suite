@@ -1008,6 +1008,36 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("says whether a screen reader could read the document, and fixes what it can", async ({
+  page,
+}) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "notice.pdf", await textFixture([["Notice"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("check-accessibility").click();
+  const list = page.getByTestId("accessibility-issues");
+  // The fixture carries a title, so the failures are language and tagging.
+  await expect(list).toContainText("No language set", { timeout: 30_000 });
+  await expect(list).toContainText("Not tagged");
+  // Tagging is reported as beyond a setting rather than silently guessed at.
+  await expect(list).toContainText("Needs more than a setting");
+
+  await page.getByTestId("doc-language").selectOption("en-IN");
+  await page.getByTestId("fix-accessibility").click();
+  await expect(page.getByTestId("status")).toHaveText("Title, language and window title set", {
+    timeout: 30_000,
+  });
+  await expect(list).not.toContainText("No language set", { timeout: 30_000 });
+
+  // In the file: a reader announces the document, not the file name.
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  expect(doc.catalog.lookup(PDFName.of("Lang"))?.toString()).toContain("en-IN");
+});
+
 test("a picture can be moved and removed, in the document itself", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

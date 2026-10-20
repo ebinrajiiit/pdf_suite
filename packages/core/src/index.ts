@@ -8,6 +8,8 @@ export { imagesToPdf, isSupportedImage } from "./images.js";
 export type { ImagesToPdfOptions, PageBox, SourceImage } from "./images.js";
 export { formatNumber, letters, place, roman, stampPages } from "./stamp.js";
 export { readProperties, setProperties } from "./properties.js";
+export { checkAccessibility, fixAccessibility } from "./accessibility.js";
+export type { AccessibilityIssue, CheckOptions, FixOptions } from "./accessibility.js";
 export { hasOutline, setOutline } from "./outline.js";
 export type { Bookmark } from "./outline.js";
 export { findHidden, sanitise } from "./sanitise.js";

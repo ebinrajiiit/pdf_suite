@@ -7,7 +7,9 @@ import {
   merge,
   reorder,
   imagesToPdf,
+  checkAccessibility,
   findHidden,
+  fixAccessibility,
   readProperties,
   setOutline,
   rotate,
@@ -519,6 +521,41 @@ async function handle(request: WorkerRequest): Promise<void> {
       const marked = await setOutline(base, request.bookmarks);
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, marked, request) });
+      return;
+    }
+    case "checkAccessible": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      // What the engine knows and the file does not say: which pages have no
+      // text at all, and how many pictures are in it.
+      const handle = await engine.open(base.buffer as ArrayBuffer);
+      const withoutText: number[] = [];
+      let imageCount = 0;
+      try {
+        for (let page = 0; page < handle.pageCount(); page++) {
+          throwIfCancelled(id);
+          const runs = await handle.extractText(page).catch(() => []);
+          if (runs.every((run) => run.text.trim() === "")) withoutText.push(page);
+          imageCount += (await engine.images(base, page).catch(() => [])).length;
+        }
+      } finally {
+        handle.close();
+      }
+      post({
+        id,
+        kind: "accessibility",
+        issues: await checkAccessibility(base, { pagesWithoutText: withoutText, imageCount }),
+      });
+      return;
+    }
+    case "fixAccessible": {
+      const base = await materialise(id, request.order, request.annotations);
+      const fixed = await fixAccessibility(base, {
+        title: request.title,
+        language: request.language,
+      });
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, fixed, request) });
       return;
     }
     case "findHidden": {

@@ -23,6 +23,7 @@ import type { Bookmark, NumberFormat, Slots } from "@pdf-suite/workers";
 import type { OutlineItem } from "@pdf-suite/engine";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
 import type {
+  AccessibilityIssue,
   EditableText,
   Found,
   PageImage,
@@ -72,6 +73,8 @@ export function App() {
     describe,
     findPattern,
     setBookmarks,
+    checkAccessible,
+    fixAccessible,
     findHidden,
     sanitise,
     pageText,
@@ -90,6 +93,11 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** Accessibility: what is wrong, and what the fix should say. */
+  const [checking, setChecking] = useState(false);
+  const [issues, setIssues] = useState<AccessibilityIssue[] | undefined>();
+  const [docLanguage, setDocLanguage] = useState("en");
+
   /** Remove hidden information: what was found, and what to take out. */
   const [cleaning, setCleaning] = useState(false);
   const [hidden, setHidden] = useState<SanitiseReport | undefined>();
@@ -433,6 +441,22 @@ export function App() {
     },
     [setBookmarks],
   );
+
+  const handleCheckAccessible = useCallback(async () => {
+    setChecking(true);
+    setIssues(undefined);
+    const found = await checkAccessible();
+    setIssues(found);
+    if (found?.length === 0) setSaved("Nothing to fix: this document reads well");
+  }, [checkAccessible]);
+
+  const handleFixAccessible = useCallback(async () => {
+    const done = await fixAccessible(stripPdf(name0), docLanguage);
+    if (!done) return;
+    const found = await checkAccessible();
+    setIssues(found);
+    setSaved("Title, language and window title set");
+  }, [checkAccessible, docLanguage, fixAccessible, name0]);
 
   /** Opens the panel with a report of what is actually in this document. */
   const handleInspect = useCallback(async () => {
@@ -1265,6 +1289,56 @@ export function App() {
         </form>
       ) : null}
 
+      {checking && info ? (
+        <div className="prompt hfpanel" data-testid="accessibility-panel">
+          <div className="hfrow">
+            <span className="hflabel">Reading</span>
+            <span className="hfnote">
+              Whether someone using a screen reader could read this document.
+            </span>
+            <label className="hfcheck">
+              Language
+              <select
+                aria-label="Document language"
+                data-testid="doc-language"
+                value={docLanguage}
+                onChange={(event) => setDocLanguage(event.target.value)}
+              >
+                <option value="en">English</option>
+                <option value="en-IN">English (India)</option>
+                <option value="ml">Malayalam</option>
+                <option value="hi">Hindi</option>
+                <option value="ta">Tamil</option>
+              </select>
+            </label>
+          </div>
+          <ul className="a11ylist" data-testid="accessibility-issues">
+            {issues === undefined ? (
+              <li>Checking…</li>
+            ) : issues.length === 0 ? (
+              <li className="a11y-ok">Nothing to fix.</li>
+            ) : (
+              issues.map((issue) => (
+                <li key={issue.id} className={`a11y-${issue.severity}`}>
+                  <strong>{issue.summary}</strong>
+                  <span>{issue.detail}</span>
+                  {issue.fixable ? <em>Can be fixed here</em> : <em>Needs more than a setting</em>}
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="hfrow">
+            {action("Set title and language", () => void handleFixAccessible(), {
+              testId: "fix-accessibility",
+              hint: "Names the document and says what language it is in",
+            })}
+            <button type="button" className="action" onClick={() => setChecking(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {cleaning && info ? (
         <div className="prompt hfpanel" data-testid="sanitise-panel">
           <div className="hfrow">
@@ -1815,6 +1889,10 @@ export function App() {
               </p>
               <div className="tool-grid">{toolButton("redact")}</div>
               <div className="action-row">
+                {action("Check accessibility…", () => void handleCheckAccessible(), {
+                  testId: "check-accessibility",
+                  hint: "Whether a screen reader could read this document",
+                })}
                 {action("Remove hidden info…", () => void handleInspect(), {
                   testId: "sanitise",
                   hint: "Metadata, attached files, scripts and actions — what travels unseen",

@@ -204,11 +204,15 @@ What an Acrobat user would miss before anything subtle:
 
 ### Accessibility
 
-Entirely missing, and the only group where that is true. Autotag, Accessibility
-Check, the Reading Order tool, the Tags panel, the table editor, alt text,
-PDF/UA validation, Read Out Loud, reflow view. For a public institution this is
-not a nicety: accessible documents are a legal expectation. It is also a large
-piece of work — the tag tree is a second document structure to build and edit.
+| Acrobat | Here |
+| --- | --- |
+| Accessibility Check | Done, for the checks with an unambiguous answer: title, language, tagging, window title, pages with no text, pictures with no description |
+| Set the title, language and window title | Done, from the same panel |
+| Autotag | Missing — see above. The tag tree is a second document structure to build and edit |
+| Reading Order tool, Tags panel, table editor | Missing, and all downstream of tagging |
+| Alternate text on pictures | Missing: descriptions live in the tag tree |
+| PDF/UA validation | Missing. veraPDF is Apache-2.0, so it is allowed |
+| Read Out Loud, reflow view | Missing |
 
 ### Print production (Acrobat Pro)
 
@@ -268,8 +272,14 @@ suggests, for an institution specifically:
 2. ~~Sanitise / remove hidden information~~ — **done.** The description, the
    XMP packet, embedded files, document scripts and actions on fields, with
    comments and links as options. It reports what it found before removing it.
-3. **Accessibility tagging** — still missing, and still the one a public
-   university is expected to have.
+3. **Accessibility** — the check is **done**: title, language, tagging, window
+   title, scanned pages with no text, pictures with no description, each with
+   what it means for a reader. The title, the language and the window-title
+   flag are fixed on the spot. **Tagging is still missing**, and is the rest of
+   this: it means deciding what is a heading, what is a table and in what order
+   a document should be read, from nothing but coordinates. Acrobat guesses and
+   tells you to check every tag afterwards; claiming to have done it would be
+   worse than saying it is not done.
 
 Nothing here is blocked on Indic support, which is the point of the English-first
 decision — but note that OCR and search already handle Malayalam, so "English

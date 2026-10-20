@@ -2,6 +2,7 @@ export { createPdfWorker, createPdfWorkerClient } from "./client.js";
 export type { OnProgress, PdfWorkerClient } from "./client.js";
 export { CancelledError } from "./protocol.js";
 export type {
+  AccessibilityIssue,
   Bookmark,
   DocumentInfo,
   DocumentProperties,

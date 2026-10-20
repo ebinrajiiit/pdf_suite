@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
+  AccessibilityIssue,
   Bookmark,
   DocumentProperties,
   EditableText,
@@ -674,6 +675,36 @@ export function useDocument() {
     [run],
   );
 
+  /** Whether a screen reader could read this document. Changes nothing. */
+  const checkAccessible = useCallback(
+    async (): Promise<AccessibilityIssue[] | undefined> =>
+      run("Checking accessibility", (worker) =>
+        worker.checkAccessible(stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
+  /** Sets the title, the language and the window-title flag. */
+  const fixAccessible = useCallback(
+    async (title: string, language: string) => {
+      const info = await run("Setting the title and language", (worker) =>
+        worker.fixAccessible(title, language, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!info) return false;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return true;
+    },
+    [run],
+  );
+
   /** What the document carries but does not show. Changes nothing. */
   const findHidden = useCallback(
     async (): Promise<SanitiseReport | undefined> =>
@@ -756,6 +787,8 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    checkAccessible,
+    fixAccessible,
     findHidden,
     sanitise,
     addAnnotation,

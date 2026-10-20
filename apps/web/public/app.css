@@ -765,6 +765,42 @@ textarea:focus-visible,
   cursor: nwse-resize;
 }
 
+/* What a screen reader would make of the document. */
+.a11ylist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.a11ylist li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--line);
+}
+.a11ylist li span {
+  color: var(--ink-soft);
+  flex: 1 1 18rem;
+}
+.a11ylist li em {
+  color: var(--ink-soft);
+  font-size: 0.8em;
+}
+.a11y-fail {
+  border-left-color: var(--danger) !important;
+}
+.a11y-warn {
+  border-left-color: #c08a1e !important;
+}
+.a11y-ok {
+  border-left-color: #2a8a4a !important;
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {

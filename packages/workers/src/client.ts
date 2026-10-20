@@ -1,5 +1,6 @@
 import {
   CancelledError,
+  type AccessibilityIssue,
   type Annotation,
   type Bookmark,
   type DocumentInfo,
@@ -116,6 +117,15 @@ export interface PdfWorkerClient {
   /** Replaces the document's bookmarks. */
   setOutline(
     bookmarks: Bookmark[],
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Checks whether a screen reader could read this document. Changes nothing. */
+  checkAccessible(order: number[], annotations: Annotation[]): Promise<AccessibilityIssue[]>;
+  /** Sets the title, the language and the window-title flag. */
+  fixAccessible(
+    title: string,
+    language: string,
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
@@ -330,6 +340,16 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     async setOutline(bookmarks, order, annotations) {
       return expect(await send({ kind: "setOutline", bookmarks, order, annotations }), "document")
         .info;
+    },
+    async checkAccessible(order, annotations) {
+      return expect(await send({ kind: "checkAccessible", order, annotations }), "accessibility")
+        .issues;
+    },
+    async fixAccessible(title, language, order, annotations) {
+      return expect(
+        await send({ kind: "fixAccessible", title, language, order, annotations }),
+        "document",
+      ).info;
     },
     async findHidden(order, annotations) {
       return expect(await send({ kind: "findHidden", order, annotations }), "hidden").report;
