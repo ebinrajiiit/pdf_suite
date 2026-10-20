@@ -331,6 +331,12 @@ textarea:focus-visible,
   background: var(--panel);
   color: inherit;
 }
+.hfcheck {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
 .hfnote {
   flex: 1 1 20rem;
   font-size: 0.82rem;

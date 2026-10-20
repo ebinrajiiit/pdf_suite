@@ -3,6 +3,10 @@ import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
   DocumentProperties,
   EditableText,
+  FindRequest,
+  Found,
+  SanitiseOptions,
+  SanitiseReport,
   RedactArea,
   StampOptions,
   TextEdit,
@@ -613,6 +617,45 @@ export function useDocument() {
     [run],
   );
 
+  /** What the document carries but does not show. Changes nothing. */
+  const findHidden = useCallback(
+    async (): Promise<SanitiseReport | undefined> =>
+      run("Checking what is hidden", (worker) =>
+        worker.findHidden(stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
+  /** Removes it. */
+  const sanitise = useCallback(
+    async (options: SanitiseOptions) => {
+      const result = await run("Removing hidden information", (worker) =>
+        worker.sanitise(options, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
+  /** Finds personal numbers or words, without changing the document. */
+  const findPattern = useCallback(
+    async (request: FindRequest): Promise<Found | undefined> =>
+      run("Searching", (worker) =>
+        worker.findPattern(request, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
   /** Saves just the given source pages, leaving the open document alone. */
   const extract = useCallback(
     async (pages: number[]) =>
@@ -652,6 +695,9 @@ export function useDocument() {
     editText,
     stamp,
     describe,
+    findPattern,
+    findHidden,
+    sanitise,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,

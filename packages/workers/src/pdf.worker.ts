@@ -7,8 +7,10 @@ import {
   merge,
   reorder,
   imagesToPdf,
+  findHidden,
   readProperties,
   rotate,
+  sanitise,
   setProperties,
   split,
   stampPages,
@@ -487,6 +489,32 @@ async function handle(request: WorkerRequest): Promise<void> {
         addedLines: result.addedLines,
         rejected: result.rejected,
       });
+      return;
+    }
+    case "findHidden": {
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "hidden", report: await findHidden(base) });
+      return;
+    }
+    case "sanitise": {
+      const base = await materialise(id, request.order, request.annotations);
+      const result = await sanitise(base, request.options);
+      throwIfCancelled(id);
+      post({
+        id,
+        kind: "sanitised",
+        info: await openBytes(id, result.bytes, request),
+        removed: result.removed,
+        wasClean: result.wasClean,
+      });
+      return;
+    }
+    case "findPattern": {
+      if (!engine) throw new Error("worker not initialised");
+      // Searched as the document will be written, so the page numbers in the
+      // result are the ones a redaction will act on.
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "found", found: await engine.findPattern(base, request.request) });
       return;
     }
     case "redact": {

@@ -1006,6 +1006,77 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("says what the document is carrying unseen, and takes it out", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  // The fixture carries a title and an author, as every converted document does.
+  await openFixture(page, "list.pdf", await textFixture([["Admissions"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("sanitise").click();
+  await expect(page.getByTestId("hidden-report")).toContainText("a description", {
+    timeout: 30_000,
+  });
+
+  await page.getByTestId("apply-sanitise").click();
+  await expect(page.getByTestId("status")).toContainText("Removed the description", {
+    timeout: 30_000,
+  });
+
+  // Gone from the file, which is where it mattered.
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  expect(doc.getTitle()).toBeUndefined();
+  expect(doc.getAuthor()).toBeUndefined();
+
+  // And the page itself is untouched.
+  await page.getByTestId("search-input").fill("Admissions");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
+test("finds every Aadhaar number and removes them all", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "admissions.pdf",
+    await textFixture([
+      ["Name: A Student", "Aadhaar: 1234 5678 9012", "Course: MTech"],
+      ["Name: B Student", "Aadhaar 2345-6789-0123", "Course: MTech"],
+    ]),
+  );
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  await page.getByTestId("find-redact").click();
+  await expect(page.getByTestId("pattern-aadhaar")).toBeChecked();
+  await page.getByTestId("find-matches").click();
+
+  // Found and counted before anything is destroyed.
+  await expect(page.getByTestId("status")).toContainText("2 matches on 2 pages", {
+    timeout: 30_000,
+  });
+  await page.getByTestId("redact-matches").click();
+  await expect(page.getByTestId("status")).toContainText("no text left in the redacted areas", {
+    timeout: 60_000,
+  });
+
+  // Gone from the document's own text — both of them, on both pages.
+  await page.getByTestId("search-input").fill("5678");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+  await page.getByTestId("search-input").fill("6789");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+
+  // And the words around them survived: this removes the number, not the page.
+  await page.getByTestId("search-input").fill("MTech");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 2", { timeout: 30_000 });
+});
+
 test("an arrow and a stamp are drawn by the engine, not just written", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

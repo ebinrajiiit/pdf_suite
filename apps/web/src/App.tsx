@@ -17,7 +17,14 @@ import {
 } from "@pdf-suite/ui";
 import type { NumberFormat, Slots } from "@pdf-suite/workers";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
-import type { EditableText, SearchHit, TextRun } from "@pdf-suite/workers";
+import type {
+  EditableText,
+  Found,
+  PatternName,
+  SanitiseReport,
+  SearchHit,
+  TextRun,
+} from "@pdf-suite/workers";
 import {
   canUsePicker,
   pickFiles,
@@ -55,6 +62,9 @@ export function App() {
     clearAnnotations,
     stamp,
     describe,
+    findPattern,
+    findHidden,
+    sanitise,
     pageText,
     setOrder,
     undo,
@@ -71,6 +81,18 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** Remove hidden information: what was found, and what to take out. */
+  const [cleaning, setCleaning] = useState(false);
+  const [hidden, setHidden] = useState<SanitiseReport | undefined>();
+  const [cleanComments, setCleanComments] = useState(false);
+  const [cleanLinks, setCleanLinks] = useState(false);
+
+  /** Find-and-redact: what to look for, and what was found but not yet removed. */
+  const [hunting, setHunting] = useState(false);
+  const [patterns, setPatterns] = useState<PatternName[]>(["aadhaar"]);
+  const [huntWords, setHuntWords] = useState("");
+  const [foundToRedact, setFoundToRedact] = useState<Found | undefined>();
+
   /** What a stamp says. Acrobat's own list, plus the one a registry uses. */
   const [stampLabel, setStampLabel] = useState("Approved");
   /**
@@ -341,6 +363,75 @@ export function App() {
           }). Do not share this file.`,
     );
   }, [redact, redactions]);
+
+  /** Finds every match, and says how many, before anything is destroyed. */
+  const handleFind = useCallback(async () => {
+    const words = huntWords
+      .split(",")
+      .map((word) => word.trim())
+      .filter((word) => word !== "");
+    const found = await findPattern({ patterns, words });
+    if (!found) return;
+    setFoundToRedact(found);
+    setSaved(
+      found.count === 0
+        ? "Nothing matched"
+        : `${found.count} match${found.count === 1 ? "" : "es"} on ${found.areas.length} ` +
+            `page${found.areas.length === 1 ? "" : "s"}` +
+            (found.samples.length > 0 ? `, such as ${found.samples.slice(0, 3).join(", ")}` : ""),
+    );
+  }, [findPattern, huntWords, patterns]);
+
+  /** Removes what the search found, through the same verified redaction pass. */
+  const handleRedactFound = useCallback(async () => {
+    if (!foundToRedact || foundToRedact.count === 0) return;
+    const result = await redact(foundToRedact.areas);
+    setFoundToRedact(undefined);
+    if (!result) return;
+    setHunting(false);
+    const removed = Object.values(result.removed).reduce((n, c) => n + c, 0);
+    setSaved(
+      result.verified
+        ? `Removed ${removed} object${removed === 1 ? "" : "s"}; no text left in the redacted areas`
+        : `WARNING: text is still present after redacting (${result.leftovers.length} run${
+            result.leftovers.length === 1 ? "" : "s"
+          }). Do not share this file.`,
+    );
+  }, [foundToRedact, redact]);
+
+  /** Opens the panel with a report of what is actually in this document. */
+  const handleInspect = useCallback(async () => {
+    setCleaning(true);
+    const report = await findHidden();
+    setHidden(report);
+    if (report) {
+      const clean =
+        !report.metadata && report.attachments === 0 && report.scripts === 0 && report.links === 0;
+      setSaved(clean ? "Nothing hidden found" : undefined);
+    }
+  }, [findHidden]);
+
+  const handleSanitise = useCallback(async () => {
+    const result = await sanitise({
+      metadata: true,
+      attachments: true,
+      scripts: true,
+      comments: cleanComments,
+      links: cleanLinks,
+    });
+    if (!result) return;
+    setCleaning(false);
+    setHidden(undefined);
+    const { removed } = result;
+    const went = [
+      removed.metadata ? "the description" : "",
+      removed.attachments > 0 ? `${removed.attachments} attached file(s)` : "",
+      removed.scripts > 0 ? `${removed.scripts} script(s)` : "",
+      removed.comments > 0 ? `${removed.comments} comment(s)` : "",
+      removed.links > 0 ? `${removed.links} link(s)` : "",
+    ].filter((part) => part !== "");
+    setSaved(went.length === 0 ? "Nothing hidden to remove" : `Removed ${went.join(", ")}`);
+  }, [cleanComments, cleanLinks, sanitise]);
 
   /** Runs OCR over the selection, or the whole document when nothing is selected. */
   const handleOcr = useCallback(async () => {
@@ -1103,6 +1194,143 @@ export function App() {
         </form>
       ) : null}
 
+      {cleaning && info ? (
+        <div className="prompt hfpanel" data-testid="sanitise-panel">
+          <div className="hfrow">
+            <span className="hflabel">Hidden</span>
+            <span className="hfnote" data-testid="hidden-report">
+              {hidden
+                ? [
+                    hidden.metadata ? "a description" : "",
+                    hidden.attachments > 0 ? `${hidden.attachments} attached file(s)` : "",
+                    hidden.scripts > 0 ? `${hidden.scripts} script(s) or action(s)` : "",
+                    hidden.comments > 0 ? `${hidden.comments} comment(s)` : "",
+                    hidden.links > 0 ? `${hidden.links} link(s)` : "",
+                  ]
+                    .filter((part) => part !== "")
+                    .join(", ") || "nothing hidden"
+                : "Looking…"}
+            </span>
+          </div>
+          <div className="hfrow">
+            <span className="hflabel">Also</span>
+            <label className="hfcheck">
+              <input
+                type="checkbox"
+                data-testid="clean-comments"
+                checked={cleanComments}
+                onChange={(event) => setCleanComments(event.target.checked)}
+              />
+              Remove comments and marks
+            </label>
+            <label className="hfcheck">
+              <input
+                type="checkbox"
+                data-testid="clean-links"
+                checked={cleanLinks}
+                onChange={(event) => setCleanLinks(event.target.checked)}
+              />
+              Remove links
+            </label>
+          </div>
+          <div className="hfrow">
+            <span className="hfnote">
+              The description, attached files, scripts and actions always go. None of this is
+              visible on any page, and all of it travels with the file.
+            </span>
+            {action("Remove it", () => void handleSanitise(), {
+              testId: "apply-sanitise",
+              danger: true,
+            })}
+            <button
+              type="button"
+              className="action"
+              onClick={() => {
+                setCleaning(false);
+                setHidden(undefined);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {hunting && info ? (
+        <form
+          className="prompt hfpanel"
+          data-testid="find-redact-panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleFind();
+          }}
+        >
+          <div className="hfrow">
+            <span className="hflabel">Find</span>
+            {PATTERN_CHOICES.map(({ name, label }) => (
+              <label key={name} className="hfcheck">
+                <input
+                  type="checkbox"
+                  data-testid={`pattern-${name}`}
+                  checked={patterns.includes(name)}
+                  onChange={(event) => {
+                    setFoundToRedact(undefined);
+                    setPatterns((current) =>
+                      event.target.checked
+                        ? [...current, name]
+                        : current.filter((one) => one !== name),
+                    );
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div className="hfrow">
+            <span className="hflabel">Words</span>
+            <input
+              className="hfslot"
+              data-testid="hunt-words"
+              value={huntWords}
+              placeholder="Any words to remove as well, separated by commas"
+              onChange={(event) => {
+                setFoundToRedact(undefined);
+                setHuntWords(event.target.value);
+              }}
+            />
+          </div>
+          <div className="hfrow">
+            <span className="hfnote">
+              Searches every page and shows what it found. Nothing is removed until you say so, and
+              what is removed is taken out of the file, not covered over.
+            </span>
+            <button type="submit" className="action action-go" data-testid="find-matches">
+              Search
+            </button>
+            {action(
+              foundToRedact && foundToRedact.count > 0 ? `Remove ${foundToRedact.count}` : "Remove",
+              () => void handleRedactFound(),
+              {
+                testId: "redact-matches",
+                danger: true,
+                off: disabled || !foundToRedact || foundToRedact.count === 0,
+                hint: "Remove every match from the file, then check it is gone",
+              },
+            )}
+            <button
+              type="button"
+              className="action"
+              onClick={() => {
+                setHunting(false);
+                setFoundToRedact(undefined);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       {numbering && info ? (
         <form
           className="prompt hfpanel"
@@ -1458,6 +1686,16 @@ export function App() {
                   : "Nothing selected — acts on the whole document"}
               </p>
               <div className="tool-grid">{toolButton("redact")}</div>
+              <div className="action-row">
+                {action("Remove hidden info…", () => void handleInspect(), {
+                  testId: "sanitise",
+                  hint: "Metadata, attached files, scripts and actions — what travels unseen",
+                })}
+                {action("Redact by pattern…", () => setHunting((open) => !open), {
+                  testId: "find-redact",
+                  hint: "Find Aadhaar or PAN numbers, emails, phone numbers or words, and remove every one",
+                })}
+              </div>
               {redactionCount > 0
                 ? action(
                     `Remove ${redactionCount} area${redactionCount === 1 ? "" : "s"}`,
@@ -1682,6 +1920,14 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   signature: "Sign",
   redact: "Redact",
 };
+
+/** The patterns offered, named for what a clerk would call them. */
+const PATTERN_CHOICES: { name: PatternName; label: string }[] = [
+  { name: "aadhaar", label: "Aadhaar numbers" },
+  { name: "pan", label: "PAN numbers" },
+  { name: "phone", label: "Phone numbers" },
+  { name: "email", label: "Email addresses" },
+];
 
 /** What a rubber stamp can say. Acrobat's own list, plus the registry's. */
 const STAMPS = [

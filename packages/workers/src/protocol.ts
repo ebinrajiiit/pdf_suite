@@ -7,6 +7,8 @@
 import type {
   Annotation,
   DocumentProperties,
+  SanitiseOptions,
+  SanitiseReport,
   FieldValues,
   FormInfo,
   StampOptions,
@@ -14,6 +16,8 @@ import type {
 import type { OutlineItem, TextRun } from "@pdf-suite/engine";
 import type {
   EditableText,
+  FindRequest,
+  Found,
   RedactArea,
   RedactionResult,
   TextEdit,
@@ -53,6 +57,8 @@ export type {
   Annotation,
   AnnotRect,
   DocumentProperties,
+  SanitiseOptions,
+  SanitiseReport,
   FieldValues,
   FormField,
   FormInfo,
@@ -63,6 +69,9 @@ export type {
 export type { OutlineItem, TextRun } from "@pdf-suite/engine";
 export type {
   EditableText,
+  FindRequest,
+  Found,
+  PatternName,
   RedactArea,
   RedactRect,
   RedactionResult,
@@ -123,6 +132,18 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /**
+     * Removes what the document carries but does not show: metadata, embedded
+     * files, scripts, and optionally comments and links.
+     */
+    | {
+        kind: "sanitise";
+        options: SanitiseOptions;
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Reports what is hidden in the document, changing nothing. */
+    | { kind: "findHidden"; order: number[]; annotations: Annotation[] }
     /** Recompresses the document, reopening the result. */
     | { kind: "compress"; order: number[]; annotations: Annotation[] }
     /**
@@ -140,6 +161,12 @@ export type WorkerRequest = { id: number } &
     | { kind: "editableText"; page: number; order: number[]; annotations: Annotation[] }
     /** Replaces the text of the named paragraphs, re-wrapping each one. */
     | { kind: "editText"; edits: TextEdit[]; order: number[]; annotations: Annotation[] }
+    /**
+     * Finds personal numbers, addresses or words across the document and returns
+     * boxes tight enough to redact. Finding and removing are separate requests
+     * on purpose: nothing is destroyed until the count has been shown.
+     */
+    | { kind: "findPattern"; request: FindRequest; order: number[]; annotations: Annotation[] }
     /** Removes the content inside the given areas, then verifies it is gone. */
     | { kind: "redact"; areas: RedactArea[]; order: number[]; annotations: Annotation[] }
     /** Sets the password the document is saved with, or null to remove protection. */
@@ -199,6 +226,9 @@ export type WorkerResponse = { id: number } & (
   | { kind: "hits"; hits: SearchHit[]; truncated: boolean }
   | { kind: "runs"; runs: TextRun[] }
   | { kind: "editable"; runs: EditableText[] }
+  | { kind: "found"; found: Found }
+  | { kind: "hidden"; report: SanitiseReport }
+  | { kind: "sanitised"; info: DocumentInfo; removed: SanitiseReport; wasClean: boolean }
   | {
       kind: "edited";
       info: DocumentInfo;
@@ -239,6 +269,9 @@ export type TerminalResponse = Extract<
       | "hits"
       | "runs"
       | "editable"
+      | "found"
+      | "hidden"
+      | "sanitised"
       | "edited"
       | "parts"
       | "images"

@@ -175,9 +175,9 @@ What an Acrobat user would miss before anything subtle:
 | Security policies | Missing |
 | Redact | Done, with true content removal and a verification pass |
 | Mark for redaction, then apply | Missing: ours removes immediately. Acrobat's two-step lets you review first |
-| Find text or patterns and redact all | Missing, and this is the one institutions actually need — redacting every Aadhaar number in a 200-page file by hand is how mistakes happen |
+| Find text or patterns and redact all | Done: Aadhaar, PAN, phone and email, plus any words. Matches are counted and sampled before anything is destroyed |
 | Redaction codes and overlay text | Missing |
-| Sanitise / remove hidden information | Missing: metadata, embedded files, hidden layers, scripts, deleted-but-present content. A separate job from redaction and arguably more important |
+| Sanitise / remove hidden information | Done for the description, XMP, embedded files, scripts and actions, with comments and links optional. Hidden layers and deleted-but-present content are still missing |
 
 ### Sign
 
@@ -261,11 +261,15 @@ difference between a tool someone tries and a tool someone switches to. After
 them, three things are worth more than their position in Acrobat's own menus
 suggests, for an institution specifically:
 
-1. **Find-and-redact by pattern** — redacting by hand is where leaks come from.
-2. **Sanitise / remove hidden information** — a redacted document that still
-   carries its metadata and its deleted text is not redacted.
-3. **Accessibility tagging** — a public university is expected to publish
-   documents people can actually read.
+1. ~~Find-and-redact by pattern~~ — **done.** Aadhaar, PAN, phone and email
+   patterns plus any words, found across every page with boxes from PDFium's
+   per-character geometry, counted for review, then removed through the
+   verified redaction pass.
+2. ~~Sanitise / remove hidden information~~ — **done.** The description, the
+   XMP packet, embedded files, document scripts and actions on fields, with
+   comments and links as options. It reports what it found before removing it.
+3. **Accessibility tagging** — still missing, and still the one a public
+   university is expected to have.
 
 Nothing here is blocked on Indic support, which is the point of the English-first
 decision — but note that OCR and search already handle Malayalam, so "English

@@ -5,11 +5,15 @@ import {
   type FieldValues,
   type OcrAssets,
   type EditableText,
+  type FindRequest,
+  type Found,
   type RedactArea,
   type RedactionResult,
   type TextEdit,
   type TextEditResult,
   type DocumentProperties,
+  type SanitiseOptions,
+  type SanitiseReport,
   type SearchHit,
   type StampOptions,
   type TextRun,
@@ -97,6 +101,16 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<{ info: DocumentInfo; order: number[]; annotations: Annotation[] }>;
+  /** Reports what the document carries but does not show, changing nothing. */
+  findHidden(order: number[], annotations: Annotation[]): Promise<SanitiseReport>;
+  /** Removes it, and says what went. */
+  sanitise(
+    options: SanitiseOptions,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; removed: SanitiseReport; wasClean: boolean }>;
+  /** Finds personal numbers or words across the document, without changing it. */
+  findPattern(request: FindRequest, order: number[], annotations: Annotation[]): Promise<Found>;
   /**
    * Removes the content inside the given areas. The reply says how many page
    * objects went and whether re-reading the result found any text left inside
@@ -284,6 +298,20 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     async redo(order, annotations) {
       const reply = expect(await send({ kind: "redo", order, annotations }), "restored");
       return { info: reply.info, order: reply.order, annotations: reply.annotations };
+    },
+    async findHidden(order, annotations) {
+      return expect(await send({ kind: "findHidden", order, annotations }), "hidden").report;
+    },
+    async sanitise(options, order, annotations) {
+      const reply = expect(
+        await send({ kind: "sanitise", options, order, annotations }),
+        "sanitised",
+      );
+      return { info: reply.info, removed: reply.removed, wasClean: reply.wasClean };
+    },
+    async findPattern(request, order, annotations) {
+      return expect(await send({ kind: "findPattern", request, order, annotations }), "found")
+        .found;
     },
     async redact(areas, order, annotations) {
       const reply = expect(await send({ kind: "redact", areas, order, annotations }), "redacted");

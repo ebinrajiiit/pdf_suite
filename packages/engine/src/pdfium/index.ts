@@ -1,5 +1,6 @@
 import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
 import { redactWithPdfium, saveCopy, type RedactArea, type RedactionResult } from "./redact.js";
+import { findPattern, type FindRequest, type Found } from "./find.js";
 import {
   applyTextEdits,
   listEditableText,
@@ -250,6 +251,8 @@ function lastError(m: WrappedPdfiumModule): string {
 }
 
 export type { RedactArea, RedactionResult, RedactRect } from "./redact.js";
+export { PATTERNS } from "./find.js";
+export type { FindRequest, Found, PatternName } from "./find.js";
 export type { EditableText, TextEdit, TextEditResult } from "./text-edit.js";
 export { STANDARD_FONTS } from "./text-edit.js";
 
@@ -270,6 +273,12 @@ export type PdfiumEngine = PdfEngine & {
   editableText(bytes: Uint8Array, page: number): Promise<EditableText[]>;
   /** Replaces the text of the named runs and returns the new document. */
   editText(bytes: Uint8Array, edits: TextEdit[]): Promise<TextEditResult>;
+  /**
+   * Finds personal numbers, addresses or words across the document and returns
+   * boxes tight enough to redact — the boxes come from per-character geometry,
+   * not from the whole-line runs search highlights with.
+   */
+  findPattern(bytes: Uint8Array, request: FindRequest): Promise<Found>;
 };
 
 export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<PdfiumEngine> {
@@ -318,6 +327,9 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
     wasmHeapBytes: () => m.pdfium.HEAPU8.byteLength,
 
     redact: (bytes, areas) => redactWithPdfium(m, bytes, areas, textOf),
+
+    findPattern: async (bytes, request) =>
+      withDocument(bytes, (doc) => findPattern(m, doc, m.FPDF_GetPageCount(doc), request)),
 
     editableText: async (bytes, page) =>
       withDocument(bytes, (doc) => listEditableText(m, doc, page)),
