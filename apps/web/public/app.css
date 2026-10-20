@@ -672,8 +672,28 @@ textarea:focus-visible,
 
 /* Which page is being read, and the bookmark panel's own actions. */
 .pagebox {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
+}
+.pagebox button {
+  padding: 0 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pagebox button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Full screen shows the document, so it gets the page's own background. */
+.main:fullscreen {
+  background: var(--sunken);
 }
 .outline-panel {
   display: flex;
@@ -752,6 +772,21 @@ textarea:focus-visible,
   border-radius: 50%;
   background: var(--panel);
   color: var(--danger);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.imagebox-replace {
+  position: absolute;
+  top: -0.7rem;
+  right: 0.9rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent);
   font-size: 0.75rem;
   line-height: 1;
   cursor: pointer;
@@ -863,6 +898,17 @@ textarea:focus-visible,
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.fieldlist-formula {
+  flex: 0 1 8rem;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
 }
 .fieldlist-kind {
   color: var(--ink-soft);
@@ -995,6 +1041,17 @@ textarea:focus-visible,
 .linkbox:hover,
 .linkbox:focus-visible {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* A calculated field, and what is wrong with a filled one. */
+.form-calculated {
+  color: var(--accent);
+  font-weight: 700;
+}
+.form-problem {
+  margin: 0.15rem 0 0;
+  color: var(--danger);
+  font-size: 0.78rem;
 }
 
 /* ---------- right-click menu ---------- */

@@ -1,4 +1,4 @@
-import type { FormField, FormInfo } from "@pdf-suite/core";
+import { evaluate, validate, type FormField, type FormInfo } from "@pdf-suite/core";
 
 export interface FormPanelProps {
   form: FormInfo;
@@ -7,6 +7,44 @@ export interface FormPanelProps {
   onChange: (name: string, value: string | string[] | boolean) => void;
   /** Called with a source page index, to jump to the field. */
   onGo: (page: number) => void;
+}
+
+/**
+ * What the calculated fields come to, and what is wrong with what is filled in.
+ *
+ * Calculations run here rather than in the document, because the document's
+ * own way of doing this is JavaScript and `docs/PRODUCT.md` rules that out. The
+ * totals are written into the fields when the form is filled, so the saved file
+ * is right in any reader even though only this one recomputes.
+ */
+export function computed(
+  form: FormInfo,
+  values: Record<string, string | string[] | boolean>,
+): { totals: Record<string, string>; problems: Record<string, string> } {
+  const current: Record<string, string | string[] | boolean | undefined> = {};
+  for (const field of form.fields) current[field.name] = field.value;
+  Object.assign(current, values);
+
+  const totals: Record<string, string> = {};
+  const problems: Record<string, string> = {};
+
+  for (const [name, rule] of Object.entries(form.rules ?? {})) {
+    if (rule.formula) {
+      try {
+        const total = evaluate(rule.formula, current);
+        // Whole numbers as whole numbers: a fee of 73000 should not read
+        // 73000.00 because the formula happened to divide somewhere.
+        totals[name] = Number.isInteger(total) ? String(total) : total.toFixed(2);
+        current[name] = totals[name];
+      } catch (error) {
+        problems[name] = error instanceof Error ? error.message : String(error);
+      }
+    }
+    const wrong = validate(name, current[name], rule);
+    if (wrong) problems[name] = wrong;
+  }
+
+  return { totals, problems };
 }
 
 /**
@@ -19,6 +57,7 @@ export interface FormPanelProps {
  * already available from pdf-lib.
  */
 export function FormPanel({ form, values, onChange, onGo }: FormPanelProps) {
+  const { totals, problems } = computed(form, values);
   if (form.hasXfa && form.fields.length === 0) {
     return (
       <p className="form-empty" data-testid="form-xfa">
@@ -46,9 +85,11 @@ export function FormPanel({ form, values, onChange, onGo }: FormPanelProps) {
         <Field
           key={field.name}
           field={field}
-          value={values[field.name] ?? field.value}
+          value={totals[field.name] ?? values[field.name] ?? field.value}
           onChange={onChange}
           onGo={onGo}
+          calculated={totals[field.name] !== undefined}
+          {...(problems[field.name] ? { problem: problems[field.name] } : {})}
         />
       ))}
     </div>
@@ -60,11 +101,16 @@ function Field({
   value,
   onChange,
   onGo,
+  calculated,
+  problem,
 }: {
   field: FormField;
   value: string | string[] | boolean | undefined;
   onChange: (name: string, value: string | string[] | boolean) => void;
   onGo: (page: number) => void;
+  /** Worked out from other fields, so typing in it would be overwritten. */
+  calculated?: boolean | undefined;
+  problem?: string | undefined;
 }) {
   const id = `field-${field.name}`;
   const page = field.pages[0];
@@ -73,6 +119,12 @@ function Field({
       <label htmlFor={id}>
         {field.name}
         {field.required ? <span aria-label="required"> *</span> : null}
+        {calculated ? (
+          <span className="form-calculated" title="Worked out from the other fields">
+            {" "}
+            =
+          </span>
+        ) : null}
       </label>
       {page === undefined ? null : (
         <button
@@ -160,11 +212,20 @@ function Field({
           id={id}
           type="text"
           value={text}
+          // A calculated field is read-only here: typing in it would be
+          // overwritten by the next recalculation, which is worse than not
+          // letting someone type.
+          readOnly={calculated === true}
           disabled={field.readOnly}
           data-testid={id}
           onChange={(event) => onChange(field.name, event.target.value)}
         />
       )}
+      {problem ? (
+        <p className="form-problem" data-testid={`problem-${field.name}`}>
+          {problem}
+        </p>
+      ) : null}
     </div>
   );
 }

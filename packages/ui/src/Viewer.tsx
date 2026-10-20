@@ -72,6 +72,11 @@ export interface ViewerProps {
   onVisible?: ((position: number) => void) | undefined;
   /** Two pages side by side, as a book opens. */
   facing?: boolean | undefined;
+  /**
+   * One page at a time. The page shown is `only`; scrolling moves within it
+   * rather than on to the next, which is what single-page view means.
+   */
+  only?: number | undefined;
   /** The document's links, so a reader can follow them. */
   links?: Link[] | undefined;
   /** Following one: a page of this document, or a web address to confirm. */
@@ -84,6 +89,7 @@ export interface ViewerProps {
     | ((page: number, index: number, box: { x: number; y: number; w: number; h: number }) => void)
     | undefined;
   onRemoveImage?: ((page: number, index: number) => void) | undefined;
+  onReplaceImage?: ((page: number, index: number) => void) | undefined;
 }
 
 const GAP = 16;
@@ -117,6 +123,7 @@ export function Viewer({
   onNeedText,
   onVisible,
   facing,
+  only,
   links,
   onFollow,
   editingImages,
@@ -124,6 +131,7 @@ export function Viewer({
   onNeedImages,
   onPlaceImage,
   onRemoveImage,
+  onReplaceImage,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -189,6 +197,12 @@ export function Viewer({
 
   const { ref, range, total, scrollToOffset } = useVisibleRange(layout.offsets);
 
+  /** Which boxes to draw: every one on screen, or the single page asked for. */
+  const shown =
+    only === undefined
+      ? layout.boxes.slice(range.start, range.end + 1)
+      : layout.boxes.filter((box) => box.position === only);
+
   // Ask for the runs of pages that are on screen, and only those: reading them
   // means parsing the page's content stream.
   useEffect(() => {
@@ -229,13 +243,16 @@ export function Viewer({
 
   return (
     <div className="viewer" ref={ref} data-testid="viewer">
-      <div className="viewer-canvas" style={{ height: `${total}px` }}>
-        {layout.boxes.slice(range.start, range.end + 1).map((box) => (
+      <div
+        className="viewer-canvas"
+        style={{ height: `${only === undefined ? total : (shown[0]?.height ?? 0) + GAP * 2}px` }}
+      >
+        {shown.map((box) => (
           <div
             key={`${box.position}:${box.page}`}
             className="viewer-page"
             style={{
-              top: `${layout.offsets[box.position] ?? 0}px`,
+              top: `${only === undefined ? (layout.offsets[box.position] ?? 0) : GAP}px`,
               width: `${box.width}px`,
               height: `${box.height}px`,
               transform: `translateX(calc(-50% + ${box.shift}px))`,
@@ -295,6 +312,7 @@ export function Viewer({
                 images={images?.get(box.page)}
                 onPlace={(page, index, area) => onPlaceImage?.(page, index, area)}
                 onRemove={(page, index) => onRemoveImage?.(page, index)}
+                {...(onReplaceImage ? { onReplace: onReplaceImage } : {})}
               />
             ) : null}
             {editing ? (

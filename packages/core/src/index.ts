@@ -13,7 +13,9 @@ export { asAnnotations, fromXfdf, toXfdf } from "./xfdf.js";
 export type { XfdfImport, XfdfMark } from "./xfdf.js";
 export type { ExistingAnnotation, Reply } from "./read-annots.js";
 export type { AnnotColor, Annotation, AnnotRect, InkPoint, MarkupKind } from "./annotate.js";
-export { addField, fillForm, readForm, removeField } from "./forms.js";
+export { addField, fillForm, readForm, removeField, setFieldRule } from "./forms.js";
+export { dependencies, evaluate, FormulaError, numberOf, validate } from "./formula.js";
+export type { FormulaValues, Rule } from "./formula.js";
 export type {
   FieldKind,
   FieldValues,

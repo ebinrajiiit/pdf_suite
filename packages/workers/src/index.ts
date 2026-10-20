@@ -12,6 +12,7 @@ export type {
   Layer,
   Link,
   RedactionMark,
+  Rule,
   SignatureInfo,
   StandardIssue,
   LinkTarget,

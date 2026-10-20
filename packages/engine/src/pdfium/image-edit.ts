@@ -27,7 +27,20 @@ export interface PageImage {
 
 export type ImageEdit =
   | { page: number; index: number; action: "remove" }
-  | { page: number; index: number; action: "place"; x: number; y: number; w: number; h: number };
+  | { page: number; index: number; action: "place"; x: number; y: number; w: number; h: number }
+  /**
+   * Replaces the picture while leaving the frame alone — the matrix stays, so
+   * the new picture lands exactly where the old one was, at the same size.
+   * Pixels are RGBA, as a canvas gives them.
+   */
+  | {
+      page: number;
+      index: number;
+      action: "replace";
+      width: number;
+      height: number;
+      pixels: Uint8Array;
+    };
 
 export interface ImageEditResult {
   bytes: Uint8Array;
@@ -51,6 +64,104 @@ function heapOf(m: WrappedPdfiumModule): Heap {
       m.pdfium.wasmExports.free(ptr);
     },
   };
+}
+
+/** PDFium's BGRA format, which is what its bitmaps are laid out as. */
+const FPDFBitmap_BGRA = 4;
+
+/**
+ * Puts new pixels into an existing image object, keeping its placement.
+ *
+ * The pixels arrive as RGBA, which is what a canvas produces; PDFium wants
+ * BGRA, so the two channels are swapped on the way in. The bitmap is handed to
+ * PDFium, which copies it, and destroyed here — PDFium does not take ownership
+ * and a bitmap left behind is a leak in a long session.
+ */
+function setPixels(
+  m: WrappedPdfiumModule,
+  heap: Heap,
+  doc: number,
+  object: number,
+  width: number,
+  height: number,
+  rgba: Uint8Array,
+): boolean {
+  if (width <= 0 || height <= 0 || rgba.length < width * height * 4) return false;
+
+  const stride = width * 4;
+  const buffer = heap.malloc(stride * height);
+  try {
+    const target = m.pdfium.HEAPU8.subarray(buffer, buffer + stride * height);
+    for (let i = 0; i < width * height; i++) {
+      const at = i * 4;
+      target[at] = rgba[at + 2]!; // blue
+      target[at + 1] = rgba[at + 1]!; // green
+      target[at + 2] = rgba[at]!; // red
+      target[at + 3] = rgba[at + 3]!; // alpha
+    }
+
+    const bitmap = m.FPDFBitmap_CreateEx(width, height, FPDFBitmap_BGRA, buffer, stride);
+    if (!bitmap) return false;
+    try {
+      // No pages are passed: the object is already on one, and passing it
+      // again is how a picture ends up drawn twice.
+      return m.FPDFImageObj_SetBitmap(0, 0, object, bitmap);
+    } finally {
+      m.FPDFBitmap_Destroy(bitmap);
+    }
+  } finally {
+    heap.free(buffer);
+  }
+}
+
+/**
+ * The pixels of one placed image, as RGBA.
+ *
+ * PDFium renders the image as it appears — with its mask and colour space
+ * applied — which is what makes this usable for re-encoding it smaller. The
+ * bitmap it returns is ours to destroy.
+ */
+export function imagePixels(
+  m: WrappedPdfiumModule,
+  doc: number,
+  pageIndex: number,
+  index: number,
+): { width: number; height: number; rgba: Uint8Array } | undefined {
+  const page = m.FPDF_LoadPage(doc, pageIndex);
+  if (!page) throw new Error(`could not load page ${pageIndex}`);
+  try {
+    const object = m.FPDFPage_GetObject(page, index);
+    if (!object || m.FPDFPageObj_GetType(object) !== FPDF_PAGEOBJ_IMAGE) return undefined;
+
+    const bitmap = m.FPDFImageObj_GetRenderedBitmap(doc, page, object);
+    if (!bitmap) return undefined;
+    try {
+      const width = m.FPDFBitmap_GetWidth(bitmap);
+      const height = m.FPDFBitmap_GetHeight(bitmap);
+      const stride = m.FPDFBitmap_GetStride(bitmap);
+      const buffer = m.FPDFBitmap_GetBuffer(bitmap);
+      if (width <= 0 || height <= 0 || !buffer) return undefined;
+
+      // BGRA out of PDFium, RGBA in: the same swap as on the way in.
+      const rgba = new Uint8Array(width * height * 4);
+      for (let y = 0; y < height; y++) {
+        const row = buffer + y * stride;
+        for (let x = 0; x < width; x++) {
+          const from = row + x * 4;
+          const to = (y * width + x) * 4;
+          rgba[to] = m.pdfium.HEAPU8[from + 2] ?? 0;
+          rgba[to + 1] = m.pdfium.HEAPU8[from + 1] ?? 0;
+          rgba[to + 2] = m.pdfium.HEAPU8[from] ?? 0;
+          rgba[to + 3] = m.pdfium.HEAPU8[from + 3] ?? 255;
+        }
+      }
+      return { width, height, rgba };
+    } finally {
+      m.FPDFBitmap_Destroy(bitmap);
+    }
+  } finally {
+    m.FPDF_ClosePage(page);
+  }
 }
 
 /** The images on one page. */
@@ -151,6 +262,21 @@ export function applyImageEdits(
               page: pageIndex,
               index: edit.index,
               reason: "PDFium refused to remove that image",
+            });
+          }
+          continue;
+        }
+
+        if (edit.action === "replace") {
+          const written = setPixels(m, heap, doc, object, edit.width, edit.height, edit.pixels);
+          if (written) {
+            applied++;
+            changed = true;
+          } else {
+            rejected.push({
+              page: pageIndex,
+              index: edit.index,
+              reason: "PDFium refused the replacement picture",
             });
           }
           continue;

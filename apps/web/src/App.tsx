@@ -11,6 +11,7 @@ import {
   type Highlight,
   type PlacedShape,
   addBookmark,
+  computed,
   ContextMenu,
   moveAt,
   removeAt,
@@ -85,6 +86,8 @@ export function App() {
     editText,
     pageImages,
     editImages,
+    replaceImage,
+    downsample,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
@@ -113,6 +116,7 @@ export function App() {
     readAttachment,
     removeAttachment,
     addFormField,
+    setFieldRule,
     removeFormField,
     findPattern,
     setBookmarks,
@@ -133,6 +137,7 @@ export function App() {
   const attachInput = useRef<HTMLInputElement>(null);
   const compareInput = useRef<HTMLInputElement>(null);
   const xfdfInput = useRef<HTMLInputElement>(null);
+  const pictureInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -248,6 +253,8 @@ export function App() {
   /** Edit-picture mode, which is the other half of editing a page. */
   const [editingImages, setEditingImages] = useState(false);
   const [imagesByPage, setImagesByPage] = useState<Map<number, PageImage[]>>(new Map());
+  /** Which picture a chosen file should replace. */
+  const [replacing, setReplacing] = useState<{ page: number; index: number } | null>(null);
   const [editRuns, setEditRuns] = useState<Map<number, EditableText[]>>(new Map());
   /** Extracted text per page, for the selectable layer over the canvas. */
   const [textRuns, setTextRuns] = useState<Map<number, TextRun[]>>(new Map());
@@ -283,6 +290,8 @@ export function App() {
   const [firstVisible, setFirstVisible] = useState(0);
   /** Two pages side by side, as a book opens. */
   const [facing, setFacing] = useState(false);
+  /** One page at a time, with the page box as the way through the document. */
+  const [singlePage, setSinglePage] = useState(false);
 
   const info = state.info;
   const pageCount = state.order.length;
@@ -464,12 +473,22 @@ export function App() {
   const handleForm = useCallback(
     async (flatten: boolean) => {
       if (Object.keys(fieldValues).length === 0 && !flatten) return;
-      if (await applyForm(fieldValues, flatten)) {
+      // Calculated fields are written in with the rest: another reader will not
+      // recompute them, so the number has to be in the file.
+      const { totals, problems } = info
+        ? computed(info.form, fieldValues)
+        : { totals: {}, problems: {} };
+      const blocking = Object.values(problems)[0];
+      if (blocking) {
+        setSaved(blocking);
+        return;
+      }
+      if (await applyForm({ ...fieldValues, ...totals }, flatten)) {
         setFieldValues({});
         setSaved(flatten ? "Form flattened" : "Form values written");
       }
     },
-    [applyForm, fieldValues],
+    [applyForm, fieldValues, info],
   );
 
   const redactionCount = useMemo(
@@ -1297,6 +1316,38 @@ export function App() {
     [pageImages],
   );
 
+  const handleReplaceImage = useCallback((page: number, index: number) => {
+    setReplacing({ page, index });
+    pictureInput.current?.click();
+  }, []);
+
+  const onPictureInput = useCallback(
+    async (files: FileList | null) => {
+      const target = replacing;
+      setReplacing(null);
+      if (!files?.length || !target) return;
+      const [file] = await readFiles(files);
+      if (!file) return;
+      const result = await replaceImage(target.page, target.index, file.bytes, file.type ?? "");
+      if (!result) return;
+      setImagesByPage(new Map());
+      setSaved(result.rejected[0]?.reason ?? "Picture replaced");
+    },
+    [replaceImage, replacing],
+  );
+
+  const handleDownsample = useCallback(async () => {
+    const result = await downsample(150);
+    if (!result) return;
+    setImagesByPage(new Map());
+    setSaved(
+      result.changed === 0
+        ? "No picture was stored at more resolution than it is printed at"
+        : `Shrank ${result.changed} picture${result.changed === 1 ? "" : "s"}, saving ` +
+            `${Math.round(result.saved / 1024)} kB`,
+    );
+  }, [downsample]);
+
   const handlePlaceImage = useCallback(
     async (page: number, index: number, box: { x: number; y: number; w: number; h: number }) => {
       const result = await editImages([{ page, index, action: "place", ...box }]);
@@ -1580,6 +1631,14 @@ export function App() {
         data-testid="compare-input"
         className="visually-hidden"
         onChange={(event) => void onCompareInput(event.target.files)}
+      />
+      <input
+        ref={pictureInput}
+        type="file"
+        accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+        data-testid="picture-input"
+        className="visually-hidden"
+        onChange={(event) => void onPictureInput(event.target.files)}
       />
       <input
         ref={xfdfInput}
@@ -2658,7 +2717,21 @@ export function App() {
                     {info.form.fields.map((field) => (
                       <li key={field.name}>
                         <span className="fieldlist-name">{field.name}</span>
-                        <span className="fieldlist-kind">{field.kind}</span>
+                        <input
+                          className="fieldlist-formula"
+                          placeholder="= formula"
+                          aria-label={`Formula for ${field.name}`}
+                          data-testid={`formula-${field.name}`}
+                          defaultValue={info.form.rules?.[field.name]?.formula ?? ""}
+                          onBlur={(event) => {
+                            const formula = event.target.value.trim();
+                            const current = info.form.rules?.[field.name]?.formula ?? "";
+                            if (formula === current) return;
+                            void setFieldRule(field.name, formula === "" ? null : { formula }).then(
+                              (done) => done && setSaved(`Rule saved for ${field.name}`),
+                            );
+                          }}
+                        />
                         <button
                           type="button"
                           aria-label={`Remove the field ${field.name}`}
@@ -2843,7 +2916,8 @@ export function App() {
               text={textRuns}
               onNeedText={needText}
               onVisible={setFirstVisible}
-              facing={facing}
+              facing={facing && !singlePage}
+              {...(singlePage ? { only: Math.min(firstVisible, pageCount - 1) } : {})}
               links={pageLinks}
               onFollow={(link) => {
                 if (link.target.page !== undefined) {
@@ -2860,6 +2934,7 @@ export function App() {
               onNeedImages={needImages}
               onPlaceImage={(page, index, box) => void handlePlaceImage(page, index, box)}
               onRemoveImage={(page, index) => void handleRemoveImage(page, index)}
+              onReplaceImage={handleReplaceImage}
             />
           </div>
 
@@ -3234,6 +3309,10 @@ export function App() {
               </div>
               <div className="action-row">
                 {action("Compress", () => void compress())}
+                {action("Shrink pictures", () => void handleDownsample(), {
+                  testId: "downsample",
+                  hint: "Re-encodes pictures stored at more resolution than they are printed at",
+                })}
                 {action(
                   info.protected ? "Remove password" : "Protect…",
                   () => void handleProtect(),
@@ -3281,7 +3360,29 @@ export function App() {
       <footer className="statusbar">
         {info ? (
           <span className="pagebox" data-testid="page-box">
+            {singlePage ? (
+              <button
+                type="button"
+                aria-label="Previous page"
+                data-testid="page-back"
+                disabled={firstVisible <= 0}
+                onClick={() => setFirstVisible((at) => Math.max(0, at - 1))}
+              >
+                ‹
+              </button>
+            ) : null}
             Page {Math.min(firstVisible + 1, pageCount)} of {pageCount}
+            {singlePage ? (
+              <button
+                type="button"
+                aria-label="Next page"
+                data-testid="page-forward"
+                disabled={firstVisible >= pageCount - 1}
+                onClick={() => setFirstVisible((at) => Math.min(pageCount - 1, at + 1))}
+              >
+                ›
+              </button>
+            ) : null}
           </span>
         ) : null}
         {info ? (
@@ -3304,6 +3405,32 @@ export function App() {
               aria-label="Zoom in"
             >
               +
+            </button>
+            <button
+              type="button"
+              className={singlePage ? "on" : undefined}
+              aria-pressed={singlePage}
+              data-testid="single-page"
+              onClick={() => setSinglePage((on) => !on)}
+              disabled={disabled}
+              title="One page at a time, with the page box to move through the document"
+            >
+              Single
+            </button>
+            <button
+              type="button"
+              data-testid="full-screen"
+              onClick={() => {
+                // The document, not the app: full screen is for reading.
+                const area = main.current;
+                if (!area) return;
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else void area.requestFullscreen().catch(() => setSaved("Full screen was refused"));
+              }}
+              disabled={disabled}
+              title="Show the document full screen"
+            >
+              Full screen
             </button>
             <button
               type="button"

@@ -17,6 +17,8 @@ export interface ImageEditLayerProps {
     box: { x: number; y: number; w: number; h: number },
   ) => void;
   onRemove: (page: number, index: number) => void;
+  /** Replaces the picture while keeping its frame. */
+  onReplace?: ((page: number, index: number) => void) | undefined;
 }
 
 /** Below this, a drag is a click that selected the image rather than moved it. */
@@ -39,6 +41,7 @@ export function ImageEditLayer({
   images,
   onPlace,
   onRemove,
+  onReplace,
 }: ImageEditLayerProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [drag, setDrag] = useState<{
@@ -148,6 +151,18 @@ export function ImageEditLayer({
                 >
                   ✕
                 </button>
+                {onReplace ? (
+                  <button
+                    type="button"
+                    className="imagebox-replace"
+                    data-testid={`image-replace-${image.index}`}
+                    aria-label="Replace this picture"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => onReplace(page, image.index)}
+                  >
+                    ⇄
+                  </button>
+                ) : null}
                 <span
                   className="imagebox-handle"
                   data-testid={`image-handle-${image.index}`}

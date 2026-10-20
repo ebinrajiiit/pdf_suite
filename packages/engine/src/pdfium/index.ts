@@ -3,6 +3,7 @@ import { redactWithPdfium, saveCopy, type RedactArea, type RedactionResult } fro
 import { findPattern, type FindRequest, type Found } from "./find.js";
 import {
   applyImageEdits,
+  imagePixels,
   listImages,
   type ImageEdit,
   type ImageEditResult,
@@ -291,6 +292,12 @@ export type PdfiumEngine = PdfEngine & {
   images(bytes: Uint8Array, page: number): Promise<PageImage[]>;
   /** Moves, resizes or removes images, and returns the new document. */
   editImages(bytes: Uint8Array, edits: ImageEdit[]): Promise<ImageEditResult>;
+  /** The pixels of one placed image, for re-encoding it. */
+  imagePixels(
+    bytes: Uint8Array,
+    page: number,
+    index: number,
+  ): Promise<{ width: number; height: number; rgba: Uint8Array } | undefined>;
 };
 
 export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<PdfiumEngine> {
@@ -341,6 +348,9 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
     redact: (bytes, areas) => redactWithPdfium(m, bytes, areas, textOf),
 
     images: async (bytes, page) => withDocument(bytes, (doc) => listImages(m, doc, page)),
+
+    imagePixels: async (bytes, page, index) =>
+      withDocument(bytes, (doc) => imagePixels(m, doc, page, index)),
 
     editImages: async (bytes, edits) =>
       withDocument(bytes, (doc) => {

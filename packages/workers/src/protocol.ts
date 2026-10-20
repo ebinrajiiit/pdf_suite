@@ -13,6 +13,7 @@ import type {
   Layer,
   Link,
   RedactionMark,
+  Rule,
   SignatureInfo,
   StandardIssue,
   LinkTarget,
@@ -90,6 +91,7 @@ export type {
   Layer,
   Link,
   RedactionMark,
+  Rule,
   SignatureInfo,
   StandardIssue,
   LinkTarget,
@@ -307,10 +309,30 @@ export type WorkerRequest = { id: number } &
     | { kind: "removeAttachment"; name: string; order: number[]; annotations: Annotation[] }
     /** Adds a form field to a page, then reopens the result. */
     | { kind: "addField"; field: NewField; order: number[]; annotations: Annotation[] }
+    /** Stores a calculation or a check on a field, or clears it. */
+    | {
+        kind: "setFieldRule";
+        field: string;
+        rule: Rule | null;
+        order: number[];
+        annotations: Annotation[];
+      }
     /** Removes a form field by name. */
     | { kind: "removeField"; name: string; order: number[]; annotations: Annotation[] }
     /** The images on one source page, with where each sits. */
     | { kind: "images"; page: number; order: number[]; annotations: Annotation[] }
+    /** Replaces one picture with an image file, keeping its frame. */
+    | {
+        kind: "replaceImage";
+        page: number;
+        index: number;
+        file: ArrayBuffer;
+        type: string;
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Re-encodes every picture stored at more resolution than it is printed at. */
+    | { kind: "downsample"; dpi: number; order: number[]; annotations: Annotation[] }
     /** Moves, resizes or removes images, then reopens the result. */
     | { kind: "editImages"; edits: ImageEdit[]; order: number[]; annotations: Annotation[] }
     /** The paragraphs on one source page that can be edited in place. */
@@ -398,6 +420,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "links"; links: Link[] }
   | { kind: "imported"; info: DocumentInfo; added: number; dropped: number; skipped: number }
   | { kind: "attachment"; name: string; bytes: ArrayBuffer }
+  | { kind: "downsampled"; info: DocumentInfo; changed: number; saved: number }
   | {
       kind: "imagesEdited";
       info: DocumentInfo;
@@ -459,6 +482,7 @@ export type TerminalResponse = Extract<
       | "links"
       | "imported"
       | "imagesEdited"
+      | "downsampled"
       | "found"
       | "hidden"
       | "accessibility"

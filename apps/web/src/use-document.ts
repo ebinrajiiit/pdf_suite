@@ -20,6 +20,7 @@ import type {
   PageImage,
   RedactionMark,
   Reply,
+  Rule,
   SanitiseOptions,
   SanitiseReport,
   StandardIssue,
@@ -645,6 +646,55 @@ export function useDocument() {
     }
   }, []);
 
+  /** Replaces one picture with an image file, keeping its frame. */
+  const replaceImage = useCallback(
+    async (page: number, index: number, file: ArrayBuffer, type: string) => {
+      const result = await run("Replacing the picture", (worker) =>
+        worker.replaceImage(
+          page,
+          index,
+          file,
+          type,
+          stateRef.current.order,
+          stateRef.current.annotations,
+        ),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
+  /** Re-encodes pictures stored at more resolution than they are printed at. */
+  const downsample = useCallback(
+    async (dpi: number) => {
+      const result = await run("Shrinking the pictures", (worker) =>
+        worker.downsample(dpi, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
   /** Moves, resizes or removes images, rewriting the document. */
   const editImages = useCallback(
     async (edits: ImageEdit[]) => {
@@ -894,6 +944,15 @@ export function useDocument() {
     [rewrite],
   );
 
+  /** Stores a calculation or a check on a field, or clears it. */
+  const setFieldRule = useCallback(
+    async (field: string, rule: Rule | null) =>
+      rewrite("Saving the rule", (worker) =>
+        worker.setFieldRule(field, rule, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   const removeFormField = useCallback(
     async (name: string) =>
       rewrite("Removing the field", (worker) =>
@@ -1048,6 +1107,8 @@ export function useDocument() {
     editText,
     pageImages,
     editImages,
+    replaceImage,
+    downsample,
     stamp,
     describe,
     findPattern,
@@ -1070,6 +1131,7 @@ export function useDocument() {
     readAttachment,
     removeAttachment,
     addFormField,
+    setFieldRule,
     removeFormField,
     extractAllText,
     exportDocx,

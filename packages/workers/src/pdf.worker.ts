@@ -25,6 +25,7 @@ import {
   fillForm,
   readForm,
   removeField,
+  setFieldRule,
   merge,
   reorder,
   imagesToPdf,
@@ -130,8 +131,8 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   // Form fields come from the bytes rather than the engine, and a document
   // without a form reads as an empty field list rather than an error.
   const form = bytesForForm
-    ? await readForm(bytesForForm).catch(() => ({ fields: [], hasXfa: false }))
-    : { fields: [], hasXfa: false };
+    ? await readForm(bytesForForm).catch(() => ({ fields: [], hasXfa: false, rules: {} }))
+    : { fields: [], hasXfa: false, rules: {} };
   const properties = bytesForForm
     ? await readProperties(bytesForForm).catch(() => blankProperties())
     : blankProperties();
@@ -161,6 +162,44 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
 /** A document that could not be read for its description still has one. */
 function blankProperties() {
   return { title: "", author: "", subject: "", keywords: "" };
+}
+
+/** An image file's pixels, decoded by the platform rather than by us. */
+async function pixelsOf(blob: Blob): Promise<{ width: number; height: number; rgba: Uint8Array }> {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("this browser cannot decode images in a worker");
+    context.drawImage(bitmap, 0, 0);
+    const data = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    return { width: bitmap.width, height: bitmap.height, rgba: new Uint8Array(data.data.buffer) };
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** The same pixels, smaller, scaled by the platform's own resampler. */
+async function resizePixels(
+  pixels: { width: number; height: number; rgba: Uint8Array },
+  width: number,
+  height: number,
+): Promise<Uint8Array> {
+  const source = new OffscreenCanvas(pixels.width, pixels.height);
+  const from = source.getContext("2d");
+  if (!from) throw new Error("this browser cannot resize images in a worker");
+  from.putImageData(
+    new ImageData(new Uint8ClampedArray(pixels.rgba), pixels.width, pixels.height),
+    0,
+    0,
+  );
+
+  const target = new OffscreenCanvas(width, height);
+  const to = target.getContext("2d");
+  if (!to) throw new Error("this browser cannot resize images in a worker");
+  to.imageSmoothingQuality = "high";
+  to.drawImage(source, 0, 0, width, height);
+  return new Uint8Array(to.getImageData(0, 0, width, height).data.buffer);
 }
 
 function post(message: WorkerResponse, transfer: Transferable[] = []): void {
@@ -753,6 +792,13 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id, kind: "document", info: await openBytes(id, built, request) });
       return;
     }
+    case "setFieldRule": {
+      const base = await materialise(id, request.order, request.annotations);
+      const ruled = await setFieldRule(base, request.field, request.rule);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, ruled, request) });
+      return;
+    }
     case "removeField": {
       const base = await materialise(id, request.order, request.annotations);
       const without = await removeField(base, request.name);
@@ -764,6 +810,85 @@ async function handle(request: WorkerRequest): Promise<void> {
       if (!engine) throw new Error("worker not initialised");
       const base = await materialise(id, request.order, request.annotations);
       post({ id, kind: "pageImages", images: await engine.images(base, request.page) });
+      return;
+    }
+    case "replaceImage": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      const pixels = await pixelsOf(new Blob([request.file], { type: request.type }));
+      const result = await engine.editImages(base, [
+        {
+          page: request.page,
+          index: request.index,
+          action: "replace",
+          width: pixels.width,
+          height: pixels.height,
+          pixels: pixels.rgba,
+        },
+      ]);
+      throwIfCancelled(id);
+      post({
+        id,
+        kind: "imagesEdited",
+        info: await openBytes(id, result.bytes, request),
+        applied: result.applied,
+        rejected: result.rejected,
+      });
+      return;
+    }
+    case "downsample": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      const before = base.byteLength;
+      let working = base;
+      let changed = 0;
+
+      for (const [position] of request.order.entries()) {
+        throwIfCancelled(id);
+        const images = await engine.images(working, position).catch(() => []);
+        for (const image of images) {
+          if (image.w <= 0 || image.h <= 0) continue;
+          // The resolution it is actually printed at, which is the only one
+          // that matters: pixels spread over the size on the page.
+          const dpi = Math.min(
+            (image.pixelWidth * 72) / image.w,
+            (image.pixelHeight * 72) / image.h,
+          );
+          if (dpi <= request.dpi * 1.1) continue;
+
+          const pixels = await engine.imagePixels(working, position, image.index);
+          if (!pixels) continue;
+          const scale = request.dpi / dpi;
+          const width = Math.max(1, Math.round(pixels.width * scale));
+          const height = Math.max(1, Math.round(pixels.height * scale));
+          if (width >= pixels.width || height >= pixels.height) continue;
+
+          const smaller = await resizePixels(pixels, width, height);
+          const result = await engine.editImages(working, [
+            {
+              page: position,
+              index: image.index,
+              action: "replace",
+              width,
+              height,
+              pixels: smaller,
+            },
+          ]);
+          if (result.applied > 0) {
+            working = result.bytes;
+            changed++;
+          }
+        }
+        post({ id, kind: "progress", done: position + 1, total: request.order.length });
+      }
+
+      post({
+        id,
+        kind: "downsampled",
+        info: await openBytes(id, working, request),
+        changed,
+        saved: Math.max(0, before - working.byteLength),
+      });
       return;
     }
     case "editImages": {

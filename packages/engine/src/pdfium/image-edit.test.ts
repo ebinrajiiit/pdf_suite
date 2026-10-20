@@ -82,3 +82,51 @@ test("an index that is not an image is refused, not guessed at", async () => {
   // And the document is unchanged.
   expect(await engine.images(result.bytes, 0)).toHaveLength(2);
 });
+
+test("replaces the picture and leaves the frame exactly where it was", async () => {
+  const bytes = await withImages();
+  const [first] = await engine.images(bytes, 0);
+
+  // A 4x3 picture replacing a 2x2 one: different pixels, same placement.
+  const pixels = new Uint8Array(4 * 3 * 4);
+  for (let i = 0; i < 4 * 3; i++) {
+    pixels[i * 4] = 0; // red
+    pixels[i * 4 + 1] = 0; // green
+    pixels[i * 4 + 2] = 255; // blue
+    pixels[i * 4 + 3] = 255; // opaque
+  }
+
+  const result = await engine.editImages(bytes, [
+    { page: 0, index: first!.index, action: "replace", width: 4, height: 3, pixels },
+  ]);
+  expect(result.applied).toBe(1);
+  expect(result.rejected).toEqual([]);
+
+  const after = await engine.images(result.bytes, 0);
+  // The stored picture is the new one...
+  expect(after[0]?.pixelWidth).toBe(4);
+  expect(after[0]?.pixelHeight).toBe(3);
+  // ...and the frame has not moved or resized.
+  expect(after[0]?.x).toBeCloseTo(first!.x, 1);
+  expect(after[0]?.y).toBeCloseTo(first!.y, 1);
+  expect(after[0]?.w).toBeCloseTo(first!.w, 1);
+  expect(after[0]?.h).toBeCloseTo(first!.h, 1);
+});
+
+test("a replacement with no pixels is refused rather than writing an empty picture", async () => {
+  const bytes = await withImages();
+  const [first] = await engine.images(bytes, 0);
+  const result = await engine.editImages(bytes, [
+    {
+      page: 0,
+      index: first!.index,
+      action: "replace",
+      width: 0,
+      height: 0,
+      pixels: new Uint8Array(),
+    },
+  ]);
+  expect(result.applied).toBe(0);
+  expect(result.rejected[0]?.reason).toMatch(/refused/);
+  expect((await engine.images(result.bytes, 0))[0]?.pixelWidth).toBe(2);
+});

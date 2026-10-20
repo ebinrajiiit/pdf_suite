@@ -1,6 +1,11 @@
 import {
   PDFCheckBox,
+  PDFDict,
   PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFNumber,
+  PDFString,
   PDFDropdown,
   PDFOptionList,
   PDFRadioGroup,
@@ -9,6 +14,7 @@ import {
   type PDFField,
 } from "pdf-lib";
 import type { PdfBytes } from "./ops.js";
+import type { Rule } from "./formula.js";
 
 /**
  * AcroForm reading and filling. XFA forms are explicitly out of scope
@@ -42,6 +48,8 @@ export interface FormInfo {
   fields: FormField[];
   /** True when the document carries an XFA form, which we do not support. */
   hasXfa: boolean;
+  /** Calculations and checks this app has stored on fields, by field name. */
+  rules: Record<string, Rule>;
 }
 
 /** A value to write, keyed by field name. */
@@ -112,7 +120,71 @@ export async function readForm(input: PdfBytes): Promise<FormInfo> {
     }
   }
 
-  return { fields, hasXfa: form.hasXFA() };
+  return { fields, hasXfa: form.hasXFA(), rules: rulesOf(doc) };
+}
+
+/**
+ * The calculations and checks this app has stored on fields.
+ *
+ * They live under a private key in the field dictionary. Another reader will
+ * ignore them — Acrobat computes with document JavaScript, which
+ * `docs/PRODUCT.md` rules out — so the values they produce are written into the
+ * fields when the form is filled. That way the saved file is right everywhere,
+ * even though only this app recomputes.
+ */
+const RULE_KEY = "PDFSuiteRule";
+
+function rulesOf(doc: PDFDocument): Record<string, Rule> {
+  const rules: Record<string, Rule> = {};
+  for (const field of doc.getForm().getFields()) {
+    const stored = field.acroField.dict.lookup(PDFName.of(RULE_KEY));
+    if (!(stored instanceof PDFDict)) continue;
+
+    const formula = stored.lookup(PDFName.of("F"));
+    const min = stored.lookup(PDFName.of("Min"));
+    const max = stored.lookup(PDFName.of("Max"));
+    rules[field.getName()] = {
+      ...(formula instanceof PDFString || formula instanceof PDFHexString
+        ? { formula: formula.decodeText() }
+        : {}),
+      ...(stored.get(PDFName.of("Req")) !== undefined
+        ? { required: String(stored.get(PDFName.of("Req"))) === "true" }
+        : {}),
+      ...(min instanceof PDFNumber ? { min: min.asNumber() } : {}),
+      ...(max instanceof PDFNumber ? { max: max.asNumber() } : {}),
+    };
+  }
+  return rules;
+}
+
+/** Stores a calculation or a check on a field, or clears it. */
+export async function setFieldRule(
+  input: PdfBytes,
+  name: string,
+  rule: Rule | null,
+): Promise<PdfBytes> {
+  const doc = await PDFDocument.load(input, { updateMetadata: false });
+  const field = doc
+    .getForm()
+    .getFields()
+    .find((one) => one.getName() === name);
+  if (!field) throw new Error(`no field called ${name}`);
+
+  if (rule === null) {
+    field.acroField.dict.delete(PDFName.of(RULE_KEY));
+    return doc.save();
+  }
+
+  field.acroField.dict.set(
+    PDFName.of(RULE_KEY),
+    doc.context.obj({
+      ...(rule.formula ? { F: PDFString.of(rule.formula) } : {}),
+      ...(rule.required !== undefined ? { Req: rule.required } : {}),
+      ...(rule.min !== undefined ? { Min: rule.min } : {}),
+      ...(rule.max !== undefined ? { Max: rule.max } : {}),
+    }),
+  );
+  return doc.save();
 }
 
 export interface FillOptions {

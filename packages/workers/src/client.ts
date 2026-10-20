@@ -24,6 +24,7 @@ import {
   type RedactArea,
   type RedactionMark,
   type Reply,
+  type Rule,
   type RedactionResult,
   type TextEdit,
   type TextEditResult,
@@ -153,10 +154,33 @@ export interface PdfWorkerClient {
   removeAttachment(name: string, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** Adds a form field to a page. */
   addField(field: NewField, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
+  /** Stores a calculation or a check on a field, or clears it. */
+  setFieldRule(
+    field: string,
+    rule: Rule | null,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
   /** Removes a form field by name. */
   removeField(name: string, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** The images on one source page. */
   images(page: number, order: number[], annotations: Annotation[]): Promise<PageImage[]>;
+  /** Replaces one picture with an image file, keeping its frame. */
+  replaceImage(
+    page: number,
+    index: number,
+    file: ArrayBuffer,
+    type: string,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; applied: number; rejected: ImageEditResult["rejected"] }>;
+  /** Re-encodes pictures stored at more resolution than they are printed at. */
+  downsample(
+    dpi: number,
+    order: number[],
+    annotations: Annotation[],
+    onProgress?: OnProgress,
+  ): Promise<{ info: DocumentInfo; changed: number; saved: number }>;
   /** Moves, resizes or removes images, reopening the document. */
   editImages(
     edits: ImageEdit[],
@@ -489,11 +513,31 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     async addField(field, order, annotations) {
       return expect(await send({ kind: "addField", field, order, annotations }), "document").info;
     },
+    async setFieldRule(field, rule, order, annotations) {
+      return expect(
+        await send({ kind: "setFieldRule", field, rule, order, annotations }),
+        "document",
+      ).info;
+    },
     async removeField(name, order, annotations) {
       return expect(await send({ kind: "removeField", name, order, annotations }), "document").info;
     },
     async images(page, order, annotations) {
       return expect(await send({ kind: "images", page, order, annotations }), "pageImages").images;
+    },
+    async replaceImage(page, index, file, type, order, annotations) {
+      const reply = expect(
+        await send({ kind: "replaceImage", page, index, file, type, order, annotations }, [file]),
+        "imagesEdited",
+      );
+      return { info: reply.info, applied: reply.applied, rejected: reply.rejected };
+    },
+    async downsample(dpi, order, annotations, onProgress) {
+      const reply = expect(
+        await send({ kind: "downsample", dpi, order, annotations }, [], onProgress),
+        "downsampled",
+      );
+      return { info: reply.info, changed: reply.changed, saved: reply.saved };
     },
     async editImages(edits, order, annotations) {
       const reply = expect(

@@ -6,7 +6,7 @@ export {
 } from "./AnnotationLayer.js";
 export { CommentList, type CommentListProps } from "./CommentList.js";
 export { ContextMenu, type ContextMenuProps, type MenuItem } from "./ContextMenu.js";
-export { FormPanel, type FormPanelProps } from "./FormPanel.js";
+export { computed, FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { ImageEditLayer, type ImageEditLayerProps } from "./ImageEditLayer.js";
 export { Outline, type OutlineProps } from "./Outline.js";
 export { addBookmark, moveAt, removeAt, renameAt } from "./outline-edit.js";

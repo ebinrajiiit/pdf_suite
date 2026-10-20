@@ -95,6 +95,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] In-place text editing: paragraph detection and reflow (blocks re-wrap to their own width, measured in the real font by PDFium), and font substitution to Helvetica when the document's font has no glyph for what was typed — refused outright when no standard font has it either
 - [x] In-place text editing: changing a block's size and face from a format bar over the text, limited to the PDF standard fonts
 - [x] Undo and redo across both layers — page order and marks in the app, document bytes in the worker — with the usual keys, plus right-click menus on pages and Delete for the selected ones
+- [x] Single-page and full-screen viewing, picture replacement, picture downsampling, and form calculations without document JavaScript
 - [x] PDF → Word, for the words (a .docx written without a zip dependency), and scanning on the desktop where SANE or WIA exists
 - [x] PDF/A and print preflight checks, a trim box, and portfolios
 - [x] Office → PDF on the desktop, through the machine's own LibreOffice (ADR 0007)
@@ -121,7 +122,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Document properties: title, author, subject, keywords
 - [x] Headers, footers, page numbers and Bates numbering, with number styles (1, i, I, a, A), a start number, zero-padding and a page range
 - [ ] In-place text editing: adding a new paragraph in the document's own font, formatting a selection within a block, embedding an arbitrary font, and pushing following content down when a block grows
-- [ ] Image replace in place, and cropping or rotating one
+- [ ] Cropping or rotating a picture in place
 - [x] Accessibility check: title, language, tagging, window title, pages with no text, pictures with no description — with the title, language and window-title flag fixed in place
 - [ ] Accessibility tagging (the tag tree itself) + PDF/UA validation
 - [ ] Mobile: view, annotate, sign

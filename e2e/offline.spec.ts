@@ -1489,6 +1489,49 @@ test("carries a file inside the document, and gives it back", async ({ page }) =
   await expect(page.getByTestId("attachments-empty")).toBeVisible();
 });
 
+test("a calculated field adds up the others, and is written into the file", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "fees.pdf", await textFixture([["Fee form"]]));
+
+  // Three fields: two to fill in and one to work out.
+  await page.getByTestId("tab-form").click();
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  const names = ["fee.tuition", "fee.hostel", "fee.total"];
+  for (const [index, name] of names.entries()) {
+    await page.getByTestId("add-field-tool").click();
+    await page.mouse.move(area.x + 60, area.y + 120 + index * 40);
+    await page.mouse.down();
+    await page.mouse.move(area.x + 260, area.y + 145 + index * 40, { steps: 4 });
+    await page.mouse.up();
+    await page.getByTestId("field-name").fill(name);
+    await page.getByTestId("add-field").click();
+    await expect(page.getByTestId("status")).toHaveText(`Added the field ${name}`, {
+      timeout: 30_000,
+    });
+  }
+
+  // The total is a formula over the other two.
+  await page.getByTestId("formula-fee.total").fill("=sum(fee.tuition, fee.hostel)");
+  await page.getByTestId("formula-fee.total").blur();
+  await expect(page.getByTestId("status")).toHaveText("Rule saved for fee.total", {
+    timeout: 30_000,
+  });
+
+  // Filling the two makes the third work itself out, without any document
+  // JavaScript being involved.
+  await page.getByTestId("field-fee.tuition").fill("45000");
+  await page.getByTestId("field-fee.hostel").fill("28,000");
+  await expect(page.getByTestId("field-fee.total")).toHaveValue("73000");
+
+  // And the total is written into the file, where another reader will see it.
+  await page.getByTestId("apply-form").click();
+  await expect(page.getByTestId("status")).toHaveText("Form values written", { timeout: 30_000 });
+  const saved = await saveAndRead(page, "Save");
+  expect(await formValuesOf(saved)).toMatchObject({ "fee.total": "73000" });
+});
+
 test("builds a fillable form on a blank page, then fills it", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");
@@ -1581,6 +1624,33 @@ test("the marks list filters, searches and sorts by page", async ({ page }) => {
   // A filter that matches nothing says so rather than looking empty.
   await page.getByTestId("comment-search").fill("nothing here");
   await expect(page.getByTestId("comments-none")).toBeVisible();
+});
+
+test("single-page view shows one page, and the page box walks the document", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "three.pdf", await textFixture([["One"], ["Two"], ["Three"]]));
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.getByTestId("single-page").click();
+  // One page on screen, not three.
+  await expect(page.locator("[data-page-position]")).toHaveCount(1);
+  await expect(page.locator('[data-page-position="0"]')).toBeVisible();
+  await expect(page.getByTestId("page-box")).toContainText("Page 1 of 3");
+  await expect(page.getByTestId("page-back")).toBeDisabled();
+
+  await page.getByTestId("page-forward").click();
+  await expect(page.locator('[data-page-position="1"]')).toBeVisible();
+  await expect(page.getByTestId("page-box")).toContainText("Page 2 of 3");
+
+  await page.getByTestId("page-forward").click();
+  await expect(page.getByTestId("page-forward")).toBeDisabled();
+  await expect(page.getByTestId("page-box")).toContainText("Page 3 of 3");
+
+  // Back to continuous, and all three are in the document again.
+  await page.getByTestId("single-page").click();
+  await expect.poll(() => page.locator("[data-page-position]").count()).toBeGreaterThan(1);
 });
 
 test("two-up puts a pair of pages side by side", async ({ page }) => {
@@ -1692,6 +1762,45 @@ test("says whether a screen reader could read the document, and fixes what it ca
   const saved = await saveAndRead(page, "Save");
   const doc = await PDFDocument.load(saved);
   expect(doc.catalog.lookup(PDFName.of("Lang"))?.toString()).toContain("en-IN");
+});
+
+test("a picture can be replaced inside its frame, and shrunk when oversized", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A big picture placed small: 240 pixels across 40 points is over 400 DPI.
+  const doc = await PDFDocument.create();
+  const sheet = doc.addPage([400, 400]);
+  const png = await doc.embedPng(tinyPng(240, 240));
+  sheet.drawImage(png, { x: 40, y: 200, width: 40, height: 40 });
+  await openFixture(page, "poster.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-images").click();
+  const box = page.getByTestId("image-0");
+  await expect(box).toBeVisible({ timeout: 30_000 });
+  const before = (await box.boundingBox())!;
+  await box.click();
+
+  // Replace it with a different picture; the frame must not move. The button
+  // on the selection says which picture the chosen file replaces.
+  await page.getByTestId("image-replace-0").click();
+  await page.setInputFiles('[data-testid="picture-input"]', {
+    name: "new.png",
+    mimeType: "image/png",
+    buffer: tinyPng(8, 4),
+  });
+  await expect(page.getByTestId("status")).toHaveText("Picture replaced", { timeout: 30_000 });
+  const after = (await page.getByTestId("image-0").boundingBox())!;
+  expect(Math.round(after.x)).toBe(Math.round(before.x));
+  expect(Math.round(after.width)).toBe(Math.round(before.width));
+
+  // And a picture stored at far more resolution than it is printed at shrinks.
+  await openFixture(page, "poster2.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+  await page.getByTestId("downsample").click();
+  await expect(page.getByTestId("status")).toContainText("Shrank 1 picture", { timeout: 60_000 });
 });
 
 test("a picture can be moved and removed, in the document itself", async ({ page }) => {

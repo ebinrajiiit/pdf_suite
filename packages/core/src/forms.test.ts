@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { describe, expect, test } from "vitest";
-import { addField, fillForm, readForm, removeField } from "./forms.js";
+import { addField, fillForm, readForm, removeField, setFieldRule } from "./forms.js";
+import { evaluate, validate } from "./formula.js";
 
 /** A document with one field of each kind we support, across two pages. */
 async function makeForm(): Promise<Uint8Array> {
@@ -242,5 +243,72 @@ describe("building a form", () => {
     const after = await removeField(bytes, "one");
     expect((await readForm(after)).fields.map((field) => field.name)).toEqual(["two"]);
     await expect(removeField(after, "one")).rejects.toThrow(/no field called one/);
+  });
+});
+
+describe("calculations stored on fields", () => {
+  async function feeForm(): Promise<Uint8Array> {
+    const doc = await PDFDocument.create();
+    doc.addPage([400, 400]);
+    let bytes = await doc.save();
+    for (const name of ["fee.tuition", "fee.hostel", "fee.total"]) {
+      bytes = await addField(bytes, {
+        page: 0,
+        name,
+        kind: "text",
+        x: 20,
+        y: 300 - 30 * ["fee.tuition", "fee.hostel", "fee.total"].indexOf(name),
+        w: 120,
+        h: 20,
+      });
+    }
+    return bytes;
+  }
+
+  test("a rule is stored with the field and read back with the form", async () => {
+    const bytes = await setFieldRule(await feeForm(), "fee.total", {
+      formula: "=sum(fee.tuition, fee.hostel)",
+    });
+    const info = await readForm(bytes);
+    expect(info.rules["fee.total"]?.formula).toBe("=sum(fee.tuition, fee.hostel)");
+    // Fields without a rule do not acquire an empty one.
+    expect(info.rules["fee.tuition"]).toBeUndefined();
+  });
+
+  test("the formula and the filled values give the total a reader will see", async () => {
+    const bytes = await setFieldRule(await feeForm(), "fee.total", {
+      formula: "sum(fee.tuition, fee.hostel)",
+    });
+    const info = await readForm(bytes);
+    const values = { "fee.tuition": "45000", "fee.hostel": "28,000" };
+    const total = evaluate(info.rules["fee.total"]!.formula!, values);
+    expect(total).toBe(73000);
+
+    // Written in, so a reader that cannot recompute still sees the right number.
+    const filled = await fillForm(bytes, { ...values, "fee.total": String(total) });
+    const after = await readForm(filled);
+    expect(after.fields.find((field) => field.name === "fee.total")?.value).toBe("73000");
+  });
+
+  test("checks are stored too, and a rule can be cleared", async () => {
+    let bytes = await setFieldRule(await feeForm(), "fee.tuition", {
+      required: true,
+      min: 0,
+      max: 100000,
+    });
+    const rule = (await readForm(bytes)).rules["fee.tuition"]!;
+    expect(rule.required).toBe(true);
+    expect(rule.min).toBe(0);
+    expect(rule.max).toBe(100000);
+    expect(validate("Tuition", "120000", rule)).toContain("cannot be more than");
+
+    bytes = await setFieldRule(bytes, "fee.tuition", null);
+    expect((await readForm(bytes)).rules["fee.tuition"]).toBeUndefined();
+  });
+
+  test("a rule on a field that is not there is refused", async () => {
+    await expect(setFieldRule(await feeForm(), "nothing.here", { required: true })).rejects.toThrow(
+      /no field called/,
+    );
   });
 });

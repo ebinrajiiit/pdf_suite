@@ -82,7 +82,7 @@ What an Acrobat user would miss before anything subtle:
 | --- | --- | --- |
 | ~~Print~~ | **Done.** ⌘P opens the document, marks and all, in the browser's own PDF viewer — vector, not a rasterised copy. The desktop shell has no print dialog in its webview, so it hands the file to the system viewer instead | |
 | ~~Select and copy text~~ | **Done.** A transparent text layer over each page, laid out from the runs the engine extracts, so selection, copy and the browser's own find all work on real text | |
-| ~~Edit images in place~~ | **Mostly done.** Drag to move, corner to resize, button to remove. Replacing the picture inside a frame is still missing | |
+| ~~Edit images in place~~ | **Done.** Drag to move, corner to resize, buttons to replace or remove — the frame stays where it is | |
 | ~~A signature you can draw~~ | **Done.** Draw it once, kept in this browser only, then click any page to place it. A drawn mark, not a digital signature | |
 | ~~Lines and arrows~~ | **Done**, with generated appearance streams — verified by rendering, not just by writing the dictionary | |
 | ~~Stamps~~ | **Done**: eight labels, drawn into an appearance stream. Dynamic stamps (name, date) would be template text on the same machinery | |
@@ -106,7 +106,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Edit text | Done, with paragraph reflow and font substitution |
-| Edit images | Move, resize and remove: done. Replacing a picture, cropping one, and rotating or flipping it are missing |
+| Edit images | Move, resize, remove and replace, with the frame kept exactly where it was. Cropping and rotating a picture are missing |
 | Add a new paragraph in the document's own font | Missing. A text annotation is not the same thing |
 | Crop pages | Done: drag what to keep, on the selection or every page, and put it back again. It says in the panel that cropping hides rather than removes |
 | Watermark and background | Text watermarks, behind the content or over it, with fade and angle. Behind means a prepended content stream, which is the only way to be underneath. Image watermarks are missing |
@@ -121,7 +121,7 @@ What an Acrobat user would miss before anything subtle:
 | Layers (OCG) | A panel that lists them and turns them on and off, which is what a drawing needs before it goes to a contractor. Flattening a layer away is missing; Remove hidden info is what takes one out |
 | Article threads | Missing. Rare outside journals |
 | Rich media (video, audio, 3D, buttons) | Missing, and 3D is not worth it |
-| Optimise (PDF Optimizer) | Partial: qpdf recompresses streams. No image downsampling, no font subsetting, no object discarding, no space audit |
+| Optimise (PDF Optimizer) | qpdf recompresses streams, and pictures stored at more resolution than they are printed at are re-encoded smaller. Font subsetting and a space audit are missing |
 
 ### Export
 
@@ -161,7 +161,7 @@ What an Acrobat user would miss before anything subtle:
 | Create and edit fields | Create: done, for text boxes, tick boxes and dropdowns — drag where the field goes and name it. Editing a field's size or kind after the fact is missing; remove and draw it again |
 | Automatic field recognition | Missing |
 | Tab order | Follows the order fields are created, which is what a reader uses when the page has no explicit `/Tabs`. Setting it by hand is missing |
-| Calculations, validation, formatting scripts | Missing. These are document JavaScript; see the non-goals |
+| Calculations and validation | Done, without document JavaScript: a small expression language — numbers, the four operators, brackets, field names, sum/avg/min/max — stored on the field and computed here. Another reader will not recompute, so the totals are written into the fields when the form is filled. Formatting scripts are missing |
 | Barcode fields | Missing |
 | Distribute, collect, track responses | Missing. The local half — export and merge FDF — is compatible with zero upload; the tracker is not |
 | XFA dynamic forms | Detected and reported, never rendered. Acrobat is retiring XFA too |
@@ -232,7 +232,7 @@ What an Acrobat user would miss before anything subtle:
 | Action Wizard (batch) | Missing. Phase 4 covers the institutional version: grade cards from a template and a CSV |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
-| View modes | Two-up (facing) and continuous, with the page box saying which page is being read. Single page, full screen and split are missing |
+| View modes | Continuous, two-up and single page, with the page box as the way through the document, and full screen. Split view is missing |
 | Print: booklets, posters, scaling, print comments, print a range | Missing — printing hands the whole document to the platform's viewer, which brings its own dialog |
 | Snapshot tool, rulers, guides, grid | Missing |
 | Geospatial PDF | Missing |
