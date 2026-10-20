@@ -793,6 +793,7 @@ textarea:focus-visible,
   line-height: 1;
   cursor: pointer;
 }
+.imagebox-turn,
 .imagebox-replace {
   position: absolute;
   top: -0.7rem;
@@ -807,6 +808,10 @@ textarea:focus-visible,
   font-size: 0.75rem;
   line-height: 1;
   cursor: pointer;
+}
+/* Turn sits beside Replace, which sits beside Remove. */
+.imagebox-turn {
+  right: 2.5rem;
 }
 .imagebox-handle {
   position: absolute;

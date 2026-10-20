@@ -1814,6 +1814,17 @@ export function App() {
     [editImages],
   );
 
+  const handleTurnImage = useCallback(
+    async (page: number, index: number) => {
+      const result = await editImages([{ page, index, action: "turn", quarters: 1 }]);
+      if (!result) return;
+      // The box's sides have swapped, so what was read for this page is stale.
+      setImagesByPage(new Map());
+      setSaved(result.rejected[0]?.reason ?? "Picture turned");
+    },
+    [editImages],
+  );
+
   /** Reads a page's editable runs once, when it first comes into view. */
   const needEditableText = useCallback(
     (page: number) => {
@@ -4024,6 +4035,7 @@ export function App() {
               onPlaceImage={(page, index, box) => void handlePlaceImage(page, index, box)}
               onRemoveImage={(page, index) => void handleRemoveImage(page, index)}
               onReplaceImage={handleReplaceImage}
+              onTurnImage={(page, index) => void handleTurnImage(page, index)}
             />
           </div>
 

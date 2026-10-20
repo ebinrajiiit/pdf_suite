@@ -2089,7 +2089,7 @@ test("a picture can be replaced inside its frame, and shrunk when oversized", as
   await expect(page.getByTestId("status")).toContainText("Shrank 1 picture", { timeout: 60_000 });
 });
 
-test("a picture can be moved and removed, in the document itself", async ({ page }) => {
+test("a picture can be moved, turned and removed, in the document itself", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");
   await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
@@ -2122,6 +2122,20 @@ test("a picture can be moved and removed, in the document itself", async ({ page
   expect(after.y).toBeGreaterThan(before.y + 10);
   // Same picture, same size: moving must not rescale it.
   expect(Math.round(after.width)).toBe(Math.round(before.width));
+
+  // Turned a quarter: the box's sides swap and its centre stays put, so a
+  // turned picture is still where it was put.
+  const upright = (await page.getByTestId("image-0").boundingBox())!;
+  await page.getByTestId("image-0").click();
+  await page.getByTestId("image-turn-0").click();
+  await expect(page.getByTestId("status")).toHaveText("Picture turned", { timeout: 30_000 });
+  const turned = (await page.getByTestId("image-0").boundingBox())!;
+  expect(Math.round(turned.width)).toBe(Math.round(upright.height));
+  expect(Math.round(turned.height)).toBe(Math.round(upright.width));
+  expect(Math.round(turned.x + turned.width / 2)).toBeCloseTo(
+    Math.round(upright.x + upright.width / 2),
+    -1,
+  );
 
   // And removed, leaving the other one.
   await page.getByTestId("image-0").click();

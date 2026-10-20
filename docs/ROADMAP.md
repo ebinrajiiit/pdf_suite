@@ -129,7 +129,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Document properties: title, author, subject, keywords
 - [x] Headers, footers, page numbers and Bates numbering, with number styles (1, i, I, a, A), a start number, zero-padding and a page range
 - [ ] In-place text editing: adding a new paragraph in the document's own font, formatting a selection within a block, embedding an arbitrary font, and pushing following content down when a block grows
-- [ ] Cropping or rotating a picture in place
+- [x] Turning a picture in place, a quarter at a time; cropping one is still missing
 - [x] Accessibility check: title, language, tagging, window title, pages with no text, pictures with no description — with the title, language and window-title flag fixed in place
 - [ ] Accessibility tagging (the tag tree itself) + PDF/UA validation
 - [ ] Mobile: view, annotate, sign

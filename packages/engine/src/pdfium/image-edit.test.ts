@@ -130,3 +130,37 @@ test("a replacement with no pixels is refused rather than writing an empty pictu
   expect(result.rejected[0]?.reason).toMatch(/refused/);
   expect((await engine.images(result.bytes, 0))[0]?.pixelWidth).toBe(2);
 });
+
+test("turns an image about its own centre, a quarter at a time", async () => {
+  const bytes = await withImages();
+  const [first] = await engine.images(bytes, 0);
+  // 80 wide, 60 tall, so the centre is at (90, 330).
+  const cx = first!.x + first!.w / 2;
+  const cy = first!.y + first!.h / 2;
+
+  const turned = await engine.editImages(bytes, [
+    { page: 0, index: first!.index, action: "turn", quarters: 1 },
+  ]);
+  expect(turned.applied).toBe(1);
+
+  const [after] = await engine.images(turned.bytes, 0);
+  // A quarter turn swaps the box's sides and leaves its centre alone, which is
+  // what makes repeated turns stay where the picture was put.
+  expect(after!.w).toBeCloseTo(60, 1);
+  expect(after!.h).toBeCloseTo(80, 1);
+  expect(after!.x + after!.w / 2).toBeCloseTo(cx, 1);
+  expect(after!.y + after!.h / 2).toBeCloseTo(cy, 1);
+
+  // Four quarters is where it started, which only holds if the turn really is
+  // composed onto the matrix rather than written over it.
+  let round = turned.bytes;
+  for (let i = 0; i < 3; i++) {
+    round = (await engine.editImages(round, [{ page: 0, index: 0, action: "turn", quarters: 1 }]))
+      .bytes;
+  }
+  const [back] = await engine.images(round, 0);
+  expect(back!.x).toBeCloseTo(first!.x, 1);
+  expect(back!.y).toBeCloseTo(first!.y, 1);
+  expect(back!.w).toBeCloseTo(first!.w, 1);
+  expect(back!.h).toBeCloseTo(first!.h, 1);
+});

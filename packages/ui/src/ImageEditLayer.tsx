@@ -19,6 +19,8 @@ export interface ImageEditLayerProps {
   onRemove: (page: number, index: number) => void;
   /** Replaces the picture while keeping its frame. */
   onReplace?: ((page: number, index: number) => void) | undefined;
+  /** Turns the picture a quarter clockwise, about the centre of its box. */
+  onTurn?: ((page: number, index: number) => void) | undefined;
 }
 
 /** Below this, a drag is a click that selected the image rather than moved it. */
@@ -42,6 +44,7 @@ export function ImageEditLayer({
   onPlace,
   onRemove,
   onReplace,
+  onTurn,
 }: ImageEditLayerProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [drag, setDrag] = useState<{
@@ -121,6 +124,7 @@ export function ImageEditLayer({
               height: `${box.h * scale}px`,
             }}
             title={`${image.pixelWidth}×${image.pixelHeight} picture — drag to move, corner to resize`}
+            data-selected={isSelected ? "" : undefined}
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
               setSelected(image.index);
@@ -151,6 +155,18 @@ export function ImageEditLayer({
                 >
                   ✕
                 </button>
+                {onTurn ? (
+                  <button
+                    type="button"
+                    className="imagebox-turn"
+                    data-testid={`image-turn-${image.index}`}
+                    aria-label="Turn this picture a quarter to the right"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => onTurn(page, image.index)}
+                  >
+                    ↻
+                  </button>
+                ) : null}
                 {onReplace ? (
                   <button
                     type="button"

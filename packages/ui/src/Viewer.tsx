@@ -90,6 +90,7 @@ export interface ViewerProps {
     | undefined;
   onRemoveImage?: ((page: number, index: number) => void) | undefined;
   onReplaceImage?: ((page: number, index: number) => void) | undefined;
+  onTurnImage?: ((page: number, index: number) => void) | undefined;
 }
 
 const GAP = 16;
@@ -132,6 +133,7 @@ export function Viewer({
   onPlaceImage,
   onRemoveImage,
   onReplaceImage,
+  onTurnImage,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -313,6 +315,7 @@ export function Viewer({
                 onPlace={(page, index, area) => onPlaceImage?.(page, index, area)}
                 onRemove={(page, index) => onRemoveImage?.(page, index)}
                 {...(onReplaceImage ? { onReplace: onReplaceImage } : {})}
+                {...(onTurnImage ? { onTurn: onTurnImage } : {})}
               />
             ) : null}
             {editing ? (

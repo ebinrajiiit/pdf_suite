@@ -123,7 +123,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Edit text | Done, with paragraph reflow and font substitution |
-| Edit images | Move, resize, remove and replace, with the frame kept exactly where it was. Cropping and rotating a picture are missing |
+| Edit images | Move, resize, remove, replace — with the frame kept exactly where it was — and turn a quarter at a time about the centre of the box, composed onto the matrix the picture already has so four turns land exactly where it started. Cropping a picture is missing |
 | Add a new paragraph in the document's own font | Missing. A text annotation is not the same thing |
 | Crop pages | Done: drag what to keep, on the selection or every page, and put it back again. It says in the panel that cropping hides rather than removes |
 | Watermark and background | Text watermarks, behind the content or over it, with fade and angle. Behind means a prepended content stream, which is the only way to be underneath. Image watermarks are missing |

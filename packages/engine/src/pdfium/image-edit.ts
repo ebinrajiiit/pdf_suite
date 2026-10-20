@@ -40,7 +40,14 @@ export type ImageEdit =
       width: number;
       height: number;
       pixels: Uint8Array;
-    };
+    }
+  /**
+   * Turns the picture a quarter at a time, about the centre of where it sits.
+   * This one is written as a nudge to the matrix already there rather than as a
+   * fresh one: turning is relative by nature, and composing the turn is what
+   * lets it be done twice without knowing which way up the picture started.
+   */
+  | { page: number; index: number; action: "turn"; quarters: 1 | 2 | 3 };
 
 export interface ImageEditResult {
   bytes: Uint8Array;
@@ -264,6 +271,40 @@ export function applyImageEdits(
               reason: "PDFium refused to remove that image",
             });
           }
+          continue;
+        }
+
+        if (edit.action === "turn") {
+          if (!m.FPDFPageObj_GetBounds(object, matrix, matrix + 4, matrix + 8, matrix + 12)) {
+            rejected.push({
+              page: pageIndex,
+              index: edit.index,
+              reason: "PDFium could not say where that image is",
+            });
+            continue;
+          }
+          const cx =
+            (m.pdfium.getValue(matrix, "float") + m.pdfium.getValue(matrix + 8, "float")) / 2;
+          const cy =
+            (m.pdfium.getValue(matrix + 4, "float") + m.pdfium.getValue(matrix + 12, "float")) / 2;
+          // Clockwise, since that is what "turn right" means to a reader.
+          const angle = (-edit.quarters * Math.PI) / 2;
+          const cos = Math.round(Math.cos(angle));
+          const sin = Math.round(Math.sin(angle));
+          // Rotation about (cx, cy): move the centre to the origin, turn, move
+          // it back. Transform concatenates onto the matrix the object has, so
+          // the picture's own rotation and skew survive.
+          m.FPDFPageObj_Transform(
+            object,
+            cos,
+            sin,
+            -sin,
+            cos,
+            cx - cx * cos + cy * sin,
+            cy - cx * sin - cy * cos,
+          );
+          applied++;
+          changed = true;
           continue;
         }
 
