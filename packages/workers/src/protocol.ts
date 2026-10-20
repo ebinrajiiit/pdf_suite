@@ -8,6 +8,9 @@ import type {
   AccessibilityIssue,
   Annotation,
   Bookmark,
+  Box,
+  PageLabelRange,
+  WatermarkOptions,
   DocumentProperties,
   SanitiseOptions,
   SanitiseReport,
@@ -63,6 +66,9 @@ export type {
   Annotation,
   AnnotRect,
   Bookmark,
+  Box,
+  PageLabelRange,
+  WatermarkOptions,
   DocumentProperties,
   SanitiseOptions,
   SanitiseReport,
@@ -164,6 +170,28 @@ export type WorkerRequest = { id: number } &
         kind: "fixAccessible";
         title: string;
         language: string;
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Crops pages to a box given in the reader's own coordinates. */
+    | {
+        kind: "crop";
+        box: Box | null;
+        pages?: number[];
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Draws a watermark across pages, behind or over their content. */
+    | {
+        kind: "watermark";
+        options: WatermarkOptions;
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Sets what the viewer's page box shows for each run of pages. */
+    | {
+        kind: "pageLabels";
+        ranges: PageLabelRange[];
         order: number[];
         annotations: Annotation[];
       }

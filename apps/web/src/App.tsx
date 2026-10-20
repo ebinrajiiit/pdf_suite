@@ -25,6 +25,7 @@ import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/co
 import type {
   AccessibilityIssue,
   EditableText,
+  PageLabelRange,
   Found,
   PageImage,
   PatternName,
@@ -71,6 +72,9 @@ export function App() {
     clearAnnotations,
     stamp,
     describe,
+    crop,
+    addWatermark,
+    setLabels,
     findPattern,
     setBookmarks,
     checkAccessible,
@@ -93,6 +97,18 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** Watermark, and the page labels the viewer's page box shows. */
+  const [marking, setMarking] = useState(false);
+  const [markText, setMarkText] = useState("DRAFT");
+  const [markOpacity, setMarkOpacity] = useState(25);
+  const [markRotation, setMarkRotation] = useState(45);
+  const [markBehind, setMarkBehind] = useState(true);
+  const [labelling, setLabelling] = useState(false);
+  const [labelRanges, setLabelRanges] = useState<PageLabelRange[]>([
+    { from: 0, style: "r" },
+    { from: 2, style: "D", start: 1 },
+  ]);
+
   /** Accessibility: what is wrong, and what the fix should say. */
   const [checking, setChecking] = useState(false);
   const [issues, setIssues] = useState<AccessibilityIssue[] | undefined>();
@@ -727,6 +743,21 @@ export function App() {
         return;
       }
       if (shape.kind === "rect") {
+        if (tool === "crop") {
+          // The selection, or every page: cropping one page of a scan is rarely
+          // what anyone wants.
+          void crop(shape.rect, positions.length > 0 ? positions : undefined).then((done) => {
+            if (done) {
+              setTool(undefined);
+              setSaved(
+                positions.length > 0
+                  ? `Cropped ${positions.length} page${positions.length === 1 ? "" : "s"}`
+                  : "Cropped every page",
+              );
+            }
+          });
+          return;
+        }
         if (tool === "square" || tool === "circle") {
           addAnnotation({ kind: tool, page, ...shape.rect, color: colour });
           return;
@@ -790,7 +821,7 @@ export function App() {
       // A note or a text box needs its words before it is worth creating.
       setPendingPoint({ page, x: shape.x, y: shape.y });
     },
-    [addAnnotation, colour, placeMarkup, signature, stampLabel, tool],
+    [addAnnotation, colour, crop, placeMarkup, positions, signature, stampLabel, tool],
   );
 
   const commitPending = useCallback(
@@ -1287,6 +1318,201 @@ export function App() {
             </button>
           </div>
         </form>
+      ) : null}
+
+      {marking && info ? (
+        <form
+          className="prompt hfpanel"
+          data-testid="watermark-panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void addWatermark({
+              text: markText,
+              opacity: markOpacity / 100,
+              rotation: markRotation,
+              placement: markBehind ? "behind" : "front",
+              ...(positions.length > 0 ? { pages: positions } : {}),
+            }).then((done) => {
+              if (done) {
+                setMarking(false);
+                setSaved("Watermark added");
+              }
+            });
+          }}
+        >
+          <div className="hfrow">
+            <span className="hflabel">Says</span>
+            <input
+              className="hfslot"
+              data-testid="watermark-text"
+              value={markText}
+              onChange={(event) => setMarkText(event.target.value)}
+            />
+            <label className="hfcheck">
+              <input
+                type="checkbox"
+                data-testid="watermark-behind"
+                checked={markBehind}
+                onChange={(event) => setMarkBehind(event.target.checked)}
+              />
+              Behind the text
+            </label>
+          </div>
+          <div className="hfrow hfoptions">
+            <label>
+              Fade
+              <input
+                type="number"
+                min={5}
+                max={100}
+                value={markOpacity}
+                data-testid="watermark-opacity"
+                onChange={(event) => setMarkOpacity(event.target.valueAsNumber || 25)}
+              />
+              %
+            </label>
+            <label>
+              Angle
+              <input
+                type="number"
+                min={-90}
+                max={90}
+                value={markRotation}
+                onChange={(event) => setMarkRotation(event.target.valueAsNumber || 0)}
+              />
+              °
+            </label>
+            <span className="hfnote">
+              {positions.length > 0
+                ? `On the ${positions.length} selected page${positions.length === 1 ? "" : "s"}.`
+                : "On every page."}{" "}
+              Behind the text keeps the document readable; over it is harder to ignore.
+            </span>
+            <button type="submit" className="action action-go" data-testid="apply-watermark">
+              Add
+            </button>
+            <button type="button" className="action" onClick={() => setMarking(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      {labelling && info ? (
+        <div className="prompt hfpanel" data-testid="labels-panel">
+          <div className="hfrow">
+            <span className="hflabel">Numbering</span>
+            <span className="hfnote">
+              What the page box shows, which is a different thing from numbers printed on the page.
+              A report numbered i, ii, iii then 1, 2, 3 should answer "go to page 4" the way its own
+              pages do.
+            </span>
+          </div>
+          {labelRanges.map((range, index) => (
+            <div className="hfrow hfoptions" key={index}>
+              <label>
+                From page
+                <input
+                  type="number"
+                  min={1}
+                  max={pageCount}
+                  value={range.from + 1}
+                  data-testid={`label-from-${index}`}
+                  onChange={(event) =>
+                    setLabelRanges((current) =>
+                      current.map((one, i) =>
+                        i === index
+                          ? { ...one, from: Math.max(0, (event.target.valueAsNumber || 1) - 1) }
+                          : one,
+                      ),
+                    )
+                  }
+                />
+              </label>
+              <label>
+                as
+                <select
+                  value={range.style ?? "D"}
+                  data-testid={`label-style-${index}`}
+                  onChange={(event) =>
+                    setLabelRanges((current) =>
+                      current.map((one, i) =>
+                        i === index
+                          ? { ...one, style: event.target.value as PageLabelRange["style"] }
+                          : one,
+                      ),
+                    )
+                  }
+                >
+                  <option value="D">1, 2, 3</option>
+                  <option value="r">i, ii, iii</option>
+                  <option value="R">I, II, III</option>
+                  <option value="a">a, b, c</option>
+                  <option value="A">A, B, C</option>
+                  <option value="none">prefix only</option>
+                </select>
+              </label>
+              <label>
+                prefix
+                <input
+                  type="text"
+                  value={range.prefix ?? ""}
+                  data-testid={`label-prefix-${index}`}
+                  onChange={(event) =>
+                    setLabelRanges((current) =>
+                      current.map((one, i) =>
+                        i === index ? { ...one, prefix: event.target.value } : one,
+                      ),
+                    )
+                  }
+                />
+              </label>
+              {labelRanges.length > 1 && index > 0 ? (
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => setLabelRanges((current) => current.filter((_, i) => i !== index))}
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          ))}
+          <div className="hfrow">
+            {action("Add a run", () =>
+              setLabelRanges((current) => [
+                ...current,
+                {
+                  from: Math.min(pageCount - 1, (current[current.length - 1]?.from ?? 0) + 1),
+                  style: "D",
+                },
+              ]),
+            )}
+            {action(
+              "Apply",
+              () => {
+                void setLabels(labelRanges).then((done) => {
+                  if (done) {
+                    setLabelling(false);
+                    setSaved("Page numbering set");
+                  }
+                });
+              },
+              { testId: "apply-labels" },
+            )}
+            {action("Remove numbering", () => {
+              void setLabels([]).then((done) => {
+                if (done) {
+                  setLabelling(false);
+                  setSaved("Page numbering removed");
+                }
+              });
+            })}
+            <button type="button" className="action" onClick={() => setLabelling(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {checking && info ? (
@@ -1931,6 +2157,30 @@ export function App() {
                   hint: "Each selected page starts a new file",
                 })}
               </div>
+              <div className="tool-grid">{toolButton("crop")}</div>
+              {tool === "crop" ? (
+                <p className="tool-hint" data-testid="crop-hint">
+                  Drag the part of the page to keep. Cropping hides the rest; it does not remove it,
+                  so redact anything that must be gone.
+                </p>
+              ) : null}
+              {action(
+                "Put the crop back",
+                () => {
+                  void crop(null).then((done) => done && setSaved("Crop removed"));
+                },
+                { testId: "uncrop" },
+              )}
+              <div className="action-row">
+                {action("Watermark…", () => setMarking((open) => !open), {
+                  testId: "watermark",
+                  hint: "A word across the page, behind or over its text",
+                })}
+                {action("Page numbering…", () => setLabelling((open) => !open), {
+                  testId: "page-labels",
+                  hint: "What the viewer's page box shows: i, ii, iii then 1, 2, 3",
+                })}
+              </div>
               <div className="action-row">
                 {action("Page numbers…", () => setNumbering((open) => !open), {
                   testId: "number-pages",
@@ -2093,6 +2343,7 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   square: "▭",
   circle: "◯",
   ink: "✎",
+  crop: "⌗",
   line: "╱",
   arrow: "↗",
   stamp: "▣",
@@ -2109,6 +2360,7 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   square: "Drag to draw a box",
   circle: "Drag to draw an oval",
   ink: "Draw freehand",
+  crop: "Drag the part of the page to keep",
   line: "Drag to draw a line",
   arrow: "Drag to draw an arrow, pointing where you finish",
   stamp: "Click a page to stamp it",
@@ -2125,6 +2377,7 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   square: "Box",
   circle: "Oval",
   ink: "Draw",
+  crop: "Crop",
   line: "Line",
   arrow: "Arrow",
   stamp: "Stamp",

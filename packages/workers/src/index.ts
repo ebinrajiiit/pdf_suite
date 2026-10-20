@@ -4,7 +4,10 @@ export { CancelledError } from "./protocol.js";
 export type {
   AccessibilityIssue,
   Bookmark,
+  Box,
   DocumentInfo,
+  PageLabelRange,
+  WatermarkOptions,
   DocumentProperties,
   FieldValues,
   FormField,

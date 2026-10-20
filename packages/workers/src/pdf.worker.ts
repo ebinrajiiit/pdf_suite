@@ -8,15 +8,19 @@ import {
   reorder,
   imagesToPdf,
   checkAccessibility,
+  cropPages,
   findHidden,
   fixAccessibility,
   readProperties,
   setOutline,
+  setPageLabels,
   rotate,
   sanitise,
   setProperties,
   split,
   stampPages,
+  uncropPages,
+  watermark,
   type Annotation,
   type Qpdf,
 } from "@pdf-suite/core";
@@ -556,6 +560,29 @@ async function handle(request: WorkerRequest): Promise<void> {
       });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, fixed, request) });
+      return;
+    }
+    case "crop": {
+      const base = await materialise(id, request.order, request.annotations);
+      const cropped = request.box
+        ? await cropPages(base, request.box, request.pages)
+        : await uncropPages(base);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, cropped, request) });
+      return;
+    }
+    case "watermark": {
+      const base = await materialise(id, request.order, request.annotations);
+      const marked = await watermark(base, request.options);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, marked, request) });
+      return;
+    }
+    case "pageLabels": {
+      const base = await materialise(id, request.order, request.annotations);
+      const labelled = await setPageLabels(base, request.ranges);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, labelled, request) });
       return;
     }
     case "findHidden": {

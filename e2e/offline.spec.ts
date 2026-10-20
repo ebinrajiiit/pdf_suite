@@ -1008,6 +1008,56 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("crops the page, watermarks it, and numbers the front matter apart", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "thesis.pdf",
+    await textFixture([["Cover"], ["Contents"], ["Chapter 1"]]),
+  );
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  // Crop: drag the part to keep. The page gets narrower on screen.
+  const before = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-crop").click();
+  await expect(page.getByTestId("crop-hint")).toBeVisible();
+  await page.mouse.move(before.x + 40, before.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width - 60, before.y + before.height - 80, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId("status")).toHaveText("Cropped every page", { timeout: 30_000 });
+  const cropped = (await page.getByTestId("annots-0").boundingBox())!;
+  expect(cropped.width).toBeLessThan(before.width);
+
+  // And it is a crop, not a cut: the whole page comes back.
+  await page.getByTestId("uncrop").click();
+  await expect(page.getByTestId("status")).toHaveText("Crop removed", { timeout: 30_000 });
+  await expect
+    .poll(async () => (await page.getByTestId("annots-0").boundingBox())!.width)
+    .toBeCloseTo(before.width, 0);
+
+  // Watermark, behind the text so the document stays readable.
+  await page.getByTestId("watermark").click();
+  await page.getByTestId("watermark-text").fill("CONFIDENTIAL");
+  await page.getByTestId("apply-watermark").click();
+  await expect(page.getByTestId("status")).toHaveText("Watermark added", { timeout: 30_000 });
+  // In the document's own text, so it prints and extracts.
+  await page.getByTestId("search-input").fill("CONFIDENTIAL");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 3", { timeout: 30_000 });
+
+  // Page labels: the first two pages are front matter.
+  await page.getByTestId("page-labels").click();
+  await page.getByTestId("apply-labels").click();
+  await expect(page.getByTestId("status")).toHaveText("Page numbering set", { timeout: 30_000 });
+
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  expect(doc.catalog.get(PDFName.of("PageLabels"))).toBeDefined();
+});
+
 test("says whether a screen reader could read the document, and fixes what it can", async ({
   page,
 }) => {

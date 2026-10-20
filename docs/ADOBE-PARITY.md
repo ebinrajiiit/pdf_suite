@@ -108,10 +108,10 @@ What an Acrobat user would miss before anything subtle:
 | Edit text | Done, with paragraph reflow and font substitution |
 | Edit images | Move, resize and remove: done. Replacing a picture, cropping one, and rotating or flipping it are missing |
 | Add a new paragraph in the document's own font | Missing. A text annotation is not the same thing |
-| Crop pages | Missing. `/CropBox` per page, with a dialog and a drag handle |
-| Watermark and background | Missing. The stamping engine built for headers and footers is most of it: it already measures, places and rotates text. Images and opacity are the new parts |
+| Crop pages | Done: drag what to keep, on the selection or every page, and put it back again. It says in the panel that cropping hides rather than removes |
+| Watermark and background | Text watermarks, behind the content or over it, with fade and angle. Behind means a prepended content stream, which is the only way to be underneath. Image watermarks are missing |
 | Headers, footers, page numbers, Bates | Done |
-| Page labels (`/PageLabels`) | Missing. This is what makes the viewer's page box read "iv" — a different thing from printing a number on the page |
+| Page labels (`/PageLabels`) | Done: runs of pages numbered 1,2,3 or i,ii,iii or a,b,c, each with a prefix, which is what the viewer's page box reads |
 | Rotate, reorder, insert, extract, delete, split | Done |
 | Replace pages | Missing, though it is delete + insert |
 | Links | Missing entirely: no creating, editing or following. Link annotations are also how a table of contents works |

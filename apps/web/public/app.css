@@ -1186,7 +1186,8 @@ textarea:focus-visible,
 .annots-ink,
 .annots-line,
 .annots-arrow,
-.annots-redact {
+.annots-redact,
+.annots-crop {
   pointer-events: auto;
   cursor: crosshair;
 }

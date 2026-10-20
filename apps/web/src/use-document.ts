@@ -3,6 +3,9 @@ import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
   Bookmark,
+  Box,
+  PageLabelRange,
+  WatermarkOptions,
   DocumentProperties,
   EditableText,
   FindRequest,
@@ -675,6 +678,50 @@ export function useDocument() {
     [run],
   );
 
+  /** One rewrite, one new document: the shape every page-level op shares. */
+  const rewrite = useCallback(
+    async (busy: string, work: (worker: PdfWorkerClient) => Promise<DocumentInfo>) => {
+      const info = await run(busy, work);
+      if (!info) return false;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return true;
+    },
+    [run],
+  );
+
+  /** Crops pages, or puts the whole page back when the box is null. */
+  const crop = useCallback(
+    async (box: Box | null, pages?: number[]) =>
+      rewrite("Cropping", (worker) =>
+        worker.crop(box, pages, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  const addWatermark = useCallback(
+    async (options: WatermarkOptions) =>
+      rewrite("Adding the watermark", (worker) =>
+        worker.watermark(options, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  const setLabels = useCallback(
+    async (ranges: PageLabelRange[]) =>
+      rewrite("Numbering the pages", (worker) =>
+        worker.pageLabels(ranges, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** Whether a screen reader could read this document. Changes nothing. */
   const checkAccessible = useCallback(
     async (): Promise<AccessibilityIssue[] | undefined> =>
@@ -787,6 +834,9 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    crop,
+    addWatermark,
+    setLabels,
     checkAccessible,
     fixAccessible,
     findHidden,

@@ -3,7 +3,10 @@ import {
   type AccessibilityIssue,
   type Annotation,
   type Bookmark,
+  type Box,
   type DocumentInfo,
+  type PageLabelRange,
+  type WatermarkOptions,
   type FieldValues,
   type OcrAssets,
   type EditableText,
@@ -126,6 +129,25 @@ export interface PdfWorkerClient {
   fixAccessible(
     title: string,
     language: string,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Crops pages, or puts the whole page back when the box is null. */
+  crop(
+    box: Box | null,
+    pages: number[] | undefined,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Draws a watermark across pages. */
+  watermark(
+    options: WatermarkOptions,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Sets what the viewer's page box shows. */
+  pageLabels(
+    ranges: PageLabelRange[],
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
@@ -339,6 +361,20 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async setOutline(bookmarks, order, annotations) {
       return expect(await send({ kind: "setOutline", bookmarks, order, annotations }), "document")
+        .info;
+    },
+    async crop(box, pages, order, annotations) {
+      return expect(
+        await send({ kind: "crop", box, ...(pages ? { pages } : {}), order, annotations }),
+        "document",
+      ).info;
+    },
+    async watermark(options, order, annotations) {
+      return expect(await send({ kind: "watermark", options, order, annotations }), "document")
+        .info;
+    },
+    async pageLabels(ranges, order, annotations) {
+      return expect(await send({ kind: "pageLabels", ranges, order, annotations }), "document")
         .info;
     },
     async checkAccessible(order, annotations) {

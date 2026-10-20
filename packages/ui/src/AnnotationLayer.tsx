@@ -15,7 +15,9 @@ export type AnnotationTool =
   | "stamp"
   | "signature"
   /** Marks an area whose content will be removed. Not a PDF annotation. */
-  | "redact";
+  | "redact"
+  /** Marks what to keep of the page. Not a PDF annotation either. */
+  | "crop";
 
 /** Tools drawn by dragging from one point to another, where direction matters. */
 const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow"]);
@@ -30,6 +32,7 @@ const BOX_TOOLS = new Set<AnnotationTool>([
   "square",
   "circle",
   "redact",
+  "crop",
 ]);
 
 /** A CSS colour from an annotation's 0-1 RGB triple. */
