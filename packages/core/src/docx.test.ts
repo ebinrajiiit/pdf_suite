@@ -35,8 +35,23 @@ test("the checksum is the one zip expects", async () => {
   expect(crc32(new Uint8Array())).toBe(0);
 });
 
+/** Writes the .docx and gives back word/document.xml, as Word would read it. */
+async function documentXml(docx: Uint8Array, name = "out.docx"): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "pdf-suite-docx-"));
+  const path = join(dir, name);
+  await writeFile(path, docx);
+  const { stdout } = await run("unzip", ["-p", path, "word/document.xml"]);
+  return stdout;
+}
+
 test("a document carries each page's words, with a break between pages", async () => {
-  const docx = toDocx(["First page\nsecond line", "Second page"], { title: "Circular 12" });
+  const docx = toDocx(
+    [
+      { blocks: [{ kind: "paragraph", text: "First page" }] },
+      { blocks: [{ kind: "paragraph", text: "Second page" }] },
+    ],
+    { title: "Circular 12" },
+  );
 
   const dir = await mkdtemp(join(tmpdir(), "pdf-suite-docx-"));
   const path = join(dir, "out.docx");
@@ -46,33 +61,95 @@ test("a document carries each page's words, with a break between pages", async (
   const { stdout: listing } = await run("unzip", ["-l", path]);
   expect(listing).toContain("[Content_Types].xml");
   expect(listing).toContain("_rels/.rels");
+  expect(listing).toContain("word/_rels/document.xml.rels");
   expect(listing).toContain("word/document.xml");
 
   const { stdout: document } = await run("unzip", ["-p", path, "word/document.xml"]);
   expect(document).toContain("Circular 12");
   expect(document).toContain("First page");
-  expect(document).toContain("second line");
   expect(document).toContain("Second page");
   expect(document).toContain('w:type="page"');
 });
 
-test("characters XML cannot carry are escaped or dropped, not written raw", async () => {
-  const docx = toDocx(["Fees < 500 & rising\u0007"], {});
-  const dir = await mkdtemp(join(tmpdir(), "pdf-suite-docx-"));
-  const path = join(dir, "out.docx");
-  await writeFile(path, docx);
+test("a paragraph is one paragraph, however many lines it had in the PDF", async () => {
+  // The whole point: a wrapped paragraph arrives as one block of text and has
+  // to leave as one <w:p>. One per line is what makes an exported document
+  // impossible to edit — every line ends in a paragraph mark.
+  const sentence =
+    "All heads of department are informed that the revised fee structure " +
+    "takes effect from the first of April.";
+  const xml = await documentXml(
+    toDocx([
+      {
+        blocks: [
+          { kind: "paragraph", text: "Office Memorandum", size: 16, bold: true },
+          { kind: "paragraph", text: sentence, size: 11 },
+        ],
+      },
+    ]),
+  );
 
-  const { stdout } = await run("unzip", ["-p", path, "word/document.xml"]);
+  expect(xml).toContain(sentence);
+  // Two paragraphs on the page, not six.
+  expect(xml.match(/<w:p>/g)).toHaveLength(2);
+  // The heading keeps its weight and its size; Word counts in half-points.
+  expect(xml).toContain('<w:b/><w:sz w:val="32"/>');
+  expect(xml).toContain('<w:sz w:val="22"/>');
+});
+
+test("a page that is a table comes out as a table", async () => {
+  const xml = await documentXml(
+    toDocx([
+      {
+        blocks: [
+          {
+            kind: "table",
+            rows: [
+              ["Roll", "Name", "Marks"],
+              ["1", "A", "90"],
+            ],
+          },
+        ],
+      },
+    ]),
+  );
+
+  expect(xml).toContain("<w:tbl>");
+  expect(xml.match(/<w:tr>/g)).toHaveLength(2);
+  expect(xml.match(/<w:tc>/g)).toHaveLength(6);
+  expect(xml).toContain("Marks");
+  // A table has to be followed by a paragraph or Word calls the file corrupt.
+  expect(xml).toContain("</w:tbl><w:p/>");
+});
+
+test("a row with fewer cells is padded rather than left short", async () => {
+  const xml = await documentXml(
+    toDocx([{ blocks: [{ kind: "table", rows: [["a", "b", "c"], ["only"]] }] }]),
+  );
+  // Six cells, not four: a short row in Word is a broken table.
+  expect(xml.match(/<w:tc>/g)).toHaveLength(6);
+});
+
+test("the page size is the PDF's own, landscape included", async () => {
+  const portrait = await documentXml(toDocx([{ blocks: [], width: 595, height: 842 }]));
+  expect(portrait).toContain('<w:pgSz w:w="11900" w:h="16840"/>');
+
+  const landscape = await documentXml(
+    toDocx([{ blocks: [{ kind: "paragraph", text: "Wide" }], width: 842, height: 595 }]),
+  );
+  expect(landscape).toContain('w:w="16840" w:h="11900" w:orient="landscape"');
+});
+
+test("characters XML cannot carry are escaped or dropped, not written raw", async () => {
+  const stdout = await documentXml(
+    toDocx([{ blocks: [{ kind: "paragraph", text: "Fees < 500 & rising\u0007" }] }]),
+  );
   expect(stdout).toContain("Fees &lt; 500 &amp; rising");
   // The control character is gone rather than making the file unreadable.
   expect(stdout).not.toContain("\u0007");
 });
 
 test("an empty document is still a document", async () => {
-  const docx = toDocx([], {});
-  const dir = await mkdtemp(join(tmpdir(), "pdf-suite-docx-"));
-  const path = join(dir, "empty.docx");
-  await writeFile(path, docx);
-  const { stdout } = await run("unzip", ["-p", path, "word/document.xml"]);
+  const stdout = await documentXml(toDocx([], {}), "empty.docx");
   expect(stdout).toContain("<w:body>");
 });

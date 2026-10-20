@@ -903,7 +903,7 @@ export function App() {
     setSaved(written ? `Saved ${written}` : undefined);
   }, [extractAllText, name0]);
 
-  /** Saves the document's words as a Word file — words, not layout. */
+  /** Saves the document's text as a Word file: paragraphs and tables, not layout. */
   const handleSaveDocx = useCallback(async () => {
     const bytes = await exportDocx(stripPdf(name0));
     if (!bytes) return;
@@ -913,7 +913,7 @@ export function App() {
       undefined,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     );
-    setSaved(written ? `Saved ${written} — the words, not the layout` : undefined);
+    setSaved(written ? `Saved ${written} — the text, not the layout` : undefined);
   }, [exportDocx, name0]);
 
   /**
@@ -4439,7 +4439,7 @@ export function App() {
                 })}
                 {action("To Word…", () => void handleSaveDocx(), {
                   testId: "to-docx",
-                  hint: "The document's words as a .docx. Not its layout — a PDF does not record one",
+                  hint: "Paragraphs and tables as a .docx. Not the layout — a PDF does not record one",
                 })}
                 {action("Tables to CSV…", () => void handleSaveCsv(), {
                   testId: "to-csv",

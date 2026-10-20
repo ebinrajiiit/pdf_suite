@@ -26,6 +26,15 @@ export function crc32(data: Uint8Array): number {
   return ~crc >>> 0;
 }
 
+/**
+ * A fixed MS-DOS timestamp: 1 January 1980, midnight — the earliest the format
+ * can express. Zero is not that; zero is month 0 day 0, which is not a date at
+ * all, and strict readers are entitled to object. A constant also keeps the
+ * output reproducible, which a timestamp of "now" would not.
+ */
+const DOS_TIME = 0;
+const DOS_DATE = (1 << 5) | 1; // month 1, day 1, year 1980
+
 export function zip(entries: ZipEntry[]): Uint8Array {
   const encoder = new TextEncoder();
   const locals: Uint8Array[] = [];
@@ -41,8 +50,8 @@ export function zip(entries: ZipEntry[]): Uint8Array {
     local.setUint16(4, 20, true); // version needed
     local.setUint16(6, 0, true); // flags
     local.setUint16(8, 0, true); // stored
-    local.setUint16(10, 0, true); // time
-    local.setUint16(12, 0, true); // date
+    local.setUint16(10, DOS_TIME, true);
+    local.setUint16(12, DOS_DATE, true);
     local.setUint32(14, sum, true);
     local.setUint32(18, entry.data.length, true);
     local.setUint32(22, entry.data.length, true);
@@ -57,8 +66,8 @@ export function zip(entries: ZipEntry[]): Uint8Array {
     header.setUint16(6, 20, true); // version needed
     header.setUint16(8, 0, true);
     header.setUint16(10, 0, true); // stored
-    header.setUint16(12, 0, true);
-    header.setUint16(14, 0, true);
+    header.setUint16(12, DOS_TIME, true);
+    header.setUint16(14, DOS_DATE, true);
     header.setUint32(16, sum, true);
     header.setUint32(20, entry.data.length, true);
     header.setUint32(24, entry.data.length, true);

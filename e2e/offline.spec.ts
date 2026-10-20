@@ -1059,14 +1059,30 @@ test("prose is not mistaken for a table", async ({ page }) => {
   await expect(page.getByTestId("status")).toContainText("No table found", { timeout: 30_000 });
 });
 
-test("saves the document's words as a Word file", async ({ page }) => {
+test("saves the document's text as a Word file, in paragraphs", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");
   await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A wrapped paragraph, then a line far enough below to be its own paragraph,
+  // then a second page. This is the shape the export used to get wrong: each
+  // line of the paragraph became a paragraph of its own.
   await openFixture(
     page,
     "circular.pdf",
-    await textFixture([["Minutes of the Council"], ["Fees are due in June"]]),
+    await textFixture([
+      [
+        "All heads of department are informed that the",
+        "revised fee structure takes effect from the",
+        "first of April.",
+        "",
+        "",
+        "",
+        "",
+        "Sd/- Registrar",
+      ],
+      ["Fees are due in June"],
+    ]),
   );
   await expect(page.getByText("2 pages")).toBeVisible();
 
@@ -1083,11 +1099,25 @@ test("saves the document's words as a Word file", async ({ page }) => {
   expect(bytes.subarray(0, 2).toString("latin1")).toBe("PK");
   const inside = bytes.toString("latin1");
   expect(inside).toContain("word/document.xml");
-  expect(inside).toContain("Minutes of the Council");
+  expect(inside).toContain("word/_rels/document.xml.rels");
   expect(inside).toContain("Fees are due in June");
 
+  // Entries are stored rather than deflated, so the document part is readable
+  // straight out of the archive.
+  const xml = inside.slice(inside.indexOf("<w:document"), inside.indexOf("</w:document>"));
+
+  // The wrapped lines are one paragraph, joined with spaces.
+  expect(xml).toContain(
+    "All heads of department are informed that the revised fee structure takes effect from the first of April.",
+  );
+  // Five paragraphs in all: the title, the two on page one, the page break, and
+  // page two. Not one per line, which would be seven.
+  expect(xml.match(/<w:p>/g)).toHaveLength(5);
+  // The page is the PDF's own A4, not a guess.
+  expect(xml).toContain('w:w="11900" w:h="16840"');
+
   // And the status says what this export is and is not.
-  await expect(page.getByTestId("status")).toContainText("the words, not the layout");
+  await expect(page.getByTestId("status")).toContainText("the text, not the layout");
 });
 
 test("says what stands between the document and PDF/A, and what a press needs", async ({

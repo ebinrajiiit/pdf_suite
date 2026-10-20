@@ -145,7 +145,7 @@ What an Acrobat user would miss before anything subtle:
 
 | Acrobat | Here |
 | --- | --- |
-| PDF → Word | The document's **words**, as a real .docx — one paragraph per line, a page break per page. Not the layout: a PDF records where ink goes, not columns or tables, and reconstructing them is guesswork. The export says so in the status line. Excel, PowerPoint and RTF are missing; the licence trap stands — `pdf2docx` pulls PyMuPDF and is banned |
+| PDF → Word | The document's **text**, as a real .docx: a paragraph per paragraph — found by the same block detection in-place editing uses, so a wrapped paragraph arrives as one editable paragraph rather than one per line — at roughly its own size, bold where the font is bold, a page break per page, the PDF's own page size and orientation, and a Word table where the page really is a grid. Not the layout: no columns, no images, no positioning, because a PDF records where ink goes and reconstructing the rest is guesswork. The export says so in the status line. Excel, PowerPoint and RTF are missing; the licence trap stands — `pdf2docx` pulls PyMuPDF and is banned |
 | PDF → plain text | Done, in display order with a page break and number per page |
 | PDF → spreadsheet | Grid tables — rows and columns that line up — found and saved as CSV, which Excel opens. Merged cells, nested tables and columns implied only by a change of font are not found, and a page with no table says so rather than producing a spreadsheet that looks right and is not |
 | PDF → HTML, XML | Missing |

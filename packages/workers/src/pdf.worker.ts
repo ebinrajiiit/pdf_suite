@@ -47,6 +47,7 @@ import {
   split,
   stampPages,
   tableFrom,
+  type DocxPage,
   toCsv,
   toDocx,
   toXfdf,
@@ -473,13 +474,54 @@ async function handle(request: WorkerRequest): Promise<void> {
     }
     case "toDocx": {
       if (!doc) throw new Error("no document is open");
-      const pages: string[] = [];
+      if (!engine) throw new Error("worker not initialised");
+      // Paragraphs, not lines. A line per paragraph is what makes an exported
+      // document impossible to edit: every line ends in a paragraph mark, so
+      // nothing reflows. The block detection is the engine's own — the same one
+      // in-place text editing uses — and it reads the document once for every
+      // page rather than once per page.
+      if (!bytes) throw new Error("no document is open");
+      // The document's own bytes, read in the order on screen: nothing is
+      // rewritten to export it, and the page indices are the ones the engine
+      // and the open document already use.
+      const blocks = await engine.editableTextPages(bytes, request.order, (done) =>
+        post({ id, kind: "progress", done, total: request.order.length }),
+      );
+      throwIfCancelled(id);
+
+      const pages: DocxPage[] = [];
       for (const [position, page] of request.order.entries()) {
-        throwIfCancelled(id);
+        const size = doc.pageSize(page);
         const runs = await doc.extractText(page).catch(() => []);
-        pages.push(runs.map((run) => run.text).join("\n"));
-        post({ id, kind: "progress", done: position + 1, total: request.order.length });
+        // A page whose columns line up every row is a table, and a table of
+        // text in paragraphs is unusable. The threshold is the one the
+        // spreadsheet export uses, for the same reason.
+        const grid = tableFrom(runs);
+        if (grid && grid.confidence >= 0.5) {
+          pages.push({ blocks: [{ kind: "table", rows: grid.rows }], ...size });
+          continue;
+        }
+
+        const paragraphs = blocks[position] ?? [];
+        pages.push({
+          blocks:
+            paragraphs.length > 0
+              ? paragraphs.map((block) => ({
+                  kind: "paragraph" as const,
+                  text: block.text,
+                  size: block.fontSize,
+                  // The font's own name is the only honest way to know: a
+                  // heavier face is bold, whatever the text says.
+                  bold: /bold|black|heavy|semib/i.test(block.fontName),
+                }))
+              : // Nothing the block detection recognised — a scan with no text
+                // layer, or text in a form it cannot group. The lines are
+                // better than nothing, and are what this used to always do.
+                runs.map((run) => ({ kind: "paragraph" as const, text: run.text })),
+          ...size,
+        });
       }
+
       const written = toDocx(pages, { title: request.title });
       const buffer = written.buffer as ArrayBuffer;
       post({ id, kind: "docx", bytes: buffer }, [buffer]);

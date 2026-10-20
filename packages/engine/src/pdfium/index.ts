@@ -280,6 +280,19 @@ export type PdfiumEngine = PdfEngine & {
    * this: pdf-lib cannot touch a content stream and pdf.js only reads.
    */
   editableText(bytes: Uint8Array, page: number): Promise<EditableText[]>;
+  /**
+   * The same, for several pages, reading the document once.
+   *
+   * Exporting a 500-page document a page at a time would reopen and reparse it
+   * five hundred times; a 200 MB scan makes that minutes rather than seconds.
+   * `onPage` is called as each page is done, so a long export can still report
+   * where it is.
+   */
+  editableTextPages(
+    bytes: Uint8Array,
+    pages: number[],
+    onPage?: (done: number) => void,
+  ): Promise<EditableText[][]>;
   /** Replaces the text of the named runs and returns the new document. */
   editText(bytes: Uint8Array, edits: TextEdit[]): Promise<TextEditResult>;
   /**
@@ -363,6 +376,15 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
 
     editableText: async (bytes, page) =>
       withDocument(bytes, (doc) => listEditableText(m, doc, page)),
+
+    editableTextPages: async (bytes, pages, onPage) =>
+      withDocument(bytes, (doc) =>
+        pages.map((page, index) => {
+          const blocks = listEditableText(m, doc, page);
+          onPage?.(index + 1);
+          return blocks;
+        }),
+      ),
 
     editText: async (bytes, edits) =>
       withDocument(bytes, (doc) => {
