@@ -2,7 +2,7 @@
 // working with the network cut. The viewer flow runs inside the guard so the
 // assertion covers real work, not just the shell loading.
 import { test, expect, type Page } from "@playwright/test";
-import { PDFDict, PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 
 type Size = [number, number];
@@ -1007,6 +1007,97 @@ async function hasColouredInk(page: Page): Promise<boolean> {
     return false;
   });
 }
+
+test("lists a drawing's layers and turns one off", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A plan with the trades on separate layers, as one arrives.
+  const doc = await PDFDocument.load(await textFixture([["Site plan"]]));
+  const groups = ["Structural", "Electrical"].map((name) =>
+    doc.context.register(doc.context.obj({ Type: "OCG", Name: PDFString.of(name) })),
+  );
+  doc.catalog.set(
+    PDFName.of("OCProperties"),
+    doc.context.obj({ OCGs: groups, D: doc.context.obj({ BaseState: PDFName.of("ON") }) }),
+  );
+  await openFixture(page, "plan.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("tab-layers").click();
+  await expect(page.getByTestId("layer-list")).toContainText("Electrical");
+  await expect(page.getByTestId("layer-Electrical")).toBeChecked();
+
+  // Clicked, not unchecked: the box reflects the document, which only changes
+  // when the worker has written it.
+  await page.getByTestId("layer-Electrical").click();
+  await expect(page.getByTestId("status")).toHaveText("Electrical hidden", { timeout: 30_000 });
+  await expect(page.getByTestId("layer-Electrical")).not.toBeChecked();
+  await expect(page.getByTestId("layer-Structural")).toBeChecked();
+
+  // And the reader that opens the file is told the same thing.
+  const saved = await saveAndRead(page, "Save");
+  const after = await PDFDocument.load(saved);
+  const config = after.catalog
+    .lookup(PDFName.of("OCProperties"), PDFDict)
+    .lookup(PDFName.of("D"), PDFDict);
+  expect(config.lookup(PDFName.of("OFF"), PDFArray).size()).toBe(1);
+});
+
+test("draws a link to another page, and one to a web address", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "report.pdf", await textFixture([["Contents"], ["Chapter one"]]));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-link").click();
+  await page.mouse.move(area.x + 50, area.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 250, area.y + 100, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(page.getByTestId("link-prompt")).toBeVisible();
+  await page.getByTestId("link-page").fill("2");
+  await page.getByTestId("add-link").click();
+  await expect(page.getByTestId("status")).toHaveText("Link added", { timeout: 30_000 });
+
+  // A second one, to a web address. The tool stays active after placing one,
+  // as Acrobat's does, so it is not clicked again.
+  await page.mouse.move(area.x + 50, area.y + 140);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 250, area.y + 160, { steps: 4 });
+  await page.mouse.up();
+  await page.getByTestId("link-kind").selectOption("url");
+  await page.getByTestId("link-url").fill("https://iiitkottayam.ac.in");
+  await page.getByTestId("add-link").click();
+  await expect(page.getByTestId("status")).toHaveText("Link added", { timeout: 30_000 });
+
+  // A reader can follow the internal one: it scrolls to the page it names.
+  const before = await page.getByTestId("viewer").evaluate((el) => el.scrollTop);
+  await page.getByTestId("link-0-0").click();
+  await expect
+    .poll(() => page.getByTestId("viewer").evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(before);
+
+  // The web one is never opened on the document's say-so: it says where it
+  // goes and waits.
+  await page.getByTestId("link-0-1").click();
+  await expect(page.getByTestId("follow-url")).toHaveText("https://iiitkottayam.ac.in");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // Both are in the file as Link annotations with their actions.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Link", "/Link"]);
+  const doc = await PDFDocument.load(saved);
+  const annots = doc.getPage(0).node.Annots()!;
+  const second = doc.context.lookup(annots.get(1)) as PDFDict;
+  const action = second.lookup(PDFName.of("A"), PDFDict);
+  expect(action.get(PDFName.of("S"))?.toString()).toBe("/URI");
+  expect(String(action.get(PDFName.of("URI")))).toContain("iiitkottayam.ac.in");
+});
 
 test("sends the marks as a file, and reads a reviewer's back", async ({ page }) => {
   await withoutFilePickers(page);

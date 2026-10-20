@@ -26,6 +26,7 @@ import type {
   AccessibilityIssue,
   Attachment,
   DocumentDiff,
+  Link,
   EditableText,
   PageLabelRange,
   Found,
@@ -78,6 +79,9 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    setLayers,
+    links,
+    addPageLink,
     exportMarks,
     importMarks,
     replyToMark,
@@ -114,6 +118,20 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** The document's links, read with it, and one waiting to be opened. */
+  const [pageLinks, setPageLinks] = useState<Link[]>([]);
+  const [following, setFollowing] = useState<string | null>(null);
+
+  /** A link box drawn but not yet told where to go. */
+  const [pendingLink, setPendingLink] = useState<{
+    page: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [linkKind, setLinkKind] = useState<"page" | "url">("page");
+
   /** Building a form: what kind of field the next drag makes, and its name. */
   const [fieldKind, setFieldKind] = useState<"text" | "checkbox" | "dropdown">("text");
   const [fieldChoices, setFieldChoices] = useState("");
@@ -192,9 +210,9 @@ export function App() {
   const [editRuns, setEditRuns] = useState<Map<number, EditableText[]>>(new Map());
   /** Extracted text per page, for the selectable layer over the canvas. */
   const [textRuns, setTextRuns] = useState<Map<number, TextRun[]>>(new Map());
-  const [sidebar, setSidebar] = useState<"pages" | "outline" | "form" | "comments" | "attachments">(
-    "pages",
-  );
+  const [sidebar, setSidebar] = useState<
+    "pages" | "outline" | "form" | "comments" | "attachments" | "layers"
+  >("pages");
   /** Files carried inside the document, read when the panel is opened. */
   const [attached, setAttached] = useState<Attachment[]>([]);
   /** What a comparison found, and the name of what it was compared with. */
@@ -792,6 +810,10 @@ export function App() {
         return;
       }
       if (shape.kind === "rect") {
+        if (tool === "link") {
+          setPendingLink({ page, ...shape.rect });
+          return;
+        }
         if (tool === "field") {
           setPendingField({ page, ...shape.rect });
           return;
@@ -971,6 +993,15 @@ export function App() {
     },
     [pageText],
   );
+
+  // The document's links, re-read whenever it changes.
+  useEffect(() => {
+    if (!info) {
+      setPageLinks([]);
+      return;
+    }
+    void links().then(setPageLinks);
+  }, [info, links]);
 
   // The files carried inside the document, re-read whenever it changes.
   useEffect(() => {
@@ -1613,6 +1644,85 @@ export function App() {
         </div>
       ) : null}
 
+      {following ? (
+        <div className="prompt" data-testid="follow-prompt">
+          <span className="hfnote">
+            This link goes to <strong data-testid="follow-url">{following}</strong>, which is
+            outside this document and outside this app.
+          </span>
+          <a
+            className="action action-go"
+            href={following}
+            target="_blank"
+            rel="noreferrer noopener"
+            data-testid="follow-open"
+            onClick={() => setFollowing(null)}
+          >
+            Open it in the browser
+          </a>
+          <button type="button" className="action" onClick={() => setFollowing(null)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+
+      {pendingLink && info ? (
+        <form
+          className="prompt"
+          data-testid="link-prompt"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            const target =
+              linkKind === "url"
+                ? { url: String(form.get("linkUrl") ?? "").trim() }
+                : { page: Math.max(0, Number(form.get("linkPage") ?? 1) - 1) };
+            void addPageLink({ ...pendingLink, target })
+              .then((done) => {
+                setPendingLink(null);
+                if (done) setSaved("Link added");
+              })
+              .catch(() => setPendingLink(null));
+          }}
+        >
+          <label htmlFor="linkPage">Where should this box take the reader?</label>
+          <select
+            aria-label="Kind of link"
+            data-testid="link-kind"
+            value={linkKind}
+            onChange={(event) => setLinkKind(event.target.value as "page" | "url")}
+          >
+            <option value="page">A page of this document</option>
+            <option value="url">A web address</option>
+          </select>
+          {linkKind === "page" ? (
+            <input
+              id="linkPage"
+              name="linkPage"
+              type="number"
+              min={1}
+              max={pageCount}
+              defaultValue={Math.min(firstVisible + 2, pageCount)}
+              data-testid="link-page"
+            />
+          ) : (
+            <input
+              name="linkUrl"
+              type="url"
+              placeholder="https://…"
+              data-testid="link-url"
+              autoFocus
+            />
+          )}
+          <button type="submit" className="action action-go" data-testid="add-link">
+            Add the link
+          </button>
+          <button type="button" className="action" onClick={() => setPendingLink(null)}>
+            Cancel
+          </button>
+        </form>
+      ) : null}
+
       {pendingField && info ? (
         <form
           className="prompt"
@@ -2195,6 +2305,7 @@ export function App() {
                   ["form", "Form", info.form.fields.length],
                   ["outline", "Marks", info.outline.length],
                   ["attachments", "Files", attached.length],
+                  ["layers", "Layers", info.layers.length],
                 ] as const
               ).map(([key, label, count], index) => (
                 <button
@@ -2304,6 +2415,47 @@ export function App() {
                     ))}
                   </ul>
                 ) : null}
+              </div>
+            ) : sidebar === "layers" ? (
+              <div className="sidebar-scroll">
+                {info.layers.length === 0 ? (
+                  <p className="comments-empty" data-testid="layers-empty">
+                    This document has no layers.
+                  </p>
+                ) : (
+                  <>
+                    <p className="tool-hint">
+                      Turning a layer off hides it for a reader. The content stays in the file —
+                      Remove hidden info is what takes it out.
+                    </p>
+                    <ul className="fieldlist" data-testid="layer-list">
+                      {info.layers.map((layer) => (
+                        <li key={layer.id}>
+                          <label className="hfcheck">
+                            <input
+                              type="checkbox"
+                              checked={layer.visible}
+                              data-testid={`layer-${layer.name}`}
+                              // The next state comes from the document, not from
+                              // the box: the box is controlled by what the file
+                              // says, and only changes once the worker has
+                              // written it.
+                              onChange={() => {
+                                const wanted = !layer.visible;
+                                void setLayers({ [layer.id]: wanted }).then(
+                                  (done) =>
+                                    done &&
+                                    setSaved(`${layer.name} ${wanted ? "shown" : "hidden"}`),
+                                );
+                              }}
+                            />
+                            {layer.name}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
             ) : sidebar === "attachments" ? (
               <div className="sidebar-scroll">
@@ -2418,6 +2570,17 @@ export function App() {
               onNeedText={needText}
               onVisible={setFirstVisible}
               facing={facing}
+              links={pageLinks}
+              onFollow={(link) => {
+                if (link.target.page !== undefined) {
+                  const position = state.order.indexOf(link.target.page);
+                  if (position >= 0) setGoTo(position);
+                  return;
+                }
+                // A web address is never opened on the document's say-so: the
+                // reader sees where it goes and decides.
+                if (link.target.url) setFollowing(link.target.url);
+              }}
               editingImages={editingImages}
               images={imagesByPage}
               onNeedImages={needImages}
@@ -2612,7 +2775,10 @@ export function App() {
                   hint: "Each selected page starts a new file",
                 })}
               </div>
-              <div className="tool-grid">{toolButton("crop")}</div>
+              <div className="tool-grid">
+                {toolButton("crop")}
+                {toolButton("link")}
+              </div>
               {tool === "crop" ? (
                 <p className="tool-hint" data-testid="crop-hint">
                   Drag the part of the page to keep. Cropping hides the rest; it does not remove it,
@@ -2819,6 +2985,7 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   ink: "✎",
   crop: "⌗",
   field: "▭̲",
+  link: "⛓",
   line: "╱",
   arrow: "↗",
   polygon: "⬠",
@@ -2842,6 +3009,7 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   ink: "Draw freehand",
   crop: "Drag the part of the page to keep",
   field: "Drag where someone should fill something in",
+  link: "Drag a box, then say where it should go",
   line: "Drag to draw a line",
   arrow: "Drag to draw an arrow, pointing where you finish",
   polygon: "Click each corner, double-click to close the shape",
@@ -2865,6 +3033,7 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   ink: "Draw",
   crop: "Crop",
   field: "Add a field",
+  link: "Link",
   line: "Line",
   arrow: "Arrow",
   polygon: "Shape",

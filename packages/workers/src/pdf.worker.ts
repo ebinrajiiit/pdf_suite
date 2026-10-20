@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import {
   addField,
+  addLink,
   addReply,
   annotate,
   asAnnotations,
@@ -11,6 +12,8 @@ import {
   listAttachments,
   readAnnotations,
   readAttachment,
+  readLayers,
+  readLinks,
   removeAttachment,
   createQpdf,
   fillForm,
@@ -24,6 +27,7 @@ import {
   findHidden,
   fixAccessibility,
   readProperties,
+  setLayerVisibility,
   setOutline,
   setPageLabels,
   rotate,
@@ -124,6 +128,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   // Marks already in the file, which the Marks panel shows alongside the ones
   // placed in this session but not yet written.
   const marks = bytesForForm ? await readAnnotations(bytesForForm).catch(() => []) : [];
+  const layers = bytesForForm ? await readLayers(bytesForForm).catch(() => []) : [];
   return {
     pageCount,
     pageSizes,
@@ -133,6 +138,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
     protected: protection !== null,
     properties,
     marks,
+    layers,
     undo: past.length,
     redo: future.length,
   };
@@ -507,6 +513,25 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "setLayers": {
+      const base = await materialise(id, request.order, request.annotations);
+      const changed = await setLayerVisibility(base, request.visibility);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, changed, request) });
+      return;
+    }
+    case "links": {
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "links", links: await readLinks(base) });
+      return;
+    }
+    case "addLink": {
+      const base = await materialise(id, request.order, request.annotations);
+      const linked = await addLink(base, request.link);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, linked, request) });
       return;
     }
     case "exportXfdf": {

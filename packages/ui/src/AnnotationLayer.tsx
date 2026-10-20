@@ -24,7 +24,9 @@ export type AnnotationTool =
   /** Marks what to keep of the page. Not a PDF annotation either. */
   | "crop"
   /** Draws a form field where the box is. Not an annotation either. */
-  | "field";
+  | "field"
+  /** Draws a link box. Not an annotation this layer owns either. */
+  | "link";
 
 /** Tools drawn by dragging from one point to another, where direction matters. */
 const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow"]);
@@ -51,6 +53,7 @@ const BOX_TOOLS = new Set<AnnotationTool>([
   "redact",
   "crop",
   "field",
+  "link",
 ]);
 
 /** A CSS colour from an annotation's 0-1 RGB triple. */

@@ -19,6 +19,8 @@ import {
   type ImageEdit,
   type ImageEditResult,
   type PageImage,
+  type Link,
+  type LinkTarget,
   type RedactArea,
   type Reply,
   type RedactionResult,
@@ -71,6 +73,20 @@ export interface PdfWorkerClient {
   fillForm(
     values: FieldValues,
     flatten: boolean,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Turns layers on and off. */
+  setLayers(
+    visibility: Record<string, boolean>,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  /** Every link in the document. */
+  links(order: number[], annotations: Annotation[]): Promise<Link[]>;
+  /** Adds a link box to a page. */
+  addLink(
+    link: { page: number; x: number; y: number; w: number; h: number; target: LinkTarget },
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
@@ -364,6 +380,16 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async setLayers(visibility, order, annotations) {
+      return expect(await send({ kind: "setLayers", visibility, order, annotations }), "document")
+        .info;
+    },
+    async links(order, annotations) {
+      return expect(await send({ kind: "links", order, annotations }), "links").links;
+    },
+    async addLink(link, order, annotations) {
+      return expect(await send({ kind: "addLink", link, order, annotations }), "document").info;
     },
     async exportXfdf(name, order, annotations) {
       return expect(await send({ kind: "exportXfdf", name, order, annotations }), "xfdf").xml;

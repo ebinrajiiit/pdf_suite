@@ -114,11 +114,11 @@ What an Acrobat user would miss before anything subtle:
 | Page labels (`/PageLabels`) | Done: runs of pages numbered 1,2,3 or i,ii,iii or a,b,c, each with a prefix, which is what the viewer's page box reads |
 | Rotate, reorder, insert, extract, delete, split | Done |
 | Replace pages | Missing, though it is delete + insert |
-| Links | Missing entirely: no creating, editing or following. Link annotations are also how a table of contents works |
+| Links | Draw a box and point it at a page or a web address; a reader can follow it. A web address is never opened on the document's say-so — the reader is shown where it goes and decides. Editing an existing link is missing |
 | Bookmarks | Add, rename, move and remove, written as a real `/Outlines` tree. Nesting an existing bookmark under another is still missing |
-| Named destinations | Missing |
+| Named destinations | Written and read, sorted as a name tree has to be. Pointing a bookmark at one is missing |
 | Attachments (embedded files) | Done: attach, list, extract and remove, in a panel of their own. Sanitising removes them, which is the same feature read the other way |
-| Layers (OCG) | Missing: no panel, no toggling, no flattening |
+| Layers (OCG) | A panel that lists them and turns them on and off, which is what a drawing needs before it goes to a contractor. Flattening a layer away is missing; Remove hidden info is what takes one out |
 | Article threads | Missing. Rare outside journals |
 | Rich media (video, audio, 3D, buttons) | Missing, and 3D is not worth it |
 | Optimise (PDF Optimizer) | Partial: qpdf recompresses streams. No image downsampling, no font subsetting, no object discarding, no space audit |

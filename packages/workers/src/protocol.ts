@@ -10,6 +10,9 @@ import type {
   Annotation,
   Attachment,
   ExistingAnnotation,
+  Layer,
+  Link,
+  LinkTarget,
   Reply,
   DocumentDiff,
   NewField,
@@ -62,6 +65,8 @@ export interface DocumentInfo {
   properties: DocumentProperties;
   /** Marks the document already carries, as opposed to ones placed here. */
   marks: ExistingAnnotation[];
+  /** Optional content groups — layers — with whether each is on. */
+  layers: Layer[];
 }
 
 /**
@@ -75,6 +80,9 @@ export type {
   Annotation,
   Attachment,
   ExistingAnnotation,
+  Layer,
+  Link,
+  LinkTarget,
   Reply,
   DocumentDiff,
   PageDiff,
@@ -225,6 +233,22 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Turns layers on and off, by the ids the info reported. */
+    | {
+        kind: "setLayers";
+        visibility: Record<string, boolean>;
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Every link in the document, with where it goes. */
+    | { kind: "links"; order: number[]; annotations: Annotation[] }
+    /** Adds a link box to a page. */
+    | {
+        kind: "addLink";
+        link: { page: number; x: number; y: number; w: number; h: number; target: LinkTarget };
+        order: number[];
+        annotations: Annotation[];
+      }
     /** The document's marks as an XFDF file, for sending to a reviewer. */
     | { kind: "exportXfdf"; name: string; order: number[]; annotations: Annotation[] }
     /** Imports marks from an XFDF file a reviewer sent back. */
@@ -338,6 +362,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "attached"; files: Attachment[] }
   | { kind: "compared"; diff: DocumentDiff }
   | { kind: "xfdf"; xml: string }
+  | { kind: "links"; links: Link[] }
   | { kind: "imported"; info: DocumentInfo; added: number; dropped: number; skipped: number }
   | { kind: "attachment"; name: string; bytes: ArrayBuffer }
   | {
@@ -396,6 +421,7 @@ export type TerminalResponse = Extract<
       | "attachment"
       | "compared"
       | "xfdf"
+      | "links"
       | "imported"
       | "imagesEdited"
       | "found"

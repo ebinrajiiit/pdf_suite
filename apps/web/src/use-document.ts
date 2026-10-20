@@ -15,6 +15,8 @@ import type {
   Found,
   ImageEdit,
   NewField,
+  Link,
+  LinkTarget,
   PageImage,
   Reply,
   SanitiseOptions,
@@ -702,6 +704,41 @@ export function useDocument() {
     [run],
   );
 
+  /** Turns layers on and off. */
+  const setLayers = useCallback(
+    async (visibility: Record<string, boolean>) =>
+      rewrite("Changing layers", (worker) =>
+        worker.setLayers(visibility, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  /** Every link in the document, with where it goes. */
+  const links = useCallback(async (): Promise<Link[]> => {
+    const worker = client.current;
+    if (!worker) return [];
+    try {
+      return await worker.links(stateRef.current.order, stateRef.current.annotations);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const addPageLink = useCallback(
+    async (link: {
+      page: number;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      target: LinkTarget;
+    }) =>
+      rewrite("Adding the link", (worker) =>
+        worker.addLink(link, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** The document's marks as an XFDF file, for sending to a reviewer. */
   const exportMarks = useCallback(
     async (name: string) =>
@@ -954,6 +991,9 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    setLayers,
+    links,
+    addPageLink,
     exportMarks,
     importMarks,
     replyToMark,

@@ -5,6 +5,7 @@ import { TextEditLayer, type TextEditCommit } from "./TextEditLayer.js";
 import { TextLayer } from "./TextLayer.js";
 import { ImageEditLayer } from "./ImageEditLayer.js";
 import type { EditableText, PageImage } from "@pdf-suite/engine/pdfium";
+import type { Link } from "@pdf-suite/core";
 import type { TextRun } from "@pdf-suite/engine";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
@@ -71,6 +72,10 @@ export interface ViewerProps {
   onVisible?: ((position: number) => void) | undefined;
   /** Two pages side by side, as a book opens. */
   facing?: boolean | undefined;
+  /** The document's links, so a reader can follow them. */
+  links?: Link[] | undefined;
+  /** Following one: a page of this document, or a web address to confirm. */
+  onFollow?: ((link: Link) => void) | undefined;
   /** Editing pictures: the images per source page, and what to do with them. */
   editingImages?: boolean | undefined;
   images?: ReadonlyMap<number, PageImage[]> | undefined;
@@ -112,6 +117,8 @@ export function Viewer({
   onNeedText,
   onVisible,
   facing,
+  links,
+  onFollow,
   editingImages,
   images,
   onNeedImages,
@@ -248,6 +255,32 @@ export function Viewer({
               render={render}
               label={`Page ${box.position + 1}`}
             />
+            {onFollow
+              ? (links ?? [])
+                  .filter((link) => link.page === box.page)
+                  .map((link) => (
+                    <button
+                      key={`${link.page}:${link.index}`}
+                      type="button"
+                      className="linkbox"
+                      data-testid={`link-${link.page}-${link.index}`}
+                      title={
+                        link.target.url
+                          ? `Opens ${link.target.url}`
+                          : link.target.page !== undefined
+                            ? `Goes to page ${link.target.page + 1}`
+                            : "Goes somewhere in this document"
+                      }
+                      style={{
+                        left: `${link.x * scale}px`,
+                        top: `${((pageSizes[box.page]?.height ?? 792) - link.y - link.h) * scale}px`,
+                        width: `${link.w * scale}px`,
+                        height: `${link.h * scale}px`,
+                      }}
+                      onClick={() => onFollow(link)}
+                    />
+                  ))
+              : null}
             <TextLayer
               page={box.page}
               pageHeight={pageSizes[box.page]?.height ?? 792}
