@@ -1,4 +1,4 @@
-import { PDFDocument, PDFString } from "pdf-lib";
+import { PDFDocument, PDFString, StandardFonts, type PDFRef } from "pdf-lib";
 import type { PdfBytes } from "./ops.js";
 
 /**
@@ -11,10 +11,10 @@ import type { PdfBytes } from "./ops.js";
  * engine. A viewer that does neither will show nothing, which is the known
  * limitation to fix by generating `/AP` if it ever matters.
  *
- * That constraint is also why there is no Line or Arrow kind. PDFium synthesises
- * appearances for Highlight, Underline, StrikeOut, Text, Square, Circle and Ink,
- * but not for Line — a Line annotation would be in the file and invisible in our
- * own viewer. Add it together with `/AP` generation.
+ * The exceptions are the kinds no viewer synthesises: Line, and Stamp. Those
+ * carry an appearance stream of their own, drawn here, which is why they can
+ * exist at all — a Line without `/AP` is in the file and invisible in PDFium,
+ * which is our own renderer.
  */
 
 /** A box in PDF points, origin at the page's bottom-left. */
@@ -52,6 +52,9 @@ export interface InkPoint {
   y: number;
 }
 
+/** Where a line carries an arrowhead. */
+export type ArrowEnds = "none" | "end" | "both";
+
 export type Annotation =
   | (Markup & { kind: "highlight" })
   | (Markup & { kind: "underline" })
@@ -63,6 +66,31 @@ export type Annotation =
   /** Freehand strokes; each inner array is one continuous stroke. */
   | (Common & { kind: "ink"; strokes: InkPoint[][]; width?: number })
   | (Common & { kind: "note"; x: number; y: number; contents: string })
+  /** A straight line, with or without arrowheads. Carries its own appearance. */
+  | (Common & {
+      kind: "line";
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      width?: number;
+      arrow?: ArrowEnds;
+    })
+  /** A rubber stamp: a labelled box, as in Approved or Draft. */
+  | (Common & { kind: "stamp"; x: number; y: number; w: number; h: number; label: string })
+  /**
+   * A drawn signature, placed as one object rather than as loose ink so it can
+   * be moved and resized. Strokes are in 0-1 of the box, so the same signature
+   * fits any size.
+   */
+  | (Common & {
+      kind: "signature";
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      strokes: InkPoint[][];
+    })
   | (Common & {
       kind: "text";
       x: number;
@@ -84,9 +112,83 @@ const SUBTYPES: Record<MarkupKind, string> = {
   strike: "StrikeOut",
 };
 const NOTE_YELLOW: AnnotColor = [1, 0.82, 0.25];
+const STAMP_RED: AnnotColor = [0.78, 0.1, 0.1];
+/** Signatures are blue ink on paper forms, so that they are obviously original. */
+const SIGNATURE_INK: AnnotColor = [0.1, 0.18, 0.55];
 const TEXT_BLACK: AnnotColor = [0, 0, 0];
 /** Bit 3 (value 4) is Print: without it many viewers omit the annotation on paper. */
 const FLAG_PRINT = 4;
+
+/**
+ * An appearance stream: the drawing a viewer shows for an annotation.
+ *
+ * Highlight, Square, Circle, Ink and the rest are synthesised by PDFium and
+ * pdf.js from their geometry, so they need none. Line and Stamp are not, and
+ * without this they would be in the file and invisible.
+ *
+ * The form's `/BBox` is given in page coordinates and matches the annotation's
+ * `/Rect`, which makes the form-to-rect mapping the identity — so the operators
+ * below are written in the page's own coordinates and need no second frame of
+ * reference.
+ */
+function appearance(
+  doc: PDFDocument,
+  rect: [number, number, number, number],
+  operators: string,
+  fonts?: Record<string, PDFRef>,
+): PDFRef {
+  return doc.context.register(
+    doc.context.flateStream(operators, {
+      Type: "XObject",
+      Subtype: "Form",
+      FormType: 1,
+      BBox: rect,
+      Resources: fonts ? { Font: fonts } : {},
+    }),
+  );
+}
+
+/** PDF numbers: short, and never in exponent notation, which PDF has no syntax for. */
+function n(value: number): string {
+  return (Math.round(value * 1000) / 1000).toString();
+}
+
+/** The operators for a line, with arrowheads where asked for. */
+function lineOperators(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  width: number,
+  colour: AnnotColor,
+  arrow: ArrowEnds,
+): string {
+  const [r, g, b] = colour;
+  const stroke = `${n(r)} ${n(g)} ${n(b)} RG`;
+  const fill = `${n(r)} ${n(g)} ${n(b)} rg`;
+  const head = (tipX: number, tipY: number, fromX: number, fromY: number): string => {
+    const length = Math.hypot(tipX - fromX, tipY - fromY) || 1;
+    // A head that grows with the pen, as every drawing program does it.
+    const size = Math.max(6, width * 3.5);
+    const ux = (tipX - fromX) / length;
+    const uy = (tipY - fromY) / length;
+    // Back along the line, then out to each side.
+    const baseX = tipX - ux * size;
+    const baseY = tipY - uy * size;
+    const spread = size * 0.4;
+    return (
+      `${n(tipX)} ${n(tipY)} m ` +
+      `${n(baseX - uy * spread)} ${n(baseY + ux * spread)} l ` +
+      `${n(baseX + uy * spread)} ${n(baseY - ux * spread)} l f\n`
+    );
+  };
+
+  let ops = `q\n${stroke}\n${fill}\n${n(width)} w 1 J 1 j\n`;
+  ops += `${n(x1)} ${n(y1)} m ${n(x2)} ${n(y2)} l S\n`;
+  if (arrow === "end" || arrow === "both") ops += head(x2, y2, x1, y1);
+  if (arrow === "both") ops += head(x1, y1, x2, y2);
+  return `${ops}Q\n`;
+}
 
 /** PDF date format, e.g. D:20261016120000Z. */
 function pdfDate(now: Date): string {
@@ -96,6 +198,20 @@ function pdfDate(now: Date): string {
     `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`
   );
 }
+
+/** Helvetica-Bold, embedded once however many stamps a document gets. */
+async function stampFont(doc: PDFDocument) {
+  const cached = fonts.get(doc);
+  if (cached) return cached;
+  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  const entry = { font, ref: font.ref };
+  fonts.set(doc, entry);
+  return entry;
+}
+const fonts = new WeakMap<
+  PDFDocument,
+  { font: Awaited<ReturnType<PDFDocument["embedFont"]>>; ref: PDFRef }
+>();
 
 /** Adds the annotations to the document and returns new bytes. */
 export async function annotate(input: PdfBytes, annotations: Annotation[]): Promise<PdfBytes> {
@@ -227,6 +343,144 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
             Name: "Comment",
             C: annotation.color ?? NOTE_YELLOW,
             Open: false,
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "line") {
+      const width = annotation.width ?? STROKE;
+      const colour = annotation.color ?? INK_RED;
+      const arrow = annotation.arrow ?? "none";
+      // The box has to hold the pen and the arrowhead, or viewers clip them.
+      const pad = Math.max(width * 2, arrow === "none" ? width : Math.max(6, width * 3.5));
+      const rect: [number, number, number, number] = [
+        Math.min(annotation.x1, annotation.x2) - pad,
+        Math.min(annotation.y1, annotation.y2) - pad,
+        Math.max(annotation.x1, annotation.x2) + pad,
+        Math.max(annotation.y1, annotation.y2) + pad,
+      ];
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "Line",
+            Rect: rect,
+            L: [annotation.x1, annotation.y1, annotation.x2, annotation.y2],
+            // The line-ending names are what another editor reads to know this
+            // is an arrow; the appearance below is what every viewer draws.
+            LE: ["None", arrow === "none" ? "None" : "OpenArrow"],
+            C: colour,
+            IC: colour,
+            BS: { W: width, S: "S" },
+            CA: 1,
+            AP: {
+              N: appearance(
+                doc,
+                rect,
+                lineOperators(
+                  annotation.x1,
+                  annotation.y1,
+                  annotation.x2,
+                  annotation.y2,
+                  width,
+                  colour,
+                  arrow,
+                ),
+              ),
+            },
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "stamp") {
+      const colour = annotation.color ?? STAMP_RED;
+      const rect: [number, number, number, number] = [
+        annotation.x,
+        annotation.y,
+        annotation.x + annotation.w,
+        annotation.y + annotation.h,
+      ];
+      const label = annotation.label.toUpperCase();
+      const font = await stampFont(doc);
+      // Big enough to read, small enough to fit the box both ways.
+      const size = Math.min(annotation.h * 0.55, (annotation.w * 1.6) / Math.max(label.length, 1));
+      const textWidth = font.font.widthOfTextAtSize(label, size);
+      const [r, g, b] = colour;
+      const inset = Math.max(1.5, annotation.h * 0.08);
+      const ops =
+        `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(r)} ${n(g)} ${n(b)} rg\n` +
+        `${n(inset)} w\n` +
+        `${n(rect[0] + inset)} ${n(rect[1] + inset)} ` +
+        `${n(annotation.w - inset * 2)} ${n(annotation.h - inset * 2)} re S\n` +
+        `BT /F1 ${n(size)} Tf ` +
+        `1 0 0 1 ${n(rect[0] + (annotation.w - textWidth) / 2)} ` +
+        `${n(rect[1] + (annotation.h - size * 0.7) / 2)} Tm\n` +
+        `(${label.replace(/([()\\])/g, "\\$1")}) Tj ET\nQ\n`;
+
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "Stamp",
+            Rect: rect,
+            Name: "Draft",
+            Contents: PDFString.of(annotation.label),
+            C: colour,
+            CA: 1,
+            AP: { N: appearance(doc, rect, ops, { F1: font.ref }) },
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "signature") {
+      if (annotation.strokes.length === 0) throw new Error("a signature needs at least one stroke");
+      const colour = annotation.color ?? SIGNATURE_INK;
+      const rect: [number, number, number, number] = [
+        annotation.x,
+        annotation.y,
+        annotation.x + annotation.w,
+        annotation.y + annotation.h,
+      ];
+      const width = Math.max(1, Math.min(annotation.w, annotation.h) * 0.02);
+      const [r, g, b] = colour;
+      // Strokes arrive in 0-1 of the box, so one drawn signature fits any size.
+      const paths = annotation.strokes
+        .filter((stroke) => stroke.length > 0)
+        .map((stroke) =>
+          stroke
+            .map((point, index) => {
+              const px = rect[0] + point.x * annotation.w;
+              const py = rect[1] + point.y * annotation.h;
+              return `${n(px)} ${n(py)} ${index === 0 ? "m" : "l"}`;
+            })
+            .join(" "),
+        )
+        .map((path) => `${path} S`)
+        .join("\n");
+
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "Stamp",
+            Rect: rect,
+            Name: "Signature",
+            Contents: PDFString.of("Signature"),
+            C: colour,
+            CA: 1,
+            AP: {
+              N: appearance(
+                doc,
+                rect,
+                `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(width)} w 1 J 1 j\n${paths}\nQ\n`,
+              ),
+            },
           }),
         ),
       );

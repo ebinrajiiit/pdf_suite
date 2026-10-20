@@ -1,5 +1,5 @@
-import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
-import { expect, test } from "vitest";
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
+import { describe, expect, test } from "vitest";
 import { annotate, type Annotation } from "./annotate.js";
 
 async function makeDoc(pages = 2): Promise<Uint8Array> {
@@ -177,4 +177,120 @@ test("a colour given for a shape is the colour written", async () => {
   const doc = await PDFDocument.load(marked);
   const colour = String(doc.getPage(0).node.Annots()!.lookup(0, PDFDict).get(PDFName.of("C")));
   expect(colour).toContain("0.5");
+});
+
+describe("appearances for the kinds no viewer synthesises", () => {
+  /** The annotation dictionaries on page 0, as plain objects. */
+  async function blankPage(): Promise<Uint8Array> {
+    return makeDoc(1);
+  }
+
+  async function annotsOf(bytes: Uint8Array) {
+    const doc = await PDFDocument.load(bytes);
+    const page = doc.getPage(0);
+    const annots = page.node.Annots();
+    return (annots?.asArray() ?? []).map((ref) => doc.context.lookup(ref) as PDFDict);
+  }
+
+  test("a line carries its own appearance stream, sized to its box", async () => {
+    const out = await annotate(await blankPage(), [
+      { kind: "line", page: 0, x1: 50, y1: 50, x2: 150, y2: 120, arrow: "end" },
+    ]);
+    const [annot] = await annotsOf(out);
+    expect(annot?.get(PDFName.of("Subtype"))?.toString()).toBe("/Line");
+
+    // Without /AP a Line is in the file and invisible in PDFium, which is the
+    // renderer this app uses.
+    const ap = annot?.lookup(PDFName.of("AP")) as PDFDict | undefined;
+    expect(ap).toBeDefined();
+    const form = ap?.lookup(PDFName.of("N")) as PDFRawStream | undefined;
+    expect(form).toBeDefined();
+
+    // The form's BBox must match the annotation's Rect, or the drawing is
+    // scaled into the wrong place.
+    const bbox = (form?.dict.lookup(PDFName.of("BBox")) as PDFArray | undefined)
+      ?.asArray()
+      .map((value) => Number(value.toString()));
+    const rect = (annot?.lookup(PDFName.of("Rect")) as PDFArray | undefined)
+      ?.asArray()
+      .map((value) => Number(value.toString()));
+    expect(bbox).toEqual(rect);
+
+    // And the arrowhead is drawn, not merely declared in /LE.
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form!).decode());
+    expect(ops).toContain(" l S");
+    expect(ops).toContain(" f");
+  });
+
+  test("a line without an arrow draws no head", async () => {
+    const out = await annotate(await blankPage(), [
+      { kind: "line", page: 0, x1: 10, y1: 10, x2: 90, y2: 10 },
+    ]);
+    const [annot] = await annotsOf(out);
+    const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+    expect(ops).toContain("m ");
+    expect(ops).not.toContain(" f\n");
+  });
+
+  test("a stamp is a Stamp with its label drawn in it", async () => {
+    const out = await annotate(await blankPage(), [
+      { kind: "stamp", page: 0, x: 40, y: 40, w: 160, h: 48, label: "Approved" },
+    ]);
+    const [annot] = await annotsOf(out);
+    expect(annot?.get(PDFName.of("Subtype"))?.toString()).toBe("/Stamp");
+    const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+    expect(ops).toContain("(APPROVED) Tj");
+    // The label needs a font to be drawn with, in the form's own resources.
+    const resources = form.dict.lookup(PDFName.of("Resources")) as PDFDict;
+    expect(resources.lookup(PDFName.of("Font"))).toBeDefined();
+  });
+
+  test("a stamp label with brackets in it does not break the stream", async () => {
+    const out = await annotate(await blankPage(), [
+      { kind: "stamp", page: 0, x: 0, y: 0, w: 200, h: 40, label: "Received (copy)" },
+    ]);
+    const [annot] = await annotsOf(out);
+    const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+    expect(ops).toContain("(RECEIVED \\(COPY\\)) Tj");
+  });
+
+  test("a signature scales its strokes into the box it is placed in", async () => {
+    const strokes = [
+      [
+        { x: 0, y: 0 },
+        { x: 0.5, y: 1 },
+        { x: 1, y: 0 },
+      ],
+    ];
+    const out = await annotate(await blankPage(), [
+      { kind: "signature", page: 0, x: 100, y: 200, w: 120, h: 40, strokes },
+    ]);
+    const [annot] = await annotsOf(out);
+    expect(annot?.get(PDFName.of("Subtype"))?.toString()).toBe("/Stamp");
+    const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+    // 0-1 in, page points out: the first point is the box's own corner.
+    expect(ops).toContain("100 200 m");
+    expect(ops).toContain("160 240 l");
+    expect(ops).toContain("220 200 l");
+  });
+
+  test("a signature with no strokes is refused", async () => {
+    await expect(
+      annotate(await blankPage(), [
+        { kind: "signature", page: 0, x: 0, y: 0, w: 10, h: 10, strokes: [] },
+      ]),
+    ).rejects.toThrow(/at least one stroke/);
+  });
 });

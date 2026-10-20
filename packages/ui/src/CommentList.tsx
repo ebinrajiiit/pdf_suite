@@ -73,4 +73,7 @@ const LABELS: Record<Annotation["kind"], string> = {
   square: "Box",
   circle: "Oval",
   ink: "Freehand",
+  line: "Line",
+  stamp: "Stamp",
+  signature: "Signature",
 };

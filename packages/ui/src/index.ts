@@ -8,6 +8,7 @@ export { CommentList, type CommentListProps } from "./CommentList.js";
 export { ContextMenu, type ContextMenuProps, type MenuItem } from "./ContextMenu.js";
 export { FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { Outline, type OutlineProps } from "./Outline.js";
+export { SignaturePad, type SignaturePadProps } from "./SignaturePad.js";
 export { TextEditLayer, type TextEditCommit, type TextEditLayerProps } from "./TextEditLayer.js";
 export { TextLayer, type TextLayerProps } from "./TextLayer.js";
 export { PageCanvas, type PageCanvasProps } from "./PageCanvas.js";

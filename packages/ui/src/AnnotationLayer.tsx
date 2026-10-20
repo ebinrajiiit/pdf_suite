@@ -10,8 +10,17 @@ export type AnnotationTool =
   | "square"
   | "circle"
   | "ink"
+  | "line"
+  | "arrow"
+  | "stamp"
+  | "signature"
   /** Marks an area whose content will be removed. Not a PDF annotation. */
   | "redact";
+
+/** Tools drawn by dragging from one point to another, where direction matters. */
+const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow"]);
+/** Tools placed with a single click. */
+const POINT_TOOLS = new Set<AnnotationTool>(["note", "text", "stamp", "signature"]);
 
 /** Tools that are drawn by dragging a box. */
 const BOX_TOOLS = new Set<AnnotationTool>([
@@ -33,6 +42,8 @@ function rgb(color?: [number, number, number]): string {
 export type PlacedShape =
   | { kind: "rect"; rect: AnnotRect }
   | { kind: "point"; x: number; y: number }
+  /** A line from where the drag started to where it ended; direction matters. */
+  | { kind: "vector"; x1: number; y1: number; x2: number; y2: number }
   /** A freehand stroke, in PDF points. */
   | { kind: "stroke"; points: { x: number; y: number }[] };
 
@@ -85,6 +96,14 @@ export function AnnotationLayer({
   const finishDrag = () => {
     if (!drag) return;
     setDrag(null);
+    if (tool && VECTOR_TOOLS.has(tool)) {
+      // Too short to be deliberate, in either direction.
+      if (Math.hypot(drag.x2 - drag.x1, drag.y2 - drag.y1) < 6) return;
+      const from = toPdf(drag.x1, drag.y1);
+      const to = toPdf(drag.x2, drag.y2);
+      onPlace?.(page, { kind: "vector", x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+      return;
+    }
     const left = Math.min(drag.x1, drag.x2);
     const right = Math.max(drag.x1, drag.x2);
     const top = Math.min(drag.y1, drag.y2);
@@ -116,7 +135,7 @@ export function AnnotationLayer({
           setStroke([{ x, y }]);
           return;
         }
-        if (!tool || !BOX_TOOLS.has(tool)) return;
+        if (!tool || !(BOX_TOOLS.has(tool) || VECTOR_TOOLS.has(tool))) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         setDrag({ x1: x, y1: y, x2: x, y2: y });
       }}
@@ -150,7 +169,7 @@ export function AnnotationLayer({
         setStroke(null);
       }}
       onClick={(event) => {
-        if (tool !== "note" && tool !== "text") return;
+        if (!tool || !POINT_TOOLS.has(tool)) return;
         const box = layer.current?.getBoundingClientRect();
         const point = toPdf(event.clientX - (box?.left ?? 0), event.clientY - (box?.top ?? 0));
         onPlace?.(page, { kind: "point", ...point });
@@ -186,6 +205,101 @@ export function AnnotationLayer({
               }}
             />
           ));
+        }
+
+        if (annotation.kind === "line") {
+          // An SVG the size of the page: a diagonal line is not a box, and
+          // drawing it with CSS would be a rotated div with the wrong hit area.
+          const colour = rgb(annotation.color);
+          const head = Math.max(6, (annotation.width ?? 2) * 3.5) * scale;
+          return (
+            <svg
+              {...common}
+              className="annot annot-line"
+              data-testid={`annot-${index}`}
+              width="100%"
+              height="100%"
+              style={{ left: 0, top: 0, width: "100%", height: "100%" }}
+            >
+              <line
+                x1={annotation.x1 * scale}
+                y1={top(annotation.y1, 0)}
+                x2={annotation.x2 * scale}
+                y2={top(annotation.y2, 0)}
+                stroke={colour}
+                strokeWidth={(annotation.width ?? 2) * scale}
+                strokeLinecap="round"
+                markerEnd={
+                  annotation.arrow && annotation.arrow !== "none" ? "url(#arrow)" : undefined
+                }
+              />
+              {annotation.arrow && annotation.arrow !== "none" ? (
+                <defs>
+                  <marker
+                    id="arrow"
+                    markerWidth={head}
+                    markerHeight={head}
+                    refX={head * 0.9}
+                    refY={head / 2}
+                    orient="auto"
+                  >
+                    <path d={`M0,0 L${head},${head / 2} L0,${head} z`} fill={colour} />
+                  </marker>
+                </defs>
+              ) : null}
+            </svg>
+          );
+        }
+
+        if (annotation.kind === "stamp") {
+          return (
+            <div
+              {...common}
+              className="annot annot-stamp"
+              data-testid={`annot-${index}`}
+              style={{
+                left: `${annotation.x * scale}px`,
+                top: `${top(annotation.y + annotation.h, 0)}px`,
+                width: `${annotation.w * scale}px`,
+                height: `${annotation.h * scale}px`,
+                color: rgb(annotation.color),
+                borderColor: rgb(annotation.color),
+                fontSize: `${annotation.h * scale * 0.5}px`,
+              }}
+            >
+              {annotation.label.toUpperCase()}
+            </div>
+          );
+        }
+
+        if (annotation.kind === "signature") {
+          const colour = rgb(annotation.color);
+          return (
+            <svg
+              {...common}
+              className="annot annot-signature"
+              data-testid={`annot-${index}`}
+              viewBox="0 0 1 1"
+              preserveAspectRatio="none"
+              style={{
+                left: `${annotation.x * scale}px`,
+                top: `${top(annotation.y + annotation.h, 0)}px`,
+                width: `${annotation.w * scale}px`,
+                height: `${annotation.h * scale}px`,
+              }}
+            >
+              {annotation.strokes.map((points, n) => (
+                <polyline
+                  key={n}
+                  points={points.map((point) => `${point.x},${1 - point.y}`).join(" ")}
+                  fill="none"
+                  stroke={colour}
+                  strokeWidth={0.02}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </svg>
+          );
         }
 
         if (annotation.kind === "square" || annotation.kind === "circle") {

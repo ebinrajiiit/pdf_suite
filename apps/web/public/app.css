@@ -599,6 +599,68 @@ textarea:focus-visible,
   background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
+/* Drawn marks the browser cannot express as a box: a line at any angle, a
+   stamp, a signature. */
+.annot-line {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+.annot-line line {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.annot-stamp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.annot-signature {
+  overflow: visible;
+}
+
+/* Sign once, place anywhere. */
+.signpad {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+.signpad-box {
+  position: relative;
+  height: 10rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: #16307a;
+  cursor: crosshair;
+  touch-action: none;
+}
+.signpad-box svg {
+  width: 100%;
+  height: 100%;
+}
+.signpad-hint {
+  position: absolute;
+  inset: auto 0 0.6rem 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.signpad-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {
@@ -982,12 +1044,16 @@ textarea:focus-visible,
 .annots-square,
 .annots-circle,
 .annots-ink,
+.annots-line,
+.annots-arrow,
 .annots-redact {
   pointer-events: auto;
   cursor: crosshair;
 }
 .annots-note,
-.annots-text {
+.annots-text,
+.annots-stamp,
+.annots-signature {
   pointer-events: auto;
   cursor: copy;
 }

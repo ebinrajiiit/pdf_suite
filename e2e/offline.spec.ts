@@ -977,6 +977,98 @@ test("a mark can be removed from the Marks panel", async ({ page }) => {
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
 });
 
+/**
+ * Whether the first page as rendered contains any strongly coloured pixel.
+ *
+ * The page canvas uses a bitmap context, so its pixels are read by drawing it
+ * into a second canvas. This is how a drawing that only exists in an appearance
+ * stream can be checked: PDFium either drew it or it did not.
+ */
+async function hasColouredInk(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const source = document.querySelector<HTMLCanvasElement>('[data-testid="viewer"] canvas');
+    if (!source) return false;
+    const copy = document.createElement("canvas");
+    copy.width = source.width;
+    copy.height = source.height;
+    const context = copy.getContext("2d");
+    if (!context) return false;
+    context.drawImage(source, 0, 0);
+    const { data } = context.getImageData(0, 0, copy.width, copy.height);
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i] ?? 0;
+      const g = data[i + 1] ?? 0;
+      const b = data[i + 2] ?? 0;
+      // Clearly coloured, not black text and not white paper.
+      if (r > 120 && g < 90 && b < 90) return true;
+    }
+    return false;
+  });
+}
+
+test("an arrow and a stamp are drawn by the engine, not just written", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "plan.pdf", await textFixture([["Site plan"]]));
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-arrow").click();
+  await page.mouse.move(area.x + 40, area.y + 160);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 220, area.y + 60, { steps: 6 });
+  await page.mouse.up();
+
+  await page.getByTestId("tool-stamp").click();
+  await page.getByTestId("stamp-label").selectOption("Received");
+  await page.mouse.click(area.x + 60, area.y + 300);
+
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comment-0")).toContainText("Line");
+  await expect(page.getByTestId("comment-1")).toContainText("Stamp");
+
+  // Written into the document, with the right subtypes.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Line", "/Stamp"]);
+
+  // And — the point of generating appearance streams — PDFium draws them.
+  // Nothing on the page is red, so red pixels can only be the new marks.
+  // Compressing rewrites the bytes, which is what writes the pending marks into
+  // the document — so what is on screen afterwards is PDFium's own rendering.
+  await page.getByRole("button", { name: "Compress" }).click();
+  await expect(page.getByTestId("status")).not.toHaveText(/Compressing/, { timeout: 60_000 });
+  await expect.poll(() => hasColouredInk(page), { timeout: 30_000 }).toBe(true);
+});
+
+test("a signature is drawn once and placed on the page", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "form.pdf", await textFixture([["Signed:"]]));
+
+  await page.getByTestId("tool-signature").click();
+  await page.getByTestId("draw-signature").click();
+
+  const pad = (await page.getByTestId("signature-canvas").boundingBox())!;
+  await page.mouse.move(pad.x + 30, pad.y + 110);
+  await page.mouse.down();
+  await page.mouse.move(pad.x + 120, pad.y + 40, { steps: 6 });
+  await page.mouse.move(pad.x + 210, pad.y + 120, { steps: 6 });
+  await page.mouse.move(pad.x + 320, pad.y + 50, { steps: 6 });
+  await page.mouse.up();
+  await page.getByTestId("signature-save").click();
+  await expect(page.getByTestId("status")).toContainText("Signature saved", { timeout: 30_000 });
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.click(area.x + 120, area.y + 120);
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comment-0")).toContainText("Signature");
+
+  // One Stamp annotation carrying the strokes, not a pile of loose ink.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Stamp"]);
+});
+
 test("the document's description can be read and corrected", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

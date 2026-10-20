@@ -11,6 +11,7 @@ import {
   type Highlight,
   type PlacedShape,
   ContextMenu,
+  SignaturePad,
   type MenuItem,
   type TextEditCommit,
 } from "@pdf-suite/ui";
@@ -70,6 +71,18 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** What a stamp says. Acrobat's own list, plus the one a registry uses. */
+  const [stampLabel, setStampLabel] = useState("Approved");
+  /**
+   * The signature drawn once and kept for the next document. It lives in this
+   * browser only — localStorage, never the network — and holds strokes in 0-1 of
+   * its box, so the same signature fits wherever it is placed.
+   */
+  const [signature, setSignature] = useState<{ x: number; y: number }[][] | null>(() =>
+    loadSignature(),
+  );
+  const [drawingSignature, setDrawingSignature] = useState(false);
+
   /** File ▸ Properties: what the document says about itself. */
   const [describing, setDescribing] = useState(false);
 
@@ -581,10 +594,53 @@ export function App() {
         }
         return;
       }
+      if (shape.kind === "vector") {
+        addAnnotation({
+          kind: "line",
+          page,
+          x1: shape.x1,
+          y1: shape.y1,
+          x2: shape.x2,
+          y2: shape.y2,
+          color: colour,
+          ...(tool === "arrow" ? { arrow: "end" as const } : {}),
+        });
+        return;
+      }
+      if (tool === "stamp") {
+        // Sized like a rubber stamp, with the click at its top-left corner.
+        addAnnotation({
+          kind: "stamp",
+          page,
+          x: shape.x,
+          y: shape.y - 36,
+          w: Math.max(120, stampLabel.length * 14),
+          h: 36,
+          label: stampLabel,
+          color: colour,
+        });
+        return;
+      }
+      if (tool === "signature") {
+        if (!signature) {
+          setDrawingSignature(true);
+          return;
+        }
+        addAnnotation({
+          kind: "signature",
+          page,
+          x: shape.x,
+          y: shape.y - 36,
+          w: 160,
+          h: 48,
+          strokes: signature,
+        });
+        return;
+      }
       // A note or a text box needs its words before it is worth creating.
       setPendingPoint({ page, x: shape.x, y: shape.y });
     },
-    [addAnnotation, colour, placeMarkup, tool],
+    [addAnnotation, colour, placeMarkup, signature, stampLabel, tool],
   );
 
   const commitPending = useCallback(
@@ -961,6 +1017,21 @@ export function App() {
         </form>
       ) : null}
 
+      {drawingSignature ? (
+        <div className="prompt">
+          <SignaturePad
+            onCancel={() => setDrawingSignature(false)}
+            onSave={(strokes) => {
+              setSignature(strokes);
+              saveSignature(strokes);
+              setDrawingSignature(false);
+              setTool("signature");
+              setSaved("Signature saved on this device — click a page to place it");
+            }}
+          />
+        </div>
+      ) : null}
+
       {describing && info ? (
         <form
           className="prompt hfpanel"
@@ -1318,8 +1389,40 @@ export function App() {
                 {(["highlight", "underline", "strike", "note", "text"] as const).map(toolButton)}
               </div>
               <div className="tool-grid">
-                {(["square", "circle", "ink"] as const).map(toolButton)}
+                {(["square", "circle", "ink", "line", "arrow"] as const).map(toolButton)}
               </div>
+              <div className="tool-grid">{(["stamp", "signature"] as const).map(toolButton)}</div>
+              {tool === "stamp" ? (
+                <div className="tool-options">
+                  <span className="tool-options-label">Says</span>
+                  <select
+                    aria-label="Stamp text"
+                    data-testid="stamp-label"
+                    value={stampLabel}
+                    onChange={(event) => setStampLabel(event.target.value)}
+                  >
+                    {STAMPS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {tool === "signature" ? (
+                <div className="tool-options">
+                  <span className="tool-options-label">Signature</span>
+                  {action(signature ? "Redraw…" : "Draw it…", () => setDrawingSignature(true), {
+                    testId: "draw-signature",
+                    hint: "Draw your signature once; it is kept on this device only",
+                  })}
+                  {signature ? (
+                    <span className="tool-hint">Click a page to place it</span>
+                  ) : (
+                    <span className="tool-hint">Draw one first</span>
+                  )}
+                </div>
+              ) : null}
               <div className="tool-options">
                 <span className="tool-options-label">Colour</span>
                 <span className="swatches" role="group" aria-label="Colour">
@@ -1541,6 +1644,10 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   square: "▭",
   circle: "◯",
   ink: "✎",
+  line: "╱",
+  arrow: "↗",
+  stamp: "▣",
+  signature: "✒",
   redact: "█",
 };
 
@@ -1553,6 +1660,10 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   square: "Drag to draw a box",
   circle: "Drag to draw an oval",
   ink: "Draw freehand",
+  line: "Drag to draw a line",
+  arrow: "Drag to draw an arrow, pointing where you finish",
+  stamp: "Click a page to stamp it",
+  signature: "Click a page to sign it",
   redact: "Drag over content to delete it permanently",
 };
 
@@ -1565,8 +1676,51 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   square: "Box",
   circle: "Oval",
   ink: "Draw",
+  line: "Line",
+  arrow: "Arrow",
+  stamp: "Stamp",
+  signature: "Sign",
   redact: "Redact",
 };
+
+/** What a rubber stamp can say. Acrobat's own list, plus the registry's. */
+const STAMPS = [
+  "Approved",
+  "Not approved",
+  "Draft",
+  "Final",
+  "Confidential",
+  "Received",
+  "Reviewed",
+  "For official use",
+];
+
+/**
+ * The drawn signature, kept in this browser only — never sent anywhere, and not
+ * part of any document until it is placed on one. Browser storage can be
+ * unavailable, in which case the signature simply does not persist.
+ */
+const SIGNATURE_KEY = "pdf-suite.signature";
+
+function loadSignature(): { x: number; y: number }[][] | null {
+  try {
+    const stored = localStorage.getItem(SIGNATURE_KEY);
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as { x: number; y: number }[][]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSignature(strokes: { x: number; y: number }[][]): void {
+  try {
+    localStorage.setItem(SIGNATURE_KEY, JSON.stringify(strokes));
+  } catch {
+    // A private window, or storage turned off. The signature still works for
+    // this session; it just will not be there next time.
+  }
+}
 
 /** What a header or footer box can hold besides the words you type. */
 const TOKENS = [

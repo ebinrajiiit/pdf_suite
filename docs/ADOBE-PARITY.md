@@ -83,9 +83,9 @@ What an Acrobat user would miss before anything subtle:
 | ~~Print~~ | **Done.** ⌘P opens the document, marks and all, in the browser's own PDF viewer — vector, not a rasterised copy. The desktop shell has no print dialog in its webview, so it hands the file to the system viewer instead | |
 | ~~Select and copy text~~ | **Done.** A transparent text layer over each page, laid out from the runs the engine extracts, so selection, copy and the browser's own find all work on real text | |
 | **Edit images in place** | "Edit PDF" moves, resizes, replaces and deletes images too; here only text | PDFium exposes image objects the same way it exposes text ones. The matrix work is done (text reflow uses it) |
-| **A signature you can draw** | Acrobat's Fill & Sign puts a drawn or typed signature on the page in two clicks. Ink annotation is close, but it is not the workflow | A saved signature (drawn once, kept locally) placed as a stamp. Days, and no crypto involved — this is not a digital signature |
-| **Lines and arrows** | The commonest markup after highlight | `/AP` generation: PDFium draws no appearance for `/Line`, so the annotation would be in the file and invisible in our own viewer |
-| **Stamps** | Approved, Draft, Received — institutional paperwork runs on them | Appearance streams again, plus a stamp library. Dynamic stamps (name, date) are template text on top |
+| ~~A signature you can draw~~ | **Done.** Draw it once, kept in this browser only, then click any page to place it. A drawn mark, not a digital signature | |
+| ~~Lines and arrows~~ | **Done**, with generated appearance streams — verified by rendering, not just by writing the dictionary | |
+| ~~Stamps~~ | **Done**: eight labels, drawn into an appearance stream. Dynamic stamps (name, date) would be template text on the same machinery | |
 | **Bookmarks you can edit** | The panel reads them; it cannot add, rename, reorder or point one somewhere | Writing the `/Outlines` tree. pdf-lib has no helper, so it is raw dictionary work |
 | ~~Document properties~~ | **Done.** ⌘D reads and rewrites title, author, subject and keywords. XMP is still untouched | |
 
@@ -139,10 +139,11 @@ What an Acrobat user would miss before anything subtle:
 | Sticky note, highlight, underline, strike-through, text box | Done |
 | Insert/replace text markup (caret) | Missing |
 | Callout | Missing |
-| Line, arrow, polygon, polyline, cloud | Missing — appearance streams |
+| Line, arrow | Done, with their own appearance streams |
+| Polygon, polyline, cloud | Missing — the same machinery, more geometry |
 | Rectangle, oval, pencil | Done |
 | Eraser for ink | Missing |
-| Stamps, including dynamic and custom | Missing |
+| Stamps | Eight fixed labels. Dynamic (name, date) and custom (an image) are missing |
 | Attach a file or audio as a comment | Missing |
 | Comment opacity, default properties, author name | Colour only |
 | Replies, status (accepted, rejected, completed), resolved | Missing — `/IRT` and `/RT` |
@@ -182,7 +183,7 @@ What an Acrobat user would miss before anything subtle:
 
 | Acrobat | Here |
 | --- | --- |
-| Fill & Sign: draw or type a signature | Missing — see above |
+| Fill & Sign: draw a signature | Done. Typing one, in a handwriting face, is missing |
 | Certificate-based signature | Missing. Phase 3: needs the signing-library ADR, and on desktop PKCS#11 for USB DSC tokens |
 | Certify (visible or hidden) | Missing |
 | Validate signatures, trust, signature panel | Missing. Validation matters even if signing never ships: institutions receive signed PDFs |
