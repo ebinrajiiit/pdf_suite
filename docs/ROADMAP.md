@@ -94,6 +94,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] In-place text editing: editing an existing run's text works through PDFium's `FPDFText_SetText`, keeping font, size, colour and position
 - [x] In-place text editing: paragraph detection and reflow (blocks re-wrap to their own width, measured in the real font by PDFium), and font substitution to Helvetica when the document's font has no glyph for what was typed — refused outright when no standard font has it either
 - [x] In-place text editing: changing a block's size and face from a format bar over the text, limited to the PDF standard fonts
+- [x] Undo and redo across both layers — page order and marks in the app, document bytes in the worker — with the usual keys, plus right-click menus on pages and Delete for the selected ones
 - [ ] In-place text editing: adding a new paragraph in the document's own font, formatting a selection within a block, embedding an arbitrary font, and pushing following content down when a block grows
 - [ ] Image replace/move in place
 - [ ] Accessibility tagging + PDF/UA checks

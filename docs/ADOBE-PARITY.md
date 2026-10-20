@@ -25,9 +25,19 @@ format and re-wraps it. The faces offered are the PDF standard set, since those
 draw everywhere without embedding anything; the document's own font stays the
 default, because it may be a face no standard font resembles.
 
+Undo and redo sit next to Open and Save, and cover both kinds of change: the
+page order and the marks you have placed, which live in the app until something
+writes them into the file, and the document's bytes, whose history the worker
+keeps because it already holds every version. It is bounded — twenty steps, or
+256 MB of them, whichever comes first, since a step of a 200 MB scan costs 200 MB.
+
+Right-clicking a page, in the panel or in the document, offers what can be done
+to it: rotate, insert, extract, save as an image, delete. Keyboard: ⌘O, ⌘S, ⌘Z,
+⇧⌘Z, ⌘F, ⌘+/−/0 and Delete for the selected pages.
+
 What is still cruder than Acrobat: no contextual toolbar on a selected mark, no
-properties panel for annotations, no right-click menus, and the tools panel hides
-below 980 px instead of collapsing to icons.
+properties panel for annotations, no right-click menu on a mark or on selected
+text, and the tools panel hides below 980 px instead of collapsing to icons.
 
 ## Have, in English and already tested
 
@@ -49,6 +59,8 @@ below 980 px instead of collapsing to icons.
 | Export pages as images | PNG per page |
 | Create PDF from images | JPEG and PNG, one page per image or fitted |
 | Repair a damaged file | qpdf repair pass on open |
+| Undo and redo | Both, over page order, marks and the document's bytes, with ⌘Z and ⇧⌘Z |
+| Right-click a page | Rotate, insert, extract, export, delete, in the panel and on the page |
 | Edit PDF (text) | Click a paragraph and type over it; it re-wraps to its own width, and a font with no glyph for what was typed is substituted |
 
 ## Missing for English parity, in the order I would build it

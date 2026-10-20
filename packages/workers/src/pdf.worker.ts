@@ -38,6 +38,32 @@ let bytes: Uint8Array | undefined;
  * opening a protected document and saving it would quietly strip its password.
  */
 let protection: string | null = null;
+/**
+ * Undo history. The worker already holds every version of the document, so this
+ * is where undo costs least: a step is the bytes as they were before an
+ * operation, plus the page order and the unsaved annotations that went with
+ * them, so undoing puts the whole document back rather than only its bytes.
+ *
+ * Bounded, because a step of a 200 MB scan costs 200 MB (CLAUDE.md §4 — big
+ * files are normal). The oldest steps go first, and one step is always kept, so
+ * a single undo works whatever the document's size.
+ */
+interface Step {
+  bytes: Uint8Array;
+  order: number[];
+  annotations: Annotation[];
+}
+let past: Step[] = [];
+let future: Step[] = [];
+const HISTORY_STEPS = 20;
+const HISTORY_BYTES = 256 * 1024 * 1024;
+
+function trimHistory(): void {
+  let total = past.reduce((sum, step) => sum + step.bytes.byteLength, 0);
+  while (past.length > 1 && (past.length > HISTORY_STEPS || total > HISTORY_BYTES)) {
+    total -= past.shift()!.bytes.byteLength;
+  }
+}
 let repaired = false;
 /** Bytes of a document that needs a password, held until one arrives. */
 let locked: Uint8Array | undefined;
@@ -64,7 +90,16 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   const form = bytesForForm
     ? await readForm(bytesForForm).catch(() => ({ fields: [], hasXfa: false }))
     : { fields: [], hasXfa: false };
-  return { pageCount, pageSizes, outline, form, repaired, protected: protection !== null };
+  return {
+    pageCount,
+    pageSizes,
+    outline,
+    form,
+    repaired,
+    protected: protection !== null,
+    undo: past.length,
+    redo: future.length,
+  };
 }
 
 function post(message: WorkerResponse, transfer: Transferable[] = []): void {
@@ -75,8 +110,24 @@ function throwIfCancelled(id: number): void {
   if (cancelled.has(id)) throw new CancelledError();
 }
 
-async function openBytes(id: number, next: Uint8Array): Promise<DocumentInfo> {
+/**
+ * Replaces the open document. `from` is the request that caused the change: its
+ * page order and annotations are what the document looked like beforehand, so
+ * passing it is what makes the change undoable. Opening a file passes nothing
+ * and starts a fresh history instead.
+ */
+async function openBytes(
+  id: number,
+  next: Uint8Array,
+  from?: { order: number[]; annotations: Annotation[] },
+): Promise<DocumentInfo> {
   if (!engine) throw new Error("worker not initialised");
+  if (from && bytes) {
+    past.push({ bytes, order: from.order, annotations: from.annotations });
+    trimHistory();
+    // A new change is a new branch: what was undone cannot be redone after it.
+    future = [];
+  }
   doc?.close();
   doc = undefined;
   // Hand over the whole buffer rather than a slice: the engine copies what it
@@ -101,6 +152,9 @@ async function openChosen(id: number, input: Uint8Array): Promise<DocumentInfo> 
   repaired = false;
   protection = null;
   locked = undefined;
+  // Another document is not another step in this one's history.
+  past = [];
+  future = [];
 
   try {
     return await openBytes(id, input);
@@ -187,7 +241,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       const merged = await merge(inputs);
       post({ id, kind: "progress", done: inputs.length, total: inputs.length });
       throwIfCancelled(id);
-      post({ id, kind: "document", info: await openBytes(id, merged) });
+      post({ id, kind: "document", info: await openBytes(id, merged, request) });
       return;
     }
     case "render": {
@@ -211,14 +265,14 @@ async function handle(request: WorkerRequest): Promise<void> {
       const base = await materialise(id, request.order, request.annotations);
       const rotated = await rotate(base, request.positions, request.by);
       throwIfCancelled(id);
-      post({ id, kind: "document", info: await openBytes(id, rotated) });
+      post({ id, kind: "document", info: await openBytes(id, rotated, request) });
       return;
     }
     case "compress": {
       const base = await materialise(id, request.order, request.annotations);
       const smaller = await (await qpdf()).compress(base);
       throwIfCancelled(id);
-      post({ id, kind: "document", info: await openBytes(id, smaller) });
+      post({ id, kind: "document", info: await openBytes(id, smaller, request) });
       return;
     }
     case "protect": {
@@ -367,7 +421,7 @@ async function handle(request: WorkerRequest): Promise<void> {
         post({
           id,
           kind: "ocrDone",
-          info: await openBytes(id, merged),
+          info: await openBytes(id, merged, request),
           recognised,
           skipped,
         });
@@ -380,7 +434,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       const base = await materialise(id, request.order, request.annotations);
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
-      post({ id, kind: "document", info: await openBytes(id, filled) });
+      post({ id, kind: "document", info: await openBytes(id, filled, request) });
       return;
     }
     case "editableText": {
@@ -399,7 +453,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({
         id,
         kind: "edited",
-        info: await openBytes(id, result.bytes),
+        info: await openBytes(id, result.bytes, request),
         applied: result.applied,
         substituted: result.substituted,
         addedLines: result.addedLines,
@@ -417,7 +471,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({
         id,
         kind: "redacted",
-        info: await openBytes(id, result.bytes),
+        info: await openBytes(id, result.bytes, request),
         removed: result.removed,
         verified: result.verified,
         leftovers: result.leftovers,
@@ -438,6 +492,24 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id, kind: "saved", bytes: buffer }, [buffer]);
       return;
     }
+    case "undo":
+    case "redo": {
+      const from = request.kind === "undo" ? past : future;
+      const onto = request.kind === "undo" ? future : past;
+      const step = from.pop();
+      if (!step || !bytes) throw new Error(`there is nothing to ${request.kind}`);
+      // Where we are now becomes the step in the other direction, so undo and
+      // redo walk the same history rather than two drifting copies of it.
+      onto.push({ bytes, order: request.order, annotations: request.annotations });
+      post({
+        id,
+        kind: "restored",
+        info: await openBytes(id, step.bytes),
+        order: step.order,
+        annotations: step.annotations,
+      });
+      return;
+    }
     case "close": {
       doc?.close();
       doc = undefined;
@@ -445,6 +517,8 @@ async function handle(request: WorkerRequest): Promise<void> {
       protection = null;
       repaired = false;
       locked = undefined;
+      past = [];
+      future = [];
       post({ id, kind: "closed" });
       return;
     }

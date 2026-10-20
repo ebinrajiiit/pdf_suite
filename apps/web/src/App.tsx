@@ -10,6 +10,8 @@ import {
   type AnnotationTool,
   type Highlight,
   type PlacedShape,
+  ContextMenu,
+  type MenuItem,
   type TextEditCommit,
 } from "@pdf-suite/ui";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
@@ -44,6 +46,10 @@ export function App() {
     clearAnnotations,
     pageText,
     setOrder,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useDocument();
   const openInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -54,6 +60,8 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** Right-click menu: where it is, and which page it was opened on. */
+  const [menu, setMenu] = useState<{ x: number; y: number; position: number } | null>(null);
   const [tool, setTool] = useState<AnnotationTool | undefined>();
   /** Edit-text mode, which is a different thing from the annotation tools. */
   const [editingText, setEditingText] = useState(false);
@@ -107,33 +115,6 @@ export function App() {
       return ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, index + by))] ?? 1;
     });
   }, []);
-
-  // Ctrl/Cmd+F goes to our search, not the browser's, which cannot see inside a
-  // canvas anyway. Zoom keys match what every viewer uses.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const meta = event.metaKey || event.ctrlKey;
-      if (meta && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        searchInput.current?.focus();
-        searchInput.current?.select();
-        return;
-      }
-      if (!meta) return;
-      if (event.key === "=" || event.key === "+") {
-        event.preventDefault();
-        stepZoom(1);
-      } else if (event.key === "-") {
-        event.preventDefault();
-        stepZoom(-1);
-      } else if (event.key === "0") {
-        event.preventDefault();
-        setZoom("fit");
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [stepZoom]);
 
   // Positions move when pages are added, removed or reordered, so a stale
   // selection or a stale set of hits would point at the wrong pages.
@@ -347,11 +328,71 @@ export function App() {
     setSaved(written > 0 ? `Saved ${written} image${written === 1 ? "" : "s"}` : undefined);
   }, [exportImages, name0, positions, state.order]);
 
+  const openMenu = useCallback((position: number, x: number, y: number) => {
+    setSelected((current) => (current.has(position) ? current : new Set([position])));
+    setMenu({ x, y, position });
+  }, []);
+
   const handleDelete = useCallback(() => {
     if (positions.length === 0 || positions.length === pageCount) return;
     setOrder(removePages(state.order, positions));
     setSelected(new Set());
   }, [pageCount, positions, setOrder, state.order]);
+
+  // Ctrl/Cmd+F goes to our search, not the browser's, which cannot see inside a
+  // canvas anyway. The rest are the ones every editor has — open, save, undo,
+  // redo, zoom, and Delete for the pages that are selected.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const meta = event.metaKey || event.ctrlKey;
+      // Never while typing: Delete in a text box means delete a character.
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
+
+      if (!meta && !typing && (event.key === "Delete" || event.key === "Backspace")) {
+        if (positions.length === 0 || positions.length === pageCount) return;
+        event.preventDefault();
+        handleDelete();
+        return;
+      }
+      if (meta && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchInput.current?.focus();
+        searchInput.current?.select();
+        return;
+      }
+      if (!meta) return;
+      if (event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        void (event.shiftKey ? redo() : undo());
+        return;
+      }
+      if (event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        void handleOpen();
+        return;
+      }
+      if (event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void handleSave();
+        return;
+      }
+      if (event.key === "=" || event.key === "+") {
+        event.preventDefault();
+        stepZoom(1);
+      } else if (event.key === "-") {
+        event.preventDefault();
+        stepZoom(-1);
+      } else if (event.key === "0") {
+        event.preventDefault();
+        setZoom("fit");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleDelete, handleOpen, handleSave, pageCount, positions.length, redo, stepZoom, undo]);
 
   const handleProtect = useCallback(async () => {
     if (info?.protected) {
@@ -516,6 +557,22 @@ export function App() {
     [editText],
   );
 
+  /** What a right-click on a page offers: the page actions, where the page is. */
+  const many = positions.length > 1 ? ` ${positions.length} pages` : "";
+  const pageMenuItems: MenuItem[] = [
+    { label: `Rotate${many || " page"} left`, onSelect: () => void rotatePages(target, 270) },
+    { label: `Rotate${many || " page"} right`, onSelect: () => void rotatePages(target, 90) },
+    { label: "Insert a PDF after this page…", onSelect: () => void handleMerge() },
+    { label: `Extract${many || " page"}…`, onSelect: () => void handleExtract() },
+    { label: `Save${many || " page"} as an image…`, onSelect: () => void handleExportImages() },
+    {
+      label: `Delete${many || " page"}`,
+      onSelect: handleDelete,
+      danger: true,
+      disabled: positions.length === pageCount,
+    },
+  ];
+
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
@@ -590,7 +647,7 @@ export function App() {
         </div>
 
         <div className="topbar-file">
-          {action("Open", () => void handleOpen(), { off: !ready, hint: "Open a PDF" })}
+          {action("Open", () => void handleOpen(), { off: !ready, hint: "Open a PDF (⌘O)" })}
           {info
             ? action(
                 positions.length === 1 ? "Insert after…" : "Merge…",
@@ -600,7 +657,25 @@ export function App() {
                 },
               )
             : null}
-          {info ? action("Save", () => void handleSave(), { hint: "Save the document" }) : null}
+          {info
+            ? action("Save", () => void handleSave(), { hint: "Save the document (⌘S)" })
+            : null}
+          {info ? (
+            <span className="topbar-history">
+              {action("↶", () => void undo(), {
+                testId: "undo",
+                name: "Undo",
+                hint: "Undo the last change (⌘Z)",
+                off: disabled || !canUndo,
+              })}
+              {action("↷", () => void redo(), {
+                testId: "redo",
+                name: "Redo",
+                hint: "Redo the change just undone (⇧⌘Z)",
+                off: disabled || !canRedo,
+              })}
+            </span>
+          ) : null}
         </div>
 
         {info ? (
@@ -859,6 +934,7 @@ export function App() {
                 onReorder={setOrder}
                 selected={selected}
                 onSelect={onSelect}
+                onPageMenu={openMenu}
               />
             )}
           </aside>
@@ -884,6 +960,7 @@ export function App() {
               editableText={editRuns}
               onNeedEditableText={needEditableText}
               onEditText={(page, edit) => void handleEditText(page, edit)}
+              onPageMenu={openMenu}
             />
           </div>
 
@@ -1064,6 +1141,10 @@ export function App() {
           </div>
         </main>
       )}
+
+      {menu && info ? (
+        <ContextMenu x={menu.x} y={menu.y} items={pageMenuItems} onClose={() => setMenu(null)} />
+      ) : null}
 
       <footer className="statusbar">
         {info ? (

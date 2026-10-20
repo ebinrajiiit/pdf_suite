@@ -974,6 +974,116 @@ test("a mark can be removed from the Marks panel", async ({ page }) => {
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
 });
 
+test("right-clicking a page offers what can be done to it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "three.pdf", await textFixture([["One"], ["Two"], ["Three"]]));
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  // On a thumbnail, as in Acrobat's page panel.
+  await page.getByTestId("thumb-1").click({ button: "right" });
+  const menu = page.getByTestId("context-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Delete page" })).toBeVisible();
+
+  // Escape closes it without doing anything.
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  // Right-clicking a page acts on that page, even though another was selected.
+  await page.getByTestId("select-0").click();
+  await page.getByTestId("thumb-2").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete page" }).click();
+  await expect(page.getByText("2 pages")).toBeVisible();
+  await expect(page.getByTestId("context-menu")).toBeHidden();
+
+  // The page that went is the one that was right-clicked, not the selected one.
+  await page.getByTestId("search-input").fill("Two");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+  await page.getByTestId("search-input").fill("Three");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toBeHidden();
+
+  // And on the page itself, not only in the panel.
+  await page.getByTestId("viewer").locator(".viewer-page").first().click({ button: "right" });
+  await expect(page.getByTestId("context-menu")).toBeVisible();
+});
+
+test("undo puts back a deleted page, and a changed word", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "two.pdf", await textFixture([["Dear Sir or Madam"], ["Second page"]]));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  // Nothing has happened yet, so there is nothing to undo.
+  await expect(page.getByTestId("undo")).toBeDisabled();
+
+  // A page order change, which lives in the app rather than in the document.
+  // Deleted with the key, which is the other half of being usable.
+  await page.getByTestId("select-0").click();
+  await page.keyboard.press("Delete");
+  await expect(page.getByText("1 page")).toBeVisible();
+  await page.getByTestId("undo").click();
+  await expect(page.getByText("2 pages")).toBeVisible();
+  await expect(page.getByTestId("redo")).toBeEnabled();
+
+  // And a change to the document's bytes, which lives in the worker.
+  await page.getByTestId("edit-text").click();
+  // Both pages have a run 0, so this one is addressed on its own page.
+  const firstPage = page.getByTestId("edit-0");
+  await expect(firstPage.getByTestId("edittarget-0")).toBeVisible({ timeout: 30_000 });
+  await firstPage.getByTestId("edittarget-0").click();
+  await firstPage.getByTestId("editbox-0").fill("Dear Registrar");
+  await firstPage.getByTestId("editbox-0").press("Enter");
+  await expect(page.getByTestId("status")).toHaveText(/Text changed/, { timeout: 30_000 });
+
+  await page.getByTestId("search-input").fill("Registrar");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  await page.getByTestId("undo").click();
+  await expect(page.getByText("2 pages")).toBeVisible();
+  await page.getByTestId("search-input").fill("Madam");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+
+  // Redo puts the edit back, and what is saved is the version on screen.
+  await page.getByTestId("redo").click();
+  await expect(page.getByTestId("status")).toHaveText(/Ready|Redoing|Saved|Text changed/, {
+    timeout: 30_000,
+  });
+  await page.getByTestId("search-input").fill("Registrar");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
+test("undo takes back a mark before it is ever saved", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "one.pdf", await textFixture([["A line"]]));
+
+  const box = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-square").click();
+  await page.mouse.move(box.x + 20, box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 120, box.y + 90, { steps: 4 });
+  await page.mouse.up();
+
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comment-0")).toBeVisible();
+
+  await page.getByTestId("undo").click();
+  await expect(page.getByTestId("comments-empty")).toBeVisible();
+
+  // Gone from the file too, not merely from the list.
+  expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual([]);
+});
+
 test("a longer paragraph re-wraps inside its own block", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

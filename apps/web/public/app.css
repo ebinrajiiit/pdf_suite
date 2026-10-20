@@ -109,6 +109,19 @@ body {
   display: flex;
   gap: 0.35rem;
 }
+/* Undo and redo sit with the file actions, a little apart from them. */
+.topbar-history {
+  display: flex;
+  gap: 0.15rem;
+  margin-left: 0.25rem;
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--line);
+}
+.topbar-history .action {
+  min-width: 2rem;
+  padding-inline: 0.5rem;
+  font-size: 1rem;
+}
 
 .topbar-doc {
   display: flex;
@@ -507,6 +520,45 @@ textarea:focus-visible,
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* ---------- right-click menu ---------- */
+
+.menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 12rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: var(--sunken);
+}
+.menu-item:disabled {
+  color: var(--ink-soft);
+  cursor: default;
+}
+.menu-item-danger:hover:not(:disabled),
+.menu-item-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
 /* Labels for screen readers on controls whose meaning is visual. */
 .sr-only {
   position: absolute;

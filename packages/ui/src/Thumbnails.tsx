@@ -14,6 +14,8 @@ export interface ThumbnailsProps {
   selected: ReadonlySet<number>;
   /** Called with the position clicked and whether the click extends the selection. */
   onSelect: (position: number, extend: boolean) => void;
+  /** Right-click on a page, for the actions that apply to it. */
+  onPageMenu?: ((position: number, x: number, y: number) => void) | undefined;
   width?: number;
 }
 
@@ -27,6 +29,7 @@ export function Thumbnails({
   onReorder,
   selected,
   onSelect,
+  onPageMenu,
   width = 120,
 }: ThumbnailsProps) {
   const [dragging, setDragging] = useState<number | null>(null);
@@ -58,6 +61,11 @@ export function Thumbnails({
             }
             style={{ top: `${layout.offsets[box.position] ?? 0}px`, width: `${box.width}px` }}
             data-testid={`thumb-${box.position}`}
+            onContextMenu={(event) => {
+              if (!onPageMenu) return;
+              event.preventDefault();
+              onPageMenu(box.position, event.clientX, event.clientY);
+            }}
             draggable
             onDragStart={() => setDragging(box.position)}
             onDragEnd={() => setDragging(null)}

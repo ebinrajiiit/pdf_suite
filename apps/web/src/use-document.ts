@@ -282,17 +282,97 @@ export function useDocument() {
     [run],
   );
 
-  const addAnnotation = useCallback((annotation: Annotation) => {
-    setState((s) => ({ ...s, annotations: [...s.annotations, annotation] }));
+  /**
+   * Undo for the changes the worker's history cannot see: page order and marks
+   * both live here until an operation writes them into the bytes. Once that
+   * happens the worker's history covers them, which is why these are dropped
+   * whenever the document changes, below — putting a mark back into bytes that
+   * already contain it would duplicate it.
+   */
+  interface UiStep {
+    order: number[];
+    annotations: Annotation[];
+  }
+  const [uiPast, setUiPast] = useState<UiStep[]>([]);
+  const [uiFuture, setUiFuture] = useState<UiStep[]>([]);
+
+  // Anything that rewrites the document writes the pending marks into it, so
+  // from that point their history is the worker's, not this one's.
+  useEffect(() => {
+    setUiPast([]);
+    setUiFuture([]);
+  }, [state.info]);
+
+  /** Call before changing page order or marks, never after. */
+  const remember = useCallback(() => {
+    const { order, annotations } = stateRef.current;
+    setUiPast((p) => [...p, { order, annotations }]);
+    setUiFuture([]);
   }, []);
 
-  const removeAnnotation = useCallback((index: number) => {
-    setState((s) => ({ ...s, annotations: s.annotations.filter((_, i) => i !== index) }));
-  }, []);
+  const addAnnotation = useCallback(
+    (annotation: Annotation) => {
+      remember();
+      setState((s) => ({ ...s, annotations: [...s.annotations, annotation] }));
+    },
+    [remember],
+  );
+
+  const removeAnnotation = useCallback(
+    (index: number) => {
+      remember();
+      setState((s) => ({ ...s, annotations: s.annotations.filter((_, i) => i !== index) }));
+    },
+    [remember],
+  );
 
   const clearAnnotations = useCallback(() => {
+    remember();
     setState((s) => ({ ...s, annotations: [] }));
-  }, []);
+  }, [remember]);
+
+  /**
+   * Steps the document back, or forward again.
+   *
+   * Reordering pages and placing marks come first: they are always the most
+   * recent changes, because anything that rewrites the document writes them into
+   * it and clears them. Once there are none left to put back, the step is the
+   * worker's, and it returns the page order and the marks that version had.
+   */
+  const step = useCallback(
+    async (direction: "undo" | "redo") => {
+      const mine = direction === "undo" ? uiPast : uiFuture;
+      const last = mine[mine.length - 1];
+      if (last) {
+        const { order, annotations } = stateRef.current;
+        if (direction === "undo") {
+          setUiPast((p) => p.slice(0, -1));
+          setUiFuture((f) => [...f, { order, annotations }]);
+        } else {
+          setUiFuture((f) => f.slice(0, -1));
+          setUiPast((p) => [...p, { order, annotations }]);
+        }
+        setState((s) => ({ ...s, order: last.order, annotations: last.annotations }));
+        return;
+      }
+
+      const result = await run(direction === "undo" ? "Undoing" : "Redoing", (worker) =>
+        worker[direction](stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.order,
+        annotations: result.annotations,
+        // The file on disk is no longer what is on screen, as after any change.
+        handle: undefined,
+        path: undefined,
+      }));
+    },
+    [run, uiFuture, uiPast],
+  );
 
   /**
    * Removes the content inside the given areas. Returns the verification result,
@@ -474,7 +554,13 @@ export function useDocument() {
     }
   }, []);
 
-  const setOrder = useCallback((order: number[]) => setState((s) => ({ ...s, order })), []);
+  const setOrder = useCallback(
+    (order: number[]) => {
+      remember();
+      setState((s) => ({ ...s, order }));
+    },
+    [remember],
+  );
 
   /** Saves just the given source pages, leaving the open document alone. */
   const extract = useCallback(
@@ -516,6 +602,10 @@ export function useDocument() {
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
+    undo: () => step("undo"),
+    redo: () => step("redo"),
+    canUndo: uiPast.length > 0 || (state.info?.undo ?? 0) > 0,
+    canRedo: uiFuture.length > 0 || (state.info?.redo ?? 0) > 0,
     pageText,
     setOrder,
   };

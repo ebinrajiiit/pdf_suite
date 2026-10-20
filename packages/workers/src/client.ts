@@ -75,6 +75,19 @@ export interface PdfWorkerClient {
     rejected: TextEditResult["rejected"];
   }>;
   /**
+   * Steps back to the previous version of the document, or forward again. The
+   * current page order and marks are sent so that the opposite step can restore
+   * them; the reply carries the ones belonging to the version restored.
+   */
+  undo(
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; order: number[]; annotations: Annotation[] }>;
+  redo(
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; order: number[]; annotations: Annotation[] }>;
+  /**
    * Removes the content inside the given areas. The reply says how many page
    * objects went and whether re-reading the result found any text left inside
    * them — a false `verified` must be shown to the user, not swallowed.
@@ -244,6 +257,14 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         addedLines: reply.addedLines,
         rejected: reply.rejected,
       };
+    },
+    async undo(order, annotations) {
+      const reply = expect(await send({ kind: "undo", order, annotations }), "restored");
+      return { info: reply.info, order: reply.order, annotations: reply.annotations };
+    },
+    async redo(order, annotations) {
+      const reply = expect(await send({ kind: "redo", order, annotations }), "restored");
+      return { info: reply.info, order: reply.order, annotations: reply.annotations };
     },
     async redact(areas, order, annotations) {
       const reply = expect(await send({ kind: "redact", areas, order, annotations }), "redacted");

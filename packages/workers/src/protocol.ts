@@ -27,6 +27,9 @@ export interface DocumentInfo {
   repaired?: boolean;
   /** Set when the document arrived encrypted and will be re-protected on save. */
   protected?: boolean;
+  /** Steps that can be undone, and redone: what the Undo and Redo buttons need. */
+  undo: number;
+  redo: number;
   /** The document's bookmarks, empty when it has none. */
   outline: OutlineItem[];
   /** The document's form fields, if it has an AcroForm. */
@@ -146,6 +149,13 @@ export type WorkerRequest = { id: number } &
          */
         despeckle?: boolean;
       }
+    /**
+     * Steps back to, or forward to, another version of this document. The order
+     * and annotations sent are the ones in force now, so the step in the other
+     * direction restores them.
+     */
+    | { kind: "undo"; order: number[]; annotations: Annotation[] }
+    | { kind: "redo"; order: number[]; annotations: Annotation[] }
     | { kind: "close" }
     | { kind: "cancel"; target: number }
   );
@@ -178,6 +188,8 @@ export type WorkerResponse = { id: number } & (
       verified: boolean;
       leftovers: RedactionResult["leftovers"];
     }
+  /** A document put back as it was, with the page order and marks of that moment. */
+  | { kind: "restored"; info: DocumentInfo; order: number[]; annotations: Annotation[] }
   | { kind: "closed" }
   | { kind: "progress"; done: number; total: number }
   | { kind: "cancelled" }
@@ -201,6 +213,7 @@ export type TerminalResponse = Extract<
       | "images"
       | "ocrDone"
       | "redacted"
+      | "restored"
       | "closed"
       | "cancelled"
       | "error";

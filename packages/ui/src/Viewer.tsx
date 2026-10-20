@@ -55,6 +55,8 @@ export interface ViewerProps {
   /** Asks for a page's runs when it comes into view. */
   onNeedEditableText?: ((page: number) => void) | undefined;
   onEditText?: ((page: number, edit: TextEditCommit) => void) | undefined;
+  /** Right-click on a page, for the actions that apply to it. */
+  onPageMenu?: ((position: number, x: number, y: number) => void) | undefined;
 }
 
 const GAP = 16;
@@ -83,6 +85,7 @@ export function Viewer({
   editableText,
   onNeedEditableText,
   onEditText,
+  onPageMenu,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -159,6 +162,11 @@ export function Viewer({
               height: `${box.height}px`,
             }}
             data-page-position={box.position}
+            onContextMenu={(event) => {
+              if (!onPageMenu) return;
+              event.preventDefault();
+              onPageMenu(box.position, event.clientX, event.clientY);
+            }}
           >
             <PageCanvas
               page={box.page}
