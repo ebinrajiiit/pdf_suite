@@ -12,6 +12,11 @@ export type AnnotationTool =
   | "ink"
   | "line"
   | "arrow"
+  | "polygon"
+  | "cloud"
+  | "polyline"
+  | "callout"
+  | "caret"
   | "stamp"
   | "signature"
   /** Marks an area whose content will be removed. Not a PDF annotation. */
@@ -24,7 +29,17 @@ export type AnnotationTool =
 /** Tools drawn by dragging from one point to another, where direction matters. */
 const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow"]);
 /** Tools placed with a single click. */
-const POINT_TOOLS = new Set<AnnotationTool>(["note", "text", "stamp", "signature"]);
+const POINT_TOOLS = new Set<AnnotationTool>([
+  "note",
+  "text",
+  "stamp",
+  "signature",
+  "callout",
+  "caret",
+]);
+
+/** Tools built point by point: click each corner, double-click to finish. */
+const PATH_TOOLS = new Set<AnnotationTool>(["polygon", "cloud", "polyline"]);
 
 /** Tools that are drawn by dragging a box. */
 const BOX_TOOLS = new Set<AnnotationTool>([
@@ -47,6 +62,8 @@ function rgb(color?: [number, number, number]): string {
 /** What the user drew, in PDF points with the origin at the page bottom-left. */
 export type PlacedShape =
   | { kind: "rect"; rect: AnnotRect }
+  /** A path clicked out point by point, in PDF points. */
+  | { kind: "path"; points: { x: number; y: number }[] }
   | { kind: "point"; x: number; y: number }
   /** A line from where the drag started to where it ended; direction matters. */
   | { kind: "vector"; x1: number; y1: number; x2: number; y2: number }
@@ -89,6 +106,10 @@ export function AnnotationLayer({
   const [drag, setDrag] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   /** Freehand points in CSS pixels while the pen is down. */
   const [stroke, setStroke] = useState<{ x: number; y: number }[] | null>(null);
+  /** Points clicked so far for a polygon, cloud or polyline, in CSS pixels. */
+  const [path, setPath] = useState<{ x: number; y: number }[]>([]);
+  /** Where the pointer is while a path is being built, for the rubber band. */
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
 
   /** Pointer position in CSS pixels relative to the page. */
   const positionIn = (event: React.PointerEvent) => {
@@ -147,6 +168,7 @@ export function AnnotationLayer({
       }}
       onPointerMove={(event) => {
         const { x, y } = positionIn(event);
+        if (path.length > 0) setHover({ x, y });
         if (stroke) {
           // Drop points closer than a pixel: a pen emits far more than the shape
           // needs, and every one of them ends up in the PDF.
@@ -175,12 +197,44 @@ export function AnnotationLayer({
         setStroke(null);
       }}
       onClick={(event) => {
-        if (!tool || !POINT_TOOLS.has(tool)) return;
         const box = layer.current?.getBoundingClientRect();
-        const point = toPdf(event.clientX - (box?.left ?? 0), event.clientY - (box?.top ?? 0));
-        onPlace?.(page, { kind: "point", ...point });
+        const at = {
+          x: event.clientX - (box?.left ?? 0),
+          y: event.clientY - (box?.top ?? 0),
+        };
+        if (tool && PATH_TOOLS.has(tool)) {
+          // Each click adds a corner; the shape is finished by double-clicking,
+          // which is how every drawing program does a polygon.
+          setPath((current) => [...current, at]);
+          return;
+        }
+        if (!tool || !POINT_TOOLS.has(tool)) return;
+        onPlace?.(page, { kind: "point", ...toPdf(at.x, at.y) });
+      }}
+      onDoubleClick={() => {
+        if (!tool || !PATH_TOOLS.has(tool) || path.length < 2) return;
+        const points = path.map((point) => toPdf(point.x, point.y));
+        setPath([]);
+        setHover(null);
+        onPlace?.(page, { kind: "path", points });
       }}
     >
+      {path.length > 0 ? (
+        <svg className="annot annot-path" data-testid={`path-${page}`} width="100%" height="100%">
+          <polyline
+            points={[...path, ...(hover ? [hover] : [])]
+              .map((point) => `${point.x},${point.y}`)
+              .join(" ")}
+            fill="none"
+            stroke={rgb()}
+            strokeWidth={2}
+            strokeDasharray="4 3"
+          />
+          {path.map((point, index) => (
+            <circle key={index} cx={point.x} cy={point.y} r={3} fill={rgb()} />
+          ))}
+        </svg>
+      ) : null}
       {annotations.map(({ annotation, index }) => {
         /** PDF points from the bottom to CSS pixels from the top. */
         const top = (y: number, h: number) => (pageHeight - y) * scale - h * scale;
@@ -211,6 +265,104 @@ export function AnnotationLayer({
               }}
             />
           ));
+        }
+
+        if (annotation.kind === "polygon" || annotation.kind === "polyline") {
+          const closed = annotation.kind === "polygon";
+          const points = annotation.points
+            .map((point) => `${point.x * scale},${top(point.y, 0)}`)
+            .join(" ");
+          return closed ? (
+            <svg
+              {...common}
+              className="annot annot-line"
+              data-testid={`annot-${index}`}
+              width="100%"
+              height="100%"
+            >
+              <polygon
+                points={points}
+                fill="none"
+                stroke={rgb(annotation.color)}
+                strokeWidth={(annotation.width ?? 2) * scale}
+                strokeDasharray={annotation.cloud ? "6 3" : undefined}
+              />
+            </svg>
+          ) : (
+            <svg
+              {...common}
+              className="annot annot-line"
+              data-testid={`annot-${index}`}
+              width="100%"
+              height="100%"
+            >
+              <polyline
+                points={points}
+                fill="none"
+                stroke={rgb(annotation.color)}
+                strokeWidth={(annotation.width ?? 2) * scale}
+              />
+            </svg>
+          );
+        }
+
+        if (annotation.kind === "callout") {
+          return (
+            <svg
+              {...common}
+              className="annot annot-line"
+              data-testid={`annot-${index}`}
+              width="100%"
+              height="100%"
+            >
+              <polyline
+                points={
+                  `${annotation.tipX * scale},${top(annotation.tipY, 0)} ` +
+                  `${((annotation.tipX + annotation.x) / 2) * scale},${top(annotation.tipY, 0)} ` +
+                  `${annotation.x * scale},${top(annotation.y + annotation.h / 2, 0)}`
+                }
+                fill="none"
+                stroke={rgb(annotation.color)}
+                strokeWidth={2 * scale}
+              />
+              <rect
+                x={annotation.x * scale}
+                y={top(annotation.y + annotation.h, 0)}
+                width={annotation.w * scale}
+                height={annotation.h * scale}
+                fill="white"
+                fillOpacity={0.85}
+                stroke={rgb(annotation.color)}
+                strokeWidth={2 * scale}
+              />
+              <text
+                x={(annotation.x + 3) * scale}
+                y={top(annotation.y + annotation.h, 0) + (annotation.size ?? 11) * scale}
+                fontSize={(annotation.size ?? 11) * scale}
+                fill={rgb(annotation.color)}
+              >
+                {annotation.contents}
+              </text>
+            </svg>
+          );
+        }
+
+        if (annotation.kind === "caret") {
+          return (
+            <div
+              {...common}
+              className="annot annot-caret"
+              data-testid={`annot-${index}`}
+              title={annotation.contents}
+              style={{
+                left: `${(annotation.x - 5) * scale}px`,
+                top: `${top(annotation.y + 10, 0)}px`,
+                width: `${10 * scale}px`,
+                height: `${10 * scale}px`,
+                color: rgb(annotation.color),
+              }}
+            />
+          );
         }
 
         if (annotation.kind === "line") {

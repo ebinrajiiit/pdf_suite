@@ -16,6 +16,7 @@ import type {
   ImageEdit,
   NewField,
   PageImage,
+  Reply,
   SanitiseOptions,
   SanitiseReport,
   RedactArea,
@@ -701,6 +702,45 @@ export function useDocument() {
     [run],
   );
 
+  /** The document's marks as an XFDF file, for sending to a reviewer. */
+  const exportMarks = useCallback(
+    async (name: string) =>
+      run("Writing the marks", (worker) =>
+        worker.exportXfdf(name, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
+  /** Imports marks a reviewer sent back. */
+  const importMarks = useCallback(
+    async (xml: string) => {
+      const result = await run("Reading the marks", (worker) =>
+        worker.importXfdf(xml, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
+  /** Answers a mark, or sets its review state. */
+  const replyToMark = useCallback(
+    async (reply: Reply) =>
+      rewrite("Saving the reply", (worker) =>
+        worker.reply(reply, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** Removes a mark the document already carried. */
   const deleteMark = useCallback(
     async (page: number, index: number) =>
@@ -914,6 +954,9 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    exportMarks,
+    importMarks,
+    replyToMark,
     deleteMark,
     compare,
     attachments,

@@ -1,10 +1,13 @@
 /// <reference lib="webworker" />
 import {
   addField,
+  addReply,
   annotate,
+  asAnnotations,
   attachFile,
   deleteAnnotation,
   diffDocuments,
+  fromXfdf,
   listAttachments,
   readAnnotations,
   readAttachment,
@@ -28,6 +31,7 @@ import {
   setProperties,
   split,
   stampPages,
+  toXfdf,
   uncropPages,
   type EncryptOptions,
   watermark,
@@ -503,6 +507,38 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "exportXfdf": {
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "xfdf", xml: toXfdf(await readAnnotations(base), request.name) });
+      return;
+    }
+    case "importXfdf": {
+      const base = await materialise(id, request.order, request.annotations);
+      const { marks, skipped } = fromXfdf(request.xml);
+      const { annotations: imported, dropped } = asAnnotations(marks);
+      // Pages the file names but this document does not have: a reviewer's
+      // marks from a longer version would otherwise be written nowhere.
+      const count = (await openBytes(id, base)).pageCount;
+      const placeable = imported.filter((annotation) => annotation.page < count);
+      const written = placeable.length > 0 ? await annotate(base, placeable) : base;
+      throwIfCancelled(id);
+      post({
+        id,
+        kind: "imported",
+        info: await openBytes(id, written, request),
+        added: placeable.length,
+        dropped: dropped + (imported.length - placeable.length),
+        skipped,
+      });
+      return;
+    }
+    case "reply": {
+      const base = await materialise(id, request.order, request.annotations);
+      const answered = await addReply(base, request.reply);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, answered, request) });
       return;
     }
     case "deleteMark": {

@@ -41,6 +41,16 @@ export interface ExistingAnnotation {
   colour?: [number, number, number] | undefined;
   /** Acrobat's review state, where one was set. */
   state?: string | undefined;
+  /**
+   * Index of the mark this one answers, where it answers one. A reply and a
+   * status are both annotations pointing at their parent with `/IRT`; `/RT`
+   * says which it is.
+   */
+  inReplyTo?: number | undefined;
+  /** "R" for a reply, "Group" for a status set on the parent. */
+  replyType?: string | undefined;
+  /** When it was written, as the file records it. */
+  date?: string | undefined;
 }
 
 /** Every mark already in the document, in page order. */
@@ -50,7 +60,11 @@ export async function readAnnotations(input: PdfBytes): Promise<ExistingAnnotati
 
   doc.getPages().forEach((page, pageIndex) => {
     const annots = page.node.Annots();
-    annots?.asArray().forEach((ref, index) => {
+    const refs = annots?.asArray() ?? [];
+    /** Which position in this page's list a reference points at. */
+    const positionOf = (target: unknown) => refs.findIndex((ref) => String(ref) === String(target));
+
+    refs.forEach((ref, index) => {
       const annot = doc.context.lookup(ref);
       if (!(annot instanceof PDFDict)) return;
 
@@ -79,6 +93,15 @@ export async function readAnnotations(input: PdfBytes): Promise<ExistingAnnotati
         h: Math.abs(y2 - y1),
         ...(colourOf(annot) ? { colour: colourOf(annot) } : {}),
         ...(textOf(annot, "State") ? { state: textOf(annot, "State") } : {}),
+        ...(textOf(annot, "M") ? { date: textOf(annot, "M") } : {}),
+        ...(annot.get(PDFName.of("IRT")) !== undefined
+          ? { inReplyTo: positionOf(annot.get(PDFName.of("IRT"))) }
+          : {}),
+        ...(annot.get(PDFName.of("RT")) !== undefined
+          ? {
+              replyType: String(annot.get(PDFName.of("RT"))).replace(/^\//, ""),
+            }
+          : {}),
       });
     });
   });
@@ -122,4 +145,77 @@ function colourOf(annot: PDFDict): [number, number, number] | undefined {
   if (parts.length === 1) return [parts[0]!, parts[0]!, parts[0]!];
   if (parts.length >= 3) return [parts[0]!, parts[1]!, parts[2]!];
   return undefined;
+}
+
+/** A reply to a mark, or a review state set on it. */
+export interface Reply {
+  /** Source page index of the mark being answered. */
+  page: number;
+  /** Its index among that page's `/Annots`. */
+  index: number;
+  contents: string;
+  author?: string | undefined;
+  /**
+   * Set to mark the parent accepted, rejected, cancelled or completed, as
+   * Acrobat's comment pane does. A status is a reply with no words of its own,
+   * which is how the format carries one.
+   */
+  state?: "Accepted" | "Rejected" | "Cancelled" | "Completed" | "None" | undefined;
+}
+
+/**
+ * Answers a mark, or sets its review state.
+ *
+ * Both are annotations of their own pointing at the parent with `/IRT` — the
+ * format has no field on a comment for "resolved", so a status is a reply
+ * carrying `/State` instead. That is what Acrobat writes and what Acrobat
+ * reads, which is the only reason to do it this way rather than something
+ * tidier.
+ */
+export async function addReply(input: PdfBytes, reply: Reply): Promise<PdfBytes> {
+  const doc = await PDFDocument.load(input, { updateMetadata: false });
+  const count = doc.getPageCount();
+  if (!Number.isInteger(reply.page) || reply.page < 0 || reply.page >= count) {
+    throw new RangeError(`page ${reply.page} outside a ${count}-page document`);
+  }
+  const node = doc.getPage(reply.page).node;
+  const refs = node.Annots()?.asArray() ?? [];
+  const parent = refs[reply.index];
+  if (!parent) throw new RangeError(`no mark ${reply.index} on page ${reply.page + 1}`);
+
+  const parentDict = doc.context.lookup(parent);
+  const rect = parentDict instanceof PDFDict ? parentDict.lookup(PDFName.of("Rect")) : undefined;
+
+  const stamp = pdfDate(new Date());
+  const annot = doc.context.obj({
+    Type: "Annot",
+    Subtype: "Text",
+    // Sits on the parent, because a reply has no place of its own.
+    Rect: rect instanceof PDFArray ? rect.asArray() : [0, 0, 24, 24],
+    Contents: PDFString.of(reply.contents),
+    T: PDFString.of(reply.author ?? "PDF Suite"),
+    M: PDFString.of(stamp),
+    CreationDate: PDFString.of(stamp),
+    IRT: parent,
+    // A plain reply groups with its parent; a state is a Group reply carrying
+    // the state, which is the distinction /RT exists to make.
+    RT: PDFName.of(reply.state ? "Group" : "R"),
+    ...(reply.state
+      ? { State: PDFString.of(reply.state), StateModel: PDFString.of("Review") }
+      : {}),
+    F: 4,
+    Open: false,
+  });
+
+  node.set(PDFName.of("Annots"), doc.context.obj([...refs, doc.context.register(annot)]));
+  return doc.save();
+}
+
+/** PDF date format, e.g. D:20261020120000Z. */
+function pdfDate(now: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return (
+    `D:${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
+    `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`
+  );
 }

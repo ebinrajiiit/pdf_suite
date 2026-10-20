@@ -8,6 +8,8 @@ export interface CommentListProps {
   existing?: ExistingAnnotation[] | undefined;
   /** Removes one of those, by page and index. */
   onRemoveExisting?: ((page: number, index: number) => void) | undefined;
+  /** Answers one of those, or sets its review state. */
+  onReply?: ((page: number, index: number, contents: string, state?: string) => void) | undefined;
   /** Maps a source page index to the display position, for the page label. */
   positionOf: (page: number) => number;
   onGo: (page: number) => void;
@@ -31,7 +33,11 @@ export function CommentList({
   onGo,
   onRemove,
   onRemoveExisting,
+  onReply,
 }: CommentListProps) {
+  /** Which mark is being answered, and what is being written. */
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
   const [kind, setKind] = useState<"all" | Annotation["kind"]>("all");
   const [query, setQuery] = useState("");
   const [byPage, setByPage] = useState(true);
@@ -56,17 +62,38 @@ export function CommentList({
       : rows;
   }, [annotations, byPage, kind, positionOf, query]);
 
-  /** The document's own marks, filtered and searched the same way. */
+  /**
+   * The document's own marks as threads: a mark, then whatever answers it.
+   * A reply and a status are both annotations pointing at their parent, so
+   * neither belongs in the list as an entry of its own.
+   */
   const theirs = useMemo(() => {
+    const all = existing ?? [];
     const needle = query.trim().toLowerCase();
-    return (existing ?? [])
+    const children = (parent: ExistingAnnotation) =>
+      all.filter((mark) => mark.page === parent.page && mark.inReplyTo === parent.index);
+
+    return all
+      .filter((mark) => mark.inReplyTo === undefined)
       .filter((mark) => kind === "all" || mark.kind === EQUIVALENT[kind])
-      .filter(
-        (mark) =>
-          needle === "" ||
-          `${mark.contents} ${mark.author} ${mark.kind}`.toLowerCase().includes(needle),
-      )
-      .sort((a, b) => (byPage ? positionOf(a.page) - positionOf(b.page) : 0));
+      .filter((mark) => {
+        if (needle === "") return true;
+        const thread = [mark, ...children(mark)]
+          .map((one) => `${one.contents} ${one.author} ${one.kind}`)
+          .join(" ");
+        return thread.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => (byPage ? positionOf(a.page) - positionOf(b.page) : 0))
+      .map((mark) => {
+        const replies = children(mark);
+        return {
+          mark,
+          replies: replies.filter((reply) => reply.contents !== ""),
+          // The latest state set on it wins, which is what a reviewer means by
+          // changing their mind.
+          state: replies.filter((reply) => reply.state).at(-1)?.state,
+        };
+      });
   }, [byPage, existing, kind, positionOf, query]);
 
   if (annotations.length === 0 && (existing?.length ?? 0) === 0) {
@@ -115,38 +142,106 @@ export function CommentList({
       </div>
       {theirs.length > 0 ? (
         <ol className="comments" data-testid="comments-existing">
-          {theirs.map((mark) => (
-            <li
-              key={`${mark.page}:${mark.index}`}
-              className="comment comment-theirs"
-              data-testid={`mark-${mark.page}-${mark.index}`}
-            >
-              <div className="comment-head">
-                <span className="comment-kind">{mark.kind}</span>
-                <button
-                  type="button"
-                  className="comment-page"
-                  onClick={() => onGo(mark.page)}
-                  title={`Go to page ${positionOf(mark.page) + 1}`}
-                >
-                  p{positionOf(mark.page) + 1}
-                </button>
-                {mark.author ? <span className="comment-author">{mark.author}</span> : null}
-                {onRemoveExisting ? (
+          {theirs.map(({ mark, replies, state }) => {
+            const id = `${mark.page}-${mark.index}`;
+            return (
+              <li key={id} className="comment comment-theirs" data-testid={`mark-${id}`}>
+                <div className="comment-head">
+                  <span className="comment-kind">{mark.kind}</span>
                   <button
                     type="button"
-                    className="comment-remove"
-                    aria-label={`Remove the ${mark.kind} on page ${positionOf(mark.page) + 1}`}
-                    data-testid={`remove-mark-${mark.page}-${mark.index}`}
-                    onClick={() => onRemoveExisting(mark.page, mark.index)}
+                    className="comment-page"
+                    onClick={() => onGo(mark.page)}
+                    title={`Go to page ${positionOf(mark.page) + 1}`}
                   >
-                    ×
+                    p{positionOf(mark.page) + 1}
                   </button>
+                  {mark.author ? <span className="comment-author">{mark.author}</span> : null}
+                  {state ? (
+                    <span className="comment-state" data-testid={`state-${id}`}>
+                      {state}
+                    </span>
+                  ) : null}
+                  {onRemoveExisting ? (
+                    <button
+                      type="button"
+                      className="comment-remove"
+                      aria-label={`Remove the ${mark.kind} on page ${positionOf(mark.page) + 1}`}
+                      data-testid={`remove-mark-${id}`}
+                      onClick={() => onRemoveExisting(mark.page, mark.index)}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+                {mark.contents ? <p className="comment-text">{mark.contents}</p> : null}
+
+                {replies.map((reply) => (
+                  <p
+                    key={`${reply.page}:${reply.index}`}
+                    className="comment-reply"
+                    data-testid={`reply-${reply.page}-${reply.index}`}
+                  >
+                    {reply.author ? <span className="comment-author">{reply.author}</span> : null}
+                    {reply.contents}
+                  </p>
+                ))}
+
+                {onReply ? (
+                  answering === id ? (
+                    <form
+                      className="comment-answer"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        if (draft.trim() === "") return;
+                        onReply(mark.page, mark.index, draft.trim());
+                        setDraft("");
+                        setAnswering(null);
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        aria-label="Your reply"
+                        data-testid={`reply-input-${id}`}
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                      />
+                      <button type="submit" data-testid={`reply-send-${id}`}>
+                        Reply
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="comment-answer">
+                      <button
+                        type="button"
+                        data-testid={`reply-${id}`}
+                        onClick={() => {
+                          setDraft("");
+                          setAnswering(id);
+                        }}
+                      >
+                        Reply
+                      </button>
+                      <select
+                        aria-label="Review state"
+                        data-testid={`set-state-${id}`}
+                        value={state ?? "None"}
+                        onChange={(event) => onReply(mark.page, mark.index, "", event.target.value)}
+                      >
+                        {["None", "Accepted", "Rejected", "Cancelled", "Completed"].map(
+                          (option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                  )
                 ) : null}
-              </div>
-              {mark.contents ? <p className="comment-text">{mark.contents}</p> : null}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ol>
       ) : null}
       {shown.length === 0 && theirs.length === 0 ? (
@@ -202,6 +297,10 @@ const EQUIVALENT: Record<string, string> = {
   circle: "circle",
   ink: "ink",
   line: "line",
+  polygon: "polygon",
+  polyline: "polyline",
+  callout: "freetext",
+  caret: "caret",
   stamp: "stamp",
   signature: "stamp",
 };
@@ -216,6 +315,10 @@ const LABELS: Record<Annotation["kind"], string> = {
   circle: "Oval",
   ink: "Freehand",
   line: "Line",
+  polygon: "Shape",
+  polyline: "Path",
+  callout: "Callout",
+  caret: "Insert mark",
   stamp: "Stamp",
   signature: "Signature",
 };

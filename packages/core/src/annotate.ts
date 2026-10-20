@@ -76,6 +76,43 @@ export type Annotation =
       width?: number;
       arrow?: ArrowEnds;
     })
+  /**
+   * A closed shape through the points given — PDF's Polygon — or an open one,
+   * PolyLine. Cloudy is the same polygon with a cloud border, which is how a
+   * reviewer rings a whole region of a drawing.
+   */
+  | (Common & {
+      kind: "polygon";
+      points: InkPoint[];
+      width?: number;
+      /** Closed with a cloud border, as Acrobat's Cloud tool draws. */
+      cloud?: boolean;
+    })
+  | (Common & { kind: "polyline"; points: InkPoint[]; width?: number })
+  /**
+   * A box of text with a line pointing at what it is about — Acrobat's Callout.
+   * The box is where the words go; the knee and the tip are where the line
+   * goes.
+   */
+  | (Common & {
+      kind: "callout";
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      contents: string;
+      /** The point being indicated, in PDF points. */
+      tipX: number;
+      tipY: number;
+      size?: number;
+      width?: number;
+    })
+  /**
+   * A caret: the mark that says "something belongs here". PDF's Caret carries
+   * no text of its own, so what should be inserted goes in its contents, as
+   * Acrobat does.
+   */
+  | (Common & { kind: "caret"; x: number; y: number; contents: string })
   /** A rubber stamp: a labelled box, as in Approved or Draft. */
   | (Common & { kind: "stamp"; x: number; y: number; w: number; h: number; label: string })
   /**
@@ -188,6 +225,95 @@ function lineOperators(
   if (arrow === "end" || arrow === "both") ops += head(x2, y2, x1, y1);
   if (arrow === "both") ops += head(x1, y1, x2, y2);
   return `${ops}Q\n`;
+}
+
+/** How far a cloud's bumps stand off the line they are drawn on. */
+const CLOUD_RADIUS = 7;
+
+/** Escapes a string operand so a bracket in it does not end the string. */
+function escape(text: string): string {
+  return text.replace(/([()\\])/g, "\\$1");
+}
+
+/** A path through the points, stroked, closed or not. */
+function polyOperators(
+  points: InkPoint[],
+  width: number,
+  colour: AnnotColor,
+  closed: boolean,
+): string {
+  const [r, g, b] = colour;
+  const path = points
+    .map((point, index) => `${n(point.x)} ${n(point.y)} ${index === 0 ? "m" : "l"}`)
+    .join(" ");
+  return `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(width)} w 1 J 1 j\n${path}${closed ? " h" : ""} S\nQ\n`;
+}
+
+/**
+ * The same outline drawn as a cloud: a row of arcs along each edge, bulging
+ * outwards. Each arc is two Bézier curves, which is close enough to a
+ * semicircle that nobody has ever noticed the difference.
+ */
+function cloudOperators(points: InkPoint[], width: number, colour: AnnotColor): string {
+  const [r, g, b] = colour;
+  let ops = `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(width)} w 1 J 1 j\n`;
+  let started = false;
+
+  for (let i = 0; i < points.length; i++) {
+    const from = points[i]!;
+    const to = points[(i + 1) % points.length]!;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length === 0) continue;
+    // Whole bumps only, so the last one lands on the corner.
+    const bumps = Math.max(1, Math.round(length / (CLOUD_RADIUS * 2)));
+    const step = length / bumps;
+    const ux = (to.x - from.x) / length;
+    const uy = (to.y - from.y) / length;
+    // Outward is to the left of travel for a clockwise outline, which is the
+    // direction a reader draws one in.
+    const nx = -uy;
+    const ny = ux;
+
+    for (let bump = 0; bump < bumps; bump++) {
+      const startX = from.x + ux * step * bump;
+      const startY = from.y + uy * step * bump;
+      const endX = from.x + ux * step * (bump + 1);
+      const endY = from.y + uy * step * (bump + 1);
+      const bulge = step * 0.55;
+      if (!started) {
+        ops += `${n(startX)} ${n(startY)} m\n`;
+        started = true;
+      }
+      ops +=
+        `${n(startX + nx * bulge)} ${n(startY + ny * bulge)} ` +
+        `${n(endX + nx * bulge)} ${n(endY + ny * bulge)} ` +
+        `${n(endX)} ${n(endY)} c\n`;
+    }
+  }
+  return `${ops}S\nQ\n`;
+}
+
+/** Greedy wrapping for the text inside a callout box. */
+function wrapToWidth(
+  text: string,
+  width: number,
+  size: number,
+  font: { widthOfTextAtSize(text: string, size: number): number },
+): string[] {
+  const words = text.split(/\s+/).filter((word) => word !== "");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line === "" ? word : `${line} ${word}`;
+    if (line !== "" && font.widthOfTextAtSize(candidate, size) > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line !== "") lines.push(line);
+  return lines;
 }
 
 /** PDF date format, e.g. D:20261016120000Z. */
@@ -343,6 +469,149 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
             Name: "Comment",
             C: annotation.color ?? NOTE_YELLOW,
             Open: false,
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "polygon" || annotation.kind === "polyline") {
+      const points = annotation.points;
+      if (points.length < 2) throw new Error(`a ${annotation.kind} needs at least two points`);
+      const width = annotation.width ?? STROKE;
+      const colour = annotation.color ?? INK_RED;
+      const closed = annotation.kind === "polygon";
+      const cloudy = closed && annotation.cloud === true;
+      // A cloud's bumps stand outside the line they are drawn on.
+      const pad = width * 2 + (cloudy ? CLOUD_RADIUS : 0);
+      const xs = points.map((point) => point.x);
+      const ys = points.map((point) => point.y);
+      const rect: [number, number, number, number] = [
+        Math.min(...xs) - pad,
+        Math.min(...ys) - pad,
+        Math.max(...xs) + pad,
+        Math.max(...ys) + pad,
+      ];
+
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: closed ? "Polygon" : "PolyLine",
+            Rect: rect,
+            Vertices: points.flatMap((point) => [point.x, point.y]),
+            C: colour,
+            BS: { W: width, S: "S" },
+            // The border effect is what makes a polygon a cloud: C for cloudy,
+            // with an intensity. Readers that ignore it still see the shape,
+            // because the appearance below draws the bumps itself.
+            ...(cloudy ? { BE: { S: "C", I: 1 } } : {}),
+            CA: 1,
+            AP: {
+              N: appearance(
+                doc,
+                rect,
+                cloudy
+                  ? cloudOperators(points, width, colour)
+                  : polyOperators(points, width, colour, closed),
+              ),
+            },
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "callout") {
+      const width = annotation.width ?? STROKE;
+      const colour = annotation.color ?? INK_RED;
+      const size = annotation.size ?? 11;
+      const font = await stampFont(doc);
+      // The rectangle has to hold the box and the line to what it points at.
+      const rect: [number, number, number, number] = [
+        Math.min(annotation.x, annotation.tipX) - width * 2,
+        Math.min(annotation.y, annotation.tipY) - width * 2,
+        Math.max(annotation.x + annotation.w, annotation.tipX) + width * 2,
+        Math.max(annotation.y + annotation.h, annotation.tipY) + width * 2,
+      ];
+      // The line leaves the box from the side the tip is on, with a knee
+      // partway, which is how Acrobat draws one.
+      const fromX = annotation.tipX < annotation.x ? annotation.x : annotation.x + annotation.w;
+      const fromY = annotation.y + annotation.h / 2;
+      const kneeX = (fromX + annotation.tipX) / 2;
+      const [r, g, b] = colour;
+
+      const lines = wrapToWidth(annotation.contents, annotation.w - 6, size, font.font);
+      const text = lines
+        .map(
+          (line, index) =>
+            `1 0 0 1 ${n(annotation.x + 3)} ` +
+            `${n(annotation.y + annotation.h - size - index * size * 1.2 - 2)} Tm ` +
+            `(${escape(line)}) Tj`,
+        )
+        .join("\n");
+
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "FreeText",
+            Rect: rect,
+            Contents: PDFString.of(annotation.contents),
+            // Callout line: tip, knee, and where it meets the box.
+            CL: [annotation.tipX, annotation.tipY, kneeX, annotation.tipY, fromX, fromY],
+            IT: "FreeTextCallout",
+            DA: PDFString.of(`${n(r)} ${n(g)} ${n(b)} rg /Helv ${n(size)} Tf`),
+            C: [1, 1, 1],
+            CA: 1,
+            AP: {
+              N: appearance(
+                doc,
+                rect,
+                `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(width)} w\n` +
+                  `${n(annotation.x)} ${n(annotation.y)} ${n(annotation.w)} ${n(annotation.h)} re S\n` +
+                  `${n(annotation.tipX)} ${n(annotation.tipY)} m ` +
+                  `${n(kneeX)} ${n(annotation.tipY)} l ${n(fromX)} ${n(fromY)} l S\n` +
+                  `${n(r)} ${n(g)} ${n(b)} rg BT /F1 ${n(size)} Tf\n${text}\nET\nQ\n`,
+                { F1: font.ref },
+              ),
+            },
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "caret") {
+      const colour = annotation.color ?? INK_RED;
+      // A caret is drawn small, at the point where something is missing.
+      const size = 10;
+      const rect: [number, number, number, number] = [
+        annotation.x - size / 2,
+        annotation.y,
+        annotation.x + size / 2,
+        annotation.y + size,
+      ];
+      const [r, g, b] = colour;
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "Caret",
+            Rect: rect,
+            Contents: PDFString.of(annotation.contents),
+            C: colour,
+            CA: 1,
+            AP: {
+              N: appearance(
+                doc,
+                rect,
+                `q\n${n(r)} ${n(g)} ${n(b)} rg\n` +
+                  `${n(rect[0])} ${n(rect[1])} m ` +
+                  `${n(annotation.x)} ${n(rect[3])} l ` +
+                  `${n(rect[2])} ${n(rect[1])} l f\nQ\n`,
+              ),
+            },
           }),
         ),
       );

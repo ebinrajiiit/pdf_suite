@@ -1008,6 +1008,134 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("sends the marks as a file, and reads a reviewer's back", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "draft.pdf", await textFixture([["Draft circular"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  // A reviewer's marks, in the file format Acrobat exchanges them in.
+  await page.setInputFiles('[data-testid="xfdf-input"]', {
+    name: "review.xfdf",
+    mimeType: "application/vnd.adobe.xfdf",
+    buffer: Buffer.from(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve">
+<annots>
+<text page="0" rect="60,700,84,724" title="The Registrar"><contents>Fees clause is wrong</contents></text>
+<square page="0" rect="60,600,300,660" color="#ff0000"/>
+<squiggly page="0" rect="10,10,50,20"/>
+</annots>
+</xfdf>`,
+    ),
+  });
+
+  // Two placed, and the one that cannot be drawn is counted rather than faked.
+  await expect(page.getByTestId("status")).toContainText("Added 2 marks", { timeout: 30_000 });
+  await expect(page.getByTestId("status")).toContainText("1 could not be placed");
+
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comments-existing")).toContainText("Fees clause is wrong");
+  await expect(page.getByTestId("comments-existing")).toContainText("The Registrar");
+
+  // And they can be sent on again.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("export-marks").click(),
+  ]);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const xml = await readFile(path!, "utf8");
+  expect(xml).toContain("http://ns.adobe.com/xfdf/");
+  expect(xml).toContain("Fees clause is wrong");
+  expect(xml).toContain('title="The Registrar"');
+});
+
+test("answers a mark and settles it, as a review does", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  const base = await textFixture([["Draft circular"]]);
+  const doc = await PDFDocument.load(base);
+  doc.getPage(0).node.set(
+    PDFName.of("Annots"),
+    doc.context.obj([
+      doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Text",
+          Rect: [50, 300, 74, 324],
+          Contents: PDFString.of("Please check the dates"),
+          T: PDFString.of("A Reviewer"),
+        }),
+      ),
+    ]),
+  );
+  await openFixture(page, "returned.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+  await page.getByTestId("tab-comments").click();
+
+  // Answer it.
+  await page.getByTestId("reply-0-0").click();
+  await page.getByTestId("reply-input-0-0").fill("Checked, they are right");
+  await page.getByTestId("reply-send-0-0").click();
+  await expect(page.getByTestId("status")).toHaveText("Reply saved", { timeout: 30_000 });
+
+  // The answer is nested under the mark, not listed as a mark of its own.
+  await expect(page.getByTestId("mark-0-0")).toContainText("Checked, they are right");
+  await expect(page.getByTestId("mark-0-1")).toBeHidden();
+
+  // Settle it.
+  await page.getByTestId("set-state-0-0").selectOption("Completed");
+  await expect(page.getByTestId("status")).toHaveText("Marked Completed", { timeout: 30_000 });
+  await expect(page.getByTestId("state-0-0")).toHaveText("Completed");
+
+  // Both are in the file, as replies pointing at what they answer.
+  const saved = await saveAndRead(page, "Save");
+  const after = await PDFDocument.load(saved);
+  const annots = after.getPage(0).node.Annots()!;
+  expect(annots.size()).toBe(3);
+  const reply = after.context.lookup(annots.get(1)) as PDFDict;
+  expect(reply.get(PDFName.of("IRT"))).toBeDefined();
+  expect(reply.get(PDFName.of("RT"))?.toString()).toBe("/R");
+  const status = after.context.lookup(annots.get(2)) as PDFDict;
+  expect(status.get(PDFName.of("RT"))?.toString()).toBe("/Group");
+});
+
+test("rings a region with a cloud, and points a callout at it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "drawing.pdf", await textFixture([["Site plan"]]));
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+
+  // A cloud: click each corner, double-click to close it.
+  await page.getByTestId("tool-cloud").click();
+  await expect(page.getByTestId("path-hint")).toBeVisible();
+  await page.mouse.click(area.x + 60, area.y + 60);
+  await page.mouse.click(area.x + 200, area.y + 70);
+  await page.mouse.click(area.x + 160, area.y + 180);
+  await expect(page.getByTestId("path-0")).toBeVisible();
+  await page.mouse.dblclick(area.x + 70, area.y + 170);
+
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comments")).toContainText("Shape");
+
+  // A callout: click what it points at, then type.
+  await page.getByTestId("tool-callout").click();
+  await page.mouse.click(area.x + 120, area.y + 260);
+  await page.getByTestId("annotation-text").fill("These dimensions disagree");
+  await page.getByRole("button", { name: "Place" }).click();
+  await expect(page.getByTestId("comments")).toContainText("Callout");
+
+  // Both reach the file as the subtypes a reader expects.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Polygon", "/FreeText"]);
+});
+
 test("shows the marks a document arrived with, and can remove one", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

@@ -294,3 +294,85 @@ describe("appearances for the kinds no viewer synthesises", () => {
     ).rejects.toThrow(/at least one stroke/);
   });
 });
+
+describe("the shapes a reviewer rings things with", () => {
+  async function one(annotation: Annotation) {
+    const out = await annotate(await makeDoc(1), [annotation]);
+    const doc = await PDFDocument.load(out);
+    const annots = doc.getPage(0).node.Annots();
+    const annot = doc.context.lookup(annots!.get(0)) as PDFDict;
+    const form = (annot.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    return {
+      annot,
+      subtype: annot.get(PDFName.of("Subtype"))?.toString(),
+      ops: new TextDecoder("latin1").decode(decodePDFRawStream(form).decode()),
+    };
+  }
+
+  const triangle = [
+    { x: 100, y: 100 },
+    { x: 200, y: 100 },
+    { x: 150, y: 200 },
+  ];
+
+  test("a polygon closes its path; a polyline does not", async () => {
+    const closed = await one({ kind: "polygon", page: 0, points: triangle });
+    expect(closed.subtype).toBe("/Polygon");
+    expect(closed.ops).toContain(" h S");
+    expect(closed.annot.lookup(PDFName.of("Vertices"), PDFArray).size()).toBe(6);
+
+    const open = await one({ kind: "polyline", page: 0, points: triangle });
+    expect(open.subtype).toBe("/PolyLine");
+    expect(open.ops).not.toContain(" h S");
+  });
+
+  test("a cloud draws its bumps, and says it is one", async () => {
+    const cloud = await one({ kind: "polygon", page: 0, points: triangle, cloud: true });
+    expect(cloud.subtype).toBe("/Polygon");
+    // Curves, not straight segments: a cloud is arcs along each edge.
+    expect(cloud.ops).toContain(" c\n");
+    // And the border effect, for a reader that draws its own appearance.
+    const effect = cloud.annot.lookup(PDFName.of("BE"), PDFDict);
+    expect(effect.get(PDFName.of("S"))?.toString()).toBe("/C");
+  });
+
+  test("too few points is refused rather than drawn as nothing", async () => {
+    await expect(
+      annotate(await makeDoc(1), [{ kind: "polygon", page: 0, points: [{ x: 1, y: 1 }] }]),
+    ).rejects.toThrow(/at least two points/);
+  });
+
+  test("a callout carries its line, its words, and the point it indicates", async () => {
+    const callout = await one({
+      kind: "callout",
+      page: 0,
+      x: 180,
+      y: 260,
+      w: 160,
+      h: 50,
+      contents: "This date is wrong",
+      tipX: 90,
+      tipY: 120,
+    });
+    expect(callout.subtype).toBe("/FreeText");
+    // The callout line: tip, knee, and where it meets the box.
+    expect(callout.annot.lookup(PDFName.of("CL"), PDFArray).size()).toBe(6);
+    expect(callout.annot.get(PDFName.of("IT"))?.toString()).toBe("/FreeTextCallout");
+    expect(callout.ops).toContain("(This date is wrong) Tj");
+  });
+
+  test("a caret points at where something is missing", async () => {
+    const caret = await one({
+      kind: "caret",
+      page: 0,
+      x: 120,
+      y: 300,
+      contents: "insert: and the fee",
+    });
+    expect(caret.subtype).toBe("/Caret");
+    // A filled triangle, which is what a caret is.
+    expect(caret.ops).toContain(" f");
+  });
+});

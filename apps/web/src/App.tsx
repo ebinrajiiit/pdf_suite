@@ -78,6 +78,9 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    exportMarks,
+    importMarks,
+    replyToMark,
     deleteMark,
     compare,
     attachments,
@@ -104,6 +107,7 @@ export function App() {
   const mergeInput = useRef<HTMLInputElement>(null);
   const attachInput = useRef<HTMLInputElement>(null);
   const compareInput = useRef<HTMLInputElement>(null);
+  const xfdfInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -837,6 +841,25 @@ export function App() {
         });
         return;
       }
+      if (shape.kind === "path") {
+        addAnnotation(
+          tool === "polyline"
+            ? { kind: "polyline", page, points: shape.points, color: colour }
+            : {
+                kind: "polygon",
+                page,
+                points: shape.points,
+                color: colour,
+                ...(tool === "cloud" ? { cloud: true } : {}),
+              },
+        );
+        return;
+      }
+      if (tool === "callout" || tool === "caret") {
+        // Both need words before they are worth creating, like a note.
+        setPendingPoint({ page, x: shape.x, y: shape.y });
+        return;
+      }
       if (tool === "stamp") {
         // Sized like a rubber stamp, with the click at its top-left corner.
         addAnnotation({
@@ -889,6 +912,34 @@ export function App() {
         });
         return;
       }
+      if (tool === "caret") {
+        addAnnotation({
+          kind: "caret",
+          page: point.page,
+          x: point.x,
+          y: point.y,
+          contents,
+          color: colour,
+        });
+        return;
+      }
+      if (tool === "callout") {
+        // The box sits up and to the right of what it points at, which is
+        // where a reader expects a callout to be.
+        addAnnotation({
+          kind: "callout",
+          page: point.page,
+          x: point.x + 60,
+          y: point.y + 40,
+          w: 170,
+          h: Math.max(32, 16 * Math.ceil(contents.length / 28)),
+          contents,
+          tipX: point.x,
+          tipY: point.y,
+          color: colour,
+        });
+        return;
+      }
       // Roughly fit the box to the text; the viewer wraps what does not fit.
       const size = 12;
       addAnnotation({
@@ -929,6 +980,35 @@ export function App() {
     }
     void attachments().then(setAttached);
   }, [attachments, info]);
+
+  /** Writes the marks out as XFDF, which is how a review travels without a server. */
+  const handleExportMarks = useCallback(async () => {
+    const xml = await exportMarks(name0);
+    if (xml === undefined) return;
+    const written = await saveBytes(
+      new TextEncoder().encode(xml).buffer as ArrayBuffer,
+      `${stripPdf(name0)}.xfdf`,
+      undefined,
+      "application/vnd.adobe.xfdf",
+    );
+    setSaved(written ? `Saved ${written}` : undefined);
+  }, [exportMarks, name0]);
+
+  const onXfdfInput = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      const [file] = await readFiles(files);
+      if (!file) return;
+      const result = await importMarks(new TextDecoder().decode(file.bytes));
+      if (!result) return;
+      const lost = result.dropped + result.skipped;
+      setSaved(
+        `Added ${result.added} mark${result.added === 1 ? "" : "s"}` +
+          (lost > 0 ? `; ${lost} could not be placed and were left out` : ""),
+      );
+    },
+    [importMarks],
+  );
 
   /** Compares the open document with another file the user picks. */
   const handleCompare = useCallback(async () => {
@@ -1288,6 +1368,14 @@ export function App() {
         data-testid="compare-input"
         className="visually-hidden"
         onChange={(event) => void onCompareInput(event.target.files)}
+      />
+      <input
+        ref={xfdfInput}
+        type="file"
+        accept=".xfdf,application/vnd.adobe.xfdf,text/xml"
+        data-testid="xfdf-input"
+        className="visually-hidden"
+        onChange={(event) => void onXfdfInput(event.target.files)}
       />
 
       {state.needsPassword ? (
@@ -2126,11 +2214,31 @@ export function App() {
 
             {sidebar === "comments" ? (
               <div className="sidebar-scroll">
+                <div className="panel-actions">
+                  {action("Send marks…", () => void handleExportMarks(), {
+                    testId: "export-marks",
+                    hint: "Writes the marks as an XFDF file to send to a reviewer",
+                  })}
+                  {action("Import marks…", () => xfdfInput.current?.click(), {
+                    testId: "import-marks",
+                    hint: "Reads marks a reviewer sent back",
+                  })}
+                </div>
                 <CommentList
                   annotations={state.annotations}
                   existing={info.marks}
                   onRemoveExisting={(page, index) => {
                     void deleteMark(page, index).then((done) => done && setSaved("Mark removed"));
+                  }}
+                  onReply={(page, index, contents, state) => {
+                    void replyToMark({
+                      page,
+                      index,
+                      contents,
+                      ...(state && state !== "None"
+                        ? { state: state as "Accepted" | "Rejected" | "Cancelled" | "Completed" }
+                        : {}),
+                    }).then((done) => done && setSaved(state ? "Marked " + state : "Reply saved"));
                   }}
                   positionOf={(page) => {
                     const at = state.order.indexOf(page);
@@ -2386,7 +2494,15 @@ export function App() {
               <div className="tool-grid">
                 {(["square", "circle", "ink", "line", "arrow"] as const).map(toolButton)}
               </div>
+              <div className="tool-grid">
+                {(["polygon", "cloud", "polyline", "callout", "caret"] as const).map(toolButton)}
+              </div>
               <div className="tool-grid">{(["stamp", "signature"] as const).map(toolButton)}</div>
+              {tool && ["polygon", "cloud", "polyline"].includes(tool) ? (
+                <p className="tool-hint" data-testid="path-hint">
+                  Click each corner; double-click to finish.
+                </p>
+              ) : null}
               {tool === "stamp" ? (
                 <div className="tool-options">
                   <span className="tool-options-label">Says</span>
@@ -2705,6 +2821,11 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   field: "▭̲",
   line: "╱",
   arrow: "↗",
+  polygon: "⬠",
+  cloud: "☁",
+  polyline: "〰",
+  callout: "🗩",
+  caret: "^",
   stamp: "▣",
   signature: "✒",
   redact: "█",
@@ -2723,6 +2844,11 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   field: "Drag where someone should fill something in",
   line: "Drag to draw a line",
   arrow: "Drag to draw an arrow, pointing where you finish",
+  polygon: "Click each corner, double-click to close the shape",
+  cloud: "Click each corner, double-click to close it as a cloud",
+  polyline: "Click each point, double-click to finish the path",
+  callout: "Click what you want to point at, then type",
+  caret: "Click where something is missing, then type what belongs there",
   stamp: "Click a page to stamp it",
   signature: "Click a page to sign it",
   redact: "Drag over content to delete it permanently",
@@ -2741,6 +2867,11 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   field: "Add a field",
   line: "Line",
   arrow: "Arrow",
+  polygon: "Shape",
+  cloud: "Cloud",
+  polyline: "Path",
+  callout: "Callout",
+  caret: "Insert",
   stamp: "Stamp",
   signature: "Sign",
   redact: "Redact",

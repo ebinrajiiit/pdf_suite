@@ -138,18 +138,18 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Sticky note, highlight, underline, strike-through, text box | Done |
-| Insert/replace text markup (caret) | Missing |
-| Callout | Missing |
+| Insert/replace text markup (caret) | The caret is done, carrying what should be inserted |
+| Callout | Done: click what it points at, type, and the box sits above it with a kneed line |
 | Line, arrow | Done, with their own appearance streams |
-| Polygon, polyline, cloud | Missing — the same machinery, more geometry |
+| Polygon, polyline, cloud | Done: click each corner, double-click to finish. The cloud draws its own bumps rather than trusting a reader to honour `/BE` |
 | Rectangle, oval, pencil | Done |
 | Eraser for ink | Missing |
 | Stamps | Eight fixed labels. Dynamic (name, date) and custom (an image) are missing |
 | Attach a file or audio as a comment | Missing |
 | Comment opacity, default properties, author name | Colour only |
-| Replies, status (accepted, rejected, completed), resolved | Missing — `/IRT` and `/RT` |
+| Replies, status (accepted, rejected, completed) | Done, as `/IRT` with `/RT` — a reply is `R`, a status is a `Group` reply carrying `/State`, which is what Acrobat writes and reads. Threads are shown nested |
 | Comment list: filter, sort, search | Done: by kind, by text and in page order, over both the document's own marks and the unsaved ones. A printed summary is missing |
-| Import/export comments (FDF, XFDF) | Missing, and worth having: it is how review happens without a server, which fits this product exactly |
+| Import/export comments (XFDF) | Done, both ways. What cannot be drawn is counted and left out rather than approximated. FDF, the older binary-ish form, is not read |
 | Shared review, Send for comment | Will not do — it uploads |
 | Measuring tools (distance, perimeter, area, scale, snap) | Missing. Engineering and architecture drawings need these |
 

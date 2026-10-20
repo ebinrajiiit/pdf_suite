@@ -9,6 +9,7 @@ export type {
   DocumentDiff,
   DocumentInfo,
   ExistingAnnotation,
+  Reply,
   EncryptOptions,
   PageLabelRange,
   WatermarkOptions,

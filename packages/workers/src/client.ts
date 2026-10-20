@@ -20,6 +20,7 @@ import {
   type ImageEditResult,
   type PageImage,
   type RedactArea,
+  type Reply,
   type RedactionResult,
   type TextEdit,
   type TextEditResult,
@@ -73,6 +74,16 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** The document's marks as an XFDF file. */
+  exportXfdf(name: string, order: number[], annotations: Annotation[]): Promise<string>;
+  /** Imports marks from an XFDF file. */
+  importXfdf(
+    xml: string,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; added: number; dropped: number; skipped: number }>;
+  /** Answers a mark, or sets its review state. */
+  reply(reply: Reply, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** Removes a mark the document already carried. */
   deleteMark(
     page: number,
@@ -353,6 +364,21 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async exportXfdf(name, order, annotations) {
+      return expect(await send({ kind: "exportXfdf", name, order, annotations }), "xfdf").xml;
+    },
+    async importXfdf(xml, order, annotations) {
+      const reply = expect(await send({ kind: "importXfdf", xml, order, annotations }), "imported");
+      return {
+        info: reply.info,
+        added: reply.added,
+        dropped: reply.dropped,
+        skipped: reply.skipped,
+      };
+    },
+    async reply(reply, order, annotations) {
+      return expect(await send({ kind: "reply", reply, order, annotations }), "document").info;
     },
     async deleteMark(page, index, order, annotations) {
       return expect(await send({ kind: "deleteMark", page, index, order, annotations }), "document")

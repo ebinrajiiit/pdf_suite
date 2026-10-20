@@ -10,6 +10,7 @@ import type {
   Annotation,
   Attachment,
   ExistingAnnotation,
+  Reply,
   DocumentDiff,
   NewField,
   Bookmark,
@@ -74,6 +75,7 @@ export type {
   Annotation,
   Attachment,
   ExistingAnnotation,
+  Reply,
   DocumentDiff,
   PageDiff,
   NewField,
@@ -223,6 +225,12 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** The document's marks as an XFDF file, for sending to a reviewer. */
+    | { kind: "exportXfdf"; name: string; order: number[]; annotations: Annotation[] }
+    /** Imports marks from an XFDF file a reviewer sent back. */
+    | { kind: "importXfdf"; xml: string; order: number[]; annotations: Annotation[] }
+    /** Answers a mark, or sets its review state. */
+    | { kind: "reply"; reply: Reply; order: number[]; annotations: Annotation[] }
     /** Removes a mark the document already carried. */
     | {
         kind: "deleteMark";
@@ -329,6 +337,8 @@ export type WorkerResponse = { id: number } & (
   | { kind: "text"; text: string }
   | { kind: "attached"; files: Attachment[] }
   | { kind: "compared"; diff: DocumentDiff }
+  | { kind: "xfdf"; xml: string }
+  | { kind: "imported"; info: DocumentInfo; added: number; dropped: number; skipped: number }
   | { kind: "attachment"; name: string; bytes: ArrayBuffer }
   | {
       kind: "imagesEdited";
@@ -385,6 +395,8 @@ export type TerminalResponse = Extract<
       | "attached"
       | "attachment"
       | "compared"
+      | "xfdf"
+      | "imported"
       | "imagesEdited"
       | "found"
       | "hidden"

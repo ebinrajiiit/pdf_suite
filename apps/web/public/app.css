@@ -925,6 +925,60 @@ textarea:focus-visible,
   font-size: 0.78rem;
 }
 
+/* A path being clicked out, and the caret that marks a gap. */
+.annot-path {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.annot-caret {
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+/* Replies and review states on a mark. */
+.comment-reply {
+  margin: 0.2rem 0 0 0.8rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--line);
+  font-size: 0.82rem;
+}
+.comment-state {
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.comment-answer {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+}
+.comment-answer input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+}
+.comment-answer button,
+.comment-answer select {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {
@@ -1310,6 +1364,9 @@ textarea:focus-visible,
 .annots-ink,
 .annots-line,
 .annots-arrow,
+.annots-polygon,
+.annots-cloud,
+.annots-polyline,
 .annots-redact,
 .annots-crop,
 .annots-field {
@@ -1319,7 +1376,9 @@ textarea:focus-visible,
 .annots-note,
 .annots-text,
 .annots-stamp,
-.annots-signature {
+.annots-signature,
+.annots-callout,
+.annots-caret {
   pointer-events: auto;
   cursor: copy;
 }

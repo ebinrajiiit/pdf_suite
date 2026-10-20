@@ -1,7 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import { expect, test } from "vitest";
 import { annotate } from "./annotate.js";
-import { deleteAnnotation, readAnnotations } from "./read-annots.js";
+import { addReply, deleteAnnotation, readAnnotations } from "./read-annots.js";
 import { fillForm } from "./forms.js";
 import { addField } from "./forms.js";
 
@@ -76,4 +76,50 @@ test("removing a mark that is not there is refused", async () => {
   const bytes = await marked();
   await expect(deleteAnnotation(bytes, 0, 9)).rejects.toThrow(/no mark 9 on page 1/);
   await expect(deleteAnnotation(bytes, 7, 0)).rejects.toThrow(/outside a 2-page document/);
+});
+
+test("answers a mark, and the answer points back at it", async () => {
+  const bytes = await marked();
+  const note = (await readAnnotations(bytes)).find((mark) => mark.kind === "text")!;
+
+  const answered = await addReply(bytes, {
+    page: note.page,
+    index: note.index,
+    contents: "Checked, they are right",
+    author: "The Registrar",
+  });
+
+  const marks = await readAnnotations(answered);
+  const reply = marks.find((mark) => mark.contents === "Checked, they are right")!;
+  expect(reply.inReplyTo).toBe(note.index);
+  expect(reply.replyType).toBe("R");
+  expect(reply.author).toBe("The Registrar");
+  // It sits on the mark it answers, since a reply has no place of its own.
+  expect(reply.x).toBeCloseTo(note.x, 0);
+});
+
+test("a status is a reply carrying the state, which is how the format says it", async () => {
+  const bytes = await marked();
+  const note = (await readAnnotations(bytes)).find((mark) => mark.kind === "text")!;
+
+  const settled = await addReply(bytes, {
+    page: note.page,
+    index: note.index,
+    contents: "",
+    state: "Completed",
+  });
+
+  const status = (await readAnnotations(settled)).find((mark) => mark.state === "Completed")!;
+  expect(status.replyType).toBe("Group");
+  expect(status.inReplyTo).toBe(note.index);
+});
+
+test("answering a mark that is not there is refused", async () => {
+  const bytes = await marked();
+  await expect(addReply(bytes, { page: 0, index: 9, contents: "x" })).rejects.toThrow(
+    /no mark 9 on page 1/,
+  );
+  await expect(addReply(bytes, { page: 6, index: 0, contents: "x" })).rejects.toThrow(
+    /outside a 2-page document/,
+  );
 });
