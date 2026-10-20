@@ -131,7 +131,7 @@ What an Acrobat user would miss before anything subtle:
 | PDF → plain text | Done, in display order with a page break and number per page |
 | PDF → HTML, XML | Missing |
 | PDF → images | Done (PNG) |
-| PDF/A, PDF/X, PDF/E conversion and validation | Missing. veraPDF is the usual validator and it is Apache-2.0, so it is allowed; conversion is the harder half |
+| PDF/A check | Done, as a report: encryption, fonts not embedded, no XMP, no output intent, JavaScript. Conversion is not done — it means embedding every font and an ICC profile, and a tool that says "converted" without both has produced a file that fails validation later, somewhere else. PDF/X and PDF/E are untouched |
 
 ### Comment and review
 
@@ -217,11 +217,12 @@ What an Acrobat user would miss before anything subtle:
 
 ### Print production (Acrobat Pro)
 
-Preflight with profiles and fixups, output preview, separations, ink manager,
-colour conversion, transparency flattening, trap presets, printer marks, the
-trim/bleed/art boxes. All missing. Niche for a university, which is why
-`docs/ROADMAP.md` has it last — but note that `/CropBox` editing and PDF/X would
-come from the same work.
+| Acrobat | Here |
+| --- | --- |
+| Preflight | A print check: fonts not embedded, images below 300 DPI at the size they are printed, and a missing trim box. Profiles and fixups are missing |
+| Trim box | Can be set, inset by a bleed |
+| Output preview, separations, ink manager | Missing, and out of reach with PDFium's wasm build: they need the renderer's own colour pipeline |
+| Colour conversion, transparency flattening, trap presets, printer marks | Missing |
 
 ### Everything else
 

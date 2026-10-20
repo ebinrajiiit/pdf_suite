@@ -28,6 +28,8 @@ export { formatNumber, letters, place, roman, stampPages } from "./stamp.js";
 export { readProperties, setProperties } from "./properties.js";
 export { attachFile, listAttachments, readAttachment, removeAttachment } from "./attachments.js";
 export type { Attachment } from "./attachments.js";
+export { checkPdfA, checkPrint, isPortfolio, makePortfolio, setTrimBox } from "./standards.js";
+export type { PrintCheckInput, StandardIssue } from "./standards.js";
 export { isSigned, readSignatures } from "./signatures.js";
 export type { SignatureInfo } from "./signatures.js";
 export { checkAccessibility, fixAccessibility } from "./accessibility.js";

@@ -31,6 +31,7 @@ import {
   type SanitiseOptions,
   type SanitiseReport,
   type SearchHit,
+  type StandardIssue,
   type StampOptions,
   type TextRun,
   type TerminalResponse,
@@ -77,6 +78,16 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** Checks the document against PDF/A, or against what a press needs. */
+  checkStandard(
+    standard: "pdfa" | "print",
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<StandardIssue[]>;
+  /** Sets the trim box, inset by the bleed given. */
+  setTrimBox(bleed: number, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
+  /** Makes the document present as a portfolio. */
+  makePortfolio(order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** Writes redaction marks, destroying nothing. */
   markRedactions(
     marks: RedactionMark[],
@@ -397,6 +408,16 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async checkStandard(standard, order, annotations) {
+      return expect(await send({ kind: "checkStandard", standard, order, annotations }), "standard")
+        .issues;
+    },
+    async setTrimBox(bleed, order, annotations) {
+      return expect(await send({ kind: "setTrimBox", bleed, order, annotations }), "document").info;
+    },
+    async makePortfolio(order, annotations) {
+      return expect(await send({ kind: "makePortfolio", order, annotations }), "document").info;
     },
     async markRedactions(marks, order, annotations) {
       return expect(await send({ kind: "markRedactions", marks, order, annotations }), "document")

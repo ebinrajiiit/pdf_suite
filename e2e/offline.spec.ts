@@ -1008,6 +1008,35 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("says what stands between the document and PDF/A, and what a press needs", async ({
+  page,
+}) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "annual.pdf", await textFixture([["Annual report"]]));
+
+  await page.getByTestId("check-pdfa").click();
+  const issues = page.getByTestId("standard-issues");
+  // A document set in a standard font carries no font data at all.
+  await expect(issues).toContainText("not embedded", { timeout: 30_000 });
+  await expect(issues).toContainText("XMP");
+  await expect(issues).toContainText("output intent");
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await page.getByTestId("check-print").click();
+  await expect(issues).toContainText("No trim box", { timeout: 30_000 });
+
+  // And the trim box can be set from the report that complained about it.
+  await page.getByTestId("set-trim").click();
+  await expect(page.getByTestId("status")).toHaveText("Trim box set", { timeout: 30_000 });
+  await expect(issues).not.toContainText("No trim box", { timeout: 30_000 });
+
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  expect(doc.getPage(0).getTrimBox().width).toBeLessThan(doc.getPage(0).getSize().width);
+});
+
 test("marks a redaction for review, then applies it with its code", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

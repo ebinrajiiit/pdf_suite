@@ -12,6 +12,7 @@ import {
   diffDocuments,
   fromXfdf,
   listAttachments,
+  makePortfolio,
   markForRedaction,
   readAnnotations,
   readAttachment,
@@ -28,6 +29,8 @@ import {
   reorder,
   imagesToPdf,
   checkAccessibility,
+  checkPdfA,
+  checkPrint,
   cropPages,
   findHidden,
   fixAccessibility,
@@ -35,6 +38,7 @@ import {
   setLayerVisibility,
   setOutline,
   setPageLabels,
+  setTrimBox,
   rotate,
   sanitise,
   setProperties,
@@ -522,6 +526,51 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "checkStandard": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      if (request.standard === "pdfa") {
+        post({ id, kind: "standard", issues: await checkPdfA(base) });
+        return;
+      }
+      // Effective resolution needs the engine: only it knows how many pixels
+      // each placed image actually stores.
+      const placed: {
+        page: number;
+        w: number;
+        h: number;
+        pixelWidth: number;
+        pixelHeight: number;
+      }[] = [];
+      for (const [position] of request.order.entries()) {
+        throwIfCancelled(id);
+        for (const image of await engine.images(base, position).catch(() => [])) {
+          placed.push({
+            page: position,
+            w: image.w,
+            h: image.h,
+            pixelWidth: image.pixelWidth,
+            pixelHeight: image.pixelHeight,
+          });
+        }
+      }
+      post({ id, kind: "standard", issues: await checkPrint(base, { images: placed }) });
+      return;
+    }
+    case "setTrimBox": {
+      const base = await materialise(id, request.order, request.annotations);
+      const trimmed = await setTrimBox(base, request.bleed);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, trimmed, request) });
+      return;
+    }
+    case "makePortfolio": {
+      const base = await materialise(id, request.order, request.annotations);
+      const portfolio = await makePortfolio(base);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, portfolio, request) });
       return;
     }
     case "markRedactions": {

@@ -34,6 +34,7 @@ import {
 import type {
   AccessibilityIssue,
   Attachment,
+  StandardIssue,
   DocumentDiff,
   Link,
   EditableText,
@@ -91,6 +92,9 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    checkStandard,
+    setTrim,
+    makePortfolio,
     markRedactions,
     applyRedactions,
     setLayers,
@@ -135,6 +139,12 @@ export function App() {
   /** The document's links, read with it, and one waiting to be opened. */
   const [pageLinks, setPageLinks] = useState<Link[]>([]);
   const [following, setFollowing] = useState<string | null>(null);
+
+  /** A standards check and what it found: PDF/A, or what a press needs. */
+  const [standard, setStandard] = useState<{
+    kind: "pdfa" | "print";
+    issues: StandardIssue[];
+  } | null>(null);
 
   /** Whether this machine can turn an Office document into a PDF. */
   const [office, setOffice] = useState(false);
@@ -569,6 +579,18 @@ export function App() {
       if (written) setSaved("Bookmarks saved");
     },
     [setBookmarks],
+  );
+
+  const handleStandard = useCallback(
+    async (kind: "pdfa" | "print") => {
+      const issues = await checkStandard(kind);
+      if (!issues) return;
+      setStandard({ kind, issues });
+      if (issues.length === 0) {
+        setSaved(kind === "pdfa" ? "Nothing stands in the way of PDF/A" : "Ready for print");
+      }
+    },
+    [checkStandard],
   );
 
   const handleCheckAccessible = useCallback(async () => {
@@ -2105,6 +2127,51 @@ export function App() {
         </div>
       ) : null}
 
+      {standard && info ? (
+        <div className="prompt hfpanel" data-testid="standard-panel">
+          <div className="hfrow">
+            <span className="hflabel">{standard.kind === "pdfa" ? "PDF/A" : "Print"}</span>
+            <span className="hfnote">
+              {standard.kind === "pdfa"
+                ? "What stands between this document and being archivable. Converting means " +
+                  "embedding every font and an ICC profile, which is not built — this says what " +
+                  "would have to change."
+                : "What a press would complain about. Resolution is judged at the size each " +
+                  "image is printed, not by the pixels it stores."}
+            </span>
+            {standard.kind === "print"
+              ? action(
+                  "Set a 9 pt trim box",
+                  () => {
+                    void setTrim(9).then((done) => {
+                      if (done) {
+                        setSaved("Trim box set");
+                        void handleStandard("print");
+                      }
+                    });
+                  },
+                  { testId: "set-trim" },
+                )
+              : null}
+            <button type="button" className="action" onClick={() => setStandard(null)}>
+              Close
+            </button>
+          </div>
+          <ul className="a11ylist" data-testid="standard-issues">
+            {standard.issues.length === 0 ? (
+              <li className="a11y-ok">Nothing to fix.</li>
+            ) : (
+              standard.issues.map((issue) => (
+                <li key={issue.id} className={`a11y-${issue.severity}`}>
+                  <strong>{issue.summary}</strong>
+                  <span>{issue.detail}</span>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : null}
+
       {showingSignatures && info ? (
         <div className="prompt hfpanel" data-testid="signature-panel">
           <div className="hfrow">
@@ -2629,6 +2696,20 @@ export function App() {
                     testId: "attach-file",
                     hint: "Carries a file inside this PDF, wherever it goes",
                   })}
+                  {attached.length > 0
+                    ? action(
+                        "Make it a portfolio",
+                        () => {
+                          void makePortfolio().then(
+                            (done) => done && setSaved("This document is now a portfolio"),
+                          );
+                        },
+                        {
+                          testId: "make-portfolio",
+                          hint: "Readers will show the files inside it rather than its pages",
+                        },
+                      )
+                    : null}
                 </div>
                 {attached.length === 0 ? (
                   <p className="comments-empty" data-testid="attachments-empty">
@@ -2941,6 +3022,14 @@ export function App() {
                       },
                     )
                   : null}
+                {action("Check for PDF/A…", () => void handleStandard("pdfa"), {
+                  testId: "check-pdfa",
+                  hint: "What stands between this document and being archivable",
+                })}
+                {action("Check for print…", () => void handleStandard("print"), {
+                  testId: "check-print",
+                  hint: "Fonts, image resolution and the trim box a press needs",
+                })}
                 {action("Check accessibility…", () => void handleCheckAccessible(), {
                   testId: "check-accessibility",
                   hint: "Whether a screen reader could read this document",

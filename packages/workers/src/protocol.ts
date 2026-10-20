@@ -14,6 +14,7 @@ import type {
   Link,
   RedactionMark,
   SignatureInfo,
+  StandardIssue,
   LinkTarget,
   Reply,
   DocumentDiff,
@@ -90,6 +91,7 @@ export type {
   Link,
   RedactionMark,
   SignatureInfo,
+  StandardIssue,
   LinkTarget,
   Reply,
   DocumentDiff,
@@ -241,6 +243,17 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Checks the document against PDF/A, or against what a press needs. */
+    | {
+        kind: "checkStandard";
+        standard: "pdfa" | "print";
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Sets the trim box, inset from the page by the bleed given. */
+    | { kind: "setTrimBox"; bleed: number; order: number[]; annotations: Annotation[] }
+    /** Makes the document present as a portfolio of the files inside it. */
+    | { kind: "makePortfolio"; order: number[]; annotations: Annotation[] }
     /** Writes redaction marks into the document, destroying nothing. */
     | {
         kind: "markRedactions";
@@ -391,6 +404,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "found"; found: Found }
   | { kind: "hidden"; report: SanitiseReport }
   | { kind: "accessibility"; issues: AccessibilityIssue[] }
+  | { kind: "standard"; issues: StandardIssue[] }
   | { kind: "sanitised"; info: DocumentInfo; removed: SanitiseReport; wasClean: boolean }
   | {
       kind: "edited";
@@ -444,6 +458,7 @@ export type TerminalResponse = Extract<
       | "found"
       | "hidden"
       | "accessibility"
+      | "standard"
       | "sanitised"
       | "edited"
       | "parts"

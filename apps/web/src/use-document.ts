@@ -22,6 +22,7 @@ import type {
   Reply,
   SanitiseOptions,
   SanitiseReport,
+  StandardIssue,
   RedactArea,
   StampOptions,
   TextEdit,
@@ -705,6 +706,31 @@ export function useDocument() {
     [run],
   );
 
+  /** Checks the document against PDF/A, or against what a press needs. */
+  const checkStandard = useCallback(
+    async (standard: "pdfa" | "print"): Promise<StandardIssue[] | undefined> =>
+      run(standard === "pdfa" ? "Checking against PDF/A" : "Checking for print", (worker) =>
+        worker.checkStandard(standard, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
+  const setTrim = useCallback(
+    async (bleed: number) =>
+      rewrite("Setting the trim box", (worker) =>
+        worker.setTrimBox(bleed, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  const makePortfolio = useCallback(
+    async () =>
+      rewrite("Making a portfolio", (worker) =>
+        worker.makePortfolio(stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** Writes redaction marks into the document, destroying nothing yet. */
   const markRedactions = useCallback(
     async (marks: RedactionMark[]) =>
@@ -1019,6 +1045,9 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    checkStandard,
+    setTrim,
+    makePortfolio,
     markRedactions,
     applyRedactions,
     setLayers,

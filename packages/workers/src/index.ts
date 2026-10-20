@@ -13,6 +13,7 @@ export type {
   Link,
   RedactionMark,
   SignatureInfo,
+  StandardIssue,
   LinkTarget,
   Reply,
   EncryptOptions,
