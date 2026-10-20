@@ -158,9 +158,9 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Fill in fields, flatten | Done (text, checkbox, radio, dropdown, button, signature read) |
-| Create and edit fields | Missing — the form builder |
+| Create and edit fields | Create: done, for text boxes, tick boxes and dropdowns — drag where the field goes and name it. Editing a field's size or kind after the fact is missing; remove and draw it again |
 | Automatic field recognition | Missing |
-| Tab order | Missing |
+| Tab order | Follows the order fields are created, which is what a reader uses when the page has no explicit `/Tabs`. Setting it by hand is missing |
 | Calculations, validation, formatting scripts | Missing. These are document JavaScript; see the non-goals |
 | Barcode fields | Missing |
 | Distribute, collect, track responses | Missing. The local half — export and merge FDF — is compatible with zero upload; the tracker is not |

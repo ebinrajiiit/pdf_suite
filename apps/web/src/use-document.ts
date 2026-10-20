@@ -12,6 +12,7 @@ import type {
   FindRequest,
   Found,
   ImageEdit,
+  NewField,
   PageImage,
   SanitiseOptions,
   SanitiseReport,
@@ -698,6 +699,23 @@ export function useDocument() {
     [run],
   );
 
+  /** Adds a form field where the user drew it. */
+  const addFormField = useCallback(
+    async (field: NewField) =>
+      rewrite("Adding the field", (worker) =>
+        worker.addField(field, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  const removeFormField = useCallback(
+    async (name: string) =>
+      rewrite("Removing the field", (worker) =>
+        worker.removeField(name, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** The document's text, in the order on screen. */
   const extractAllText = useCallback(
     async () => run("Extracting text", (worker) => worker.toText(stateRef.current.order)),
@@ -841,6 +859,8 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    addFormField,
+    removeFormField,
     extractAllText,
     crop,
     addWatermark,

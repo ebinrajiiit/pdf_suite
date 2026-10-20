@@ -13,6 +13,7 @@ export type {
   FieldValues,
   FormField,
   FormInfo,
+  NewField,
   OcrAssets,
   EditableText,
   FindRequest,

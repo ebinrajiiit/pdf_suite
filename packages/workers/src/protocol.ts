@@ -8,6 +8,7 @@ import type { EncryptOptions } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
   Annotation,
+  NewField,
   Bookmark,
   Box,
   PageLabelRange,
@@ -66,6 +67,7 @@ export type { EncryptOptions } from "@pdf-suite/core";
 export type {
   AccessibilityIssue,
   Annotation,
+  NewField,
   AnnotRect,
   Bookmark,
   Box,
@@ -212,6 +214,10 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Adds a form field to a page, then reopens the result. */
+    | { kind: "addField"; field: NewField; order: number[]; annotations: Annotation[] }
+    /** Removes a form field by name. */
+    | { kind: "removeField"; name: string; order: number[]; annotations: Annotation[] }
     /** The images on one source page, with where each sits. */
     | { kind: "images"; page: number; order: number[]; annotations: Annotation[] }
     /** Moves, resizes or removes images, then reopens the result. */

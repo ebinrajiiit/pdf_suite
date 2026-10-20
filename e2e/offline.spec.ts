@@ -1008,6 +1008,47 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("builds a fillable form on a blank page, then fills it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "admission.pdf", await textFixture([["Application form"]]));
+
+  await page.getByTestId("tab-form").click();
+  await page.getByTestId("add-field-tool").click();
+
+  // Drag where someone should write their name.
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.move(area.x + 60, area.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 320, area.y + 150, { steps: 5 });
+  await page.mouse.up();
+
+  await expect(page.getByTestId("field-prompt")).toBeVisible();
+  await page.getByTestId("field-name").fill("applicant.name");
+  await page.getByTestId("add-field").click();
+  await expect(page.getByTestId("status")).toHaveText("Added the field applicant.name", {
+    timeout: 30_000,
+  });
+
+  // It is a real field: the Form panel lists it and can fill it.
+  await expect(page.getByTestId("field-list")).toContainText("applicant.name");
+  await page.getByTestId("field-applicant.name").fill("A Student");
+  await page.getByTestId("apply-form").click();
+  await expect(page.getByTestId("status")).toHaveText("Form values written", { timeout: 30_000 });
+
+  // And the value is in the saved file, under the name it was given.
+  const saved = await saveAndRead(page, "Save");
+  expect(await formValuesOf(saved)).toMatchObject({ "applicant.name": "A Student" });
+
+  // Removing it takes the field out again.
+  await page.getByTestId("remove-field-applicant.name").click();
+  await expect(page.getByTestId("status")).toHaveText("Removed the field applicant.name", {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("field-list")).toBeHidden();
+});
+
 test("the marks list filters, searches and sorts by page", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

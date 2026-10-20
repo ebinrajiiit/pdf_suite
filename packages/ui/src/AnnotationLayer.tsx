@@ -17,7 +17,9 @@ export type AnnotationTool =
   /** Marks an area whose content will be removed. Not a PDF annotation. */
   | "redact"
   /** Marks what to keep of the page. Not a PDF annotation either. */
-  | "crop";
+  | "crop"
+  /** Draws a form field where the box is. Not an annotation either. */
+  | "field";
 
 /** Tools drawn by dragging from one point to another, where direction matters. */
 const VECTOR_TOOLS = new Set<AnnotationTool>(["line", "arrow"]);
@@ -33,6 +35,7 @@ const BOX_TOOLS = new Set<AnnotationTool>([
   "circle",
   "redact",
   "crop",
+  "field",
 ]);
 
 /** A CSS colour from an annotation's 0-1 RGB triple. */

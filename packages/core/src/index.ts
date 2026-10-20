@@ -2,8 +2,15 @@ export { merge, reorder, rotate, split } from "./ops.js";
 export type { PageRange, PdfBytes } from "./ops.js";
 export { annotate } from "./annotate.js";
 export type { AnnotColor, Annotation, AnnotRect, InkPoint, MarkupKind } from "./annotate.js";
-export { fillForm, readForm } from "./forms.js";
-export type { FieldKind, FieldValues, FillOptions, FormField, FormInfo } from "./forms.js";
+export { addField, fillForm, readForm, removeField } from "./forms.js";
+export type {
+  FieldKind,
+  FieldValues,
+  FillOptions,
+  FormField,
+  FormInfo,
+  NewField,
+} from "./forms.js";
 export { imagesToPdf, isSupportedImage } from "./images.js";
 export type { ImagesToPdfOptions, PageBox, SourceImage } from "./images.js";
 export { formatNumber, letters, place, roman, stampPages } from "./stamp.js";

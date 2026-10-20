@@ -835,6 +835,46 @@ textarea:focus-visible,
   white-space: nowrap;
 }
 
+/* The fields a form has, while building one. */
+.fieldlist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+}
+.fieldlist li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  background: var(--sunken);
+}
+.fieldlist-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.fieldlist-kind {
+  color: var(--ink-soft);
+}
+.fieldlist button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.fieldlist button:hover {
+  color: var(--danger);
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {
@@ -1221,7 +1261,8 @@ textarea:focus-visible,
 .annots-line,
 .annots-arrow,
 .annots-redact,
-.annots-crop {
+.annots-crop,
+.annots-field {
   pointer-events: auto;
   cursor: crosshair;
 }

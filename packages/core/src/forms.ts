@@ -178,3 +178,77 @@ export async function fillForm(
   if (options.flatten) form.flatten();
   return doc.save();
 }
+
+/** What a new field needs: where it goes, what it is called, and what it is. */
+export interface NewField {
+  /** Source page index. */
+  page: number;
+  /** Fully qualified name. Two fields with one name share a value, which is
+   *  how a form repeats an answer across pages — and how one gets overwritten
+   *  by accident, so a clash is refused rather than silently merged. */
+  name: string;
+  kind: "text" | "checkbox" | "dropdown";
+  /** Box in PDF points, origin at the page's bottom-left. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** For a dropdown. */
+  options?: string[] | undefined;
+  multiline?: boolean | undefined;
+  required?: boolean | undefined;
+}
+
+/**
+ * Adds a field to the document — Acrobat's "Prepare Form", one field at a time.
+ *
+ * Tab order follows the order fields are created, which is what the PDF
+ * specification calls the document's own order and what a reader uses when the
+ * page has no explicit `/Tabs`. Dragging a field into a different place does
+ * not change it, which is worth knowing when building a two-column form.
+ */
+export async function addField(input: PdfBytes, field: NewField): Promise<PdfBytes> {
+  const doc = await PDFDocument.load(input, { updateMetadata: false });
+  const count = doc.getPageCount();
+  if (!Number.isInteger(field.page) || field.page < 0 || field.page >= count) {
+    throw new RangeError(`field page ${field.page} outside a ${count}-page document`);
+  }
+  if (field.name.trim() === "") throw new Error("a field needs a name");
+  if (field.w < 4 || field.h < 4) throw new Error("a field has to be big enough to click");
+
+  const form = doc.getForm();
+  if (form.getFields().some((existing) => existing.getName() === field.name)) {
+    throw new Error(`this document already has a field called ${field.name}`);
+  }
+
+  const page = doc.getPage(field.page);
+  const where = { x: field.x, y: field.y, width: field.w, height: field.h };
+
+  if (field.kind === "text") {
+    const made = form.createTextField(field.name);
+    if (field.multiline) made.enableMultiline();
+    if (field.required) made.enableRequired();
+    made.addToPage(page, where);
+  } else if (field.kind === "checkbox") {
+    const made = form.createCheckBox(field.name);
+    if (field.required) made.enableRequired();
+    made.addToPage(page, where);
+  } else {
+    const made = form.createDropdown(field.name);
+    made.setOptions(field.options ?? []);
+    if (field.required) made.enableRequired();
+    made.addToPage(page, where);
+  }
+
+  return doc.save();
+}
+
+/** Removes a field and the widgets that show it. */
+export async function removeField(input: PdfBytes, name: string): Promise<PdfBytes> {
+  const doc = await PDFDocument.load(input, { updateMetadata: false });
+  const form = doc.getForm();
+  const field = form.getFields().find((one) => one.getName() === name);
+  if (!field) throw new Error(`no field called ${name}`);
+  form.removeField(field);
+  return doc.save();
+}

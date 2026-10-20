@@ -1,9 +1,11 @@
 /// <reference lib="webworker" />
 import {
+  addField,
   annotate,
   createQpdf,
   fillForm,
   readForm,
+  removeField,
   merge,
   reorder,
   imagesToPdf,
@@ -490,6 +492,20 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "addField": {
+      const base = await materialise(id, request.order, request.annotations);
+      const built = await addField(base, request.field);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, built, request) });
+      return;
+    }
+    case "removeField": {
+      const base = await materialise(id, request.order, request.annotations);
+      const without = await removeField(base, request.name);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, without, request) });
       return;
     }
     case "images": {

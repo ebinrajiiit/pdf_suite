@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { expect, test } from "vitest";
-import { fillForm, readForm } from "./forms.js";
+import { describe, expect, test } from "vitest";
+import { addField, fillForm, readForm, removeField } from "./forms.js";
 
 /** A document with one field of each kind we support, across two pages. */
 async function makeForm(): Promise<Uint8Array> {
@@ -129,4 +129,118 @@ test("does not touch the caller's bytes", async () => {
   const before = original.slice();
   await fillForm(original, { "student.name": "x" });
   expect(original).toEqual(before);
+});
+
+describe("building a form", () => {
+  async function blankPages(count = 2): Promise<Uint8Array> {
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < count; i++) doc.addPage([400, 400]);
+    return doc.save();
+  }
+
+  test("adds a text field that can then be filled", async () => {
+    const withField = await addField(await blankPages(), {
+      page: 0,
+      name: "applicant.name",
+      kind: "text",
+      x: 50,
+      y: 300,
+      w: 200,
+      h: 20,
+    });
+
+    const info = await readForm(withField);
+    expect(info.fields.map((field) => field.name)).toEqual(["applicant.name"]);
+    expect(info.fields[0]?.kind).toBe("text");
+    expect(info.fields[0]?.pages).toEqual([0]);
+
+    // And the field it built is one the filling path can write to.
+    const filled = await fillForm(withField, { "applicant.name": "A Student" });
+    expect((await readForm(filled)).fields[0]?.value).toBe("A Student");
+  });
+
+  test("adds checkboxes and dropdowns with their choices", async () => {
+    let bytes = await addField(await blankPages(1), {
+      page: 0,
+      name: "agree",
+      kind: "checkbox",
+      x: 20,
+      y: 100,
+      w: 14,
+      h: 14,
+    });
+    bytes = await addField(bytes, {
+      page: 0,
+      name: "course",
+      kind: "dropdown",
+      x: 20,
+      y: 60,
+      w: 150,
+      h: 20,
+      options: ["MTech", "PhD"],
+    });
+
+    const info = await readForm(bytes);
+    expect(info.fields.map((field) => field.kind).sort()).toEqual(["checkbox", "dropdown"]);
+    expect(info.fields.find((field) => field.name === "course")?.options).toEqual(["MTech", "PhD"]);
+
+    const filled = await fillForm(bytes, { agree: true, course: ["PhD"] });
+    const after = await readForm(filled);
+    expect(after.fields.find((field) => field.name === "agree")?.value).toBe(true);
+    expect(after.fields.find((field) => field.name === "course")?.value).toEqual(["PhD"]);
+  });
+
+  test("a name already in the document is refused, not quietly merged", async () => {
+    const once = await addField(await blankPages(1), {
+      page: 0,
+      name: "roll",
+      kind: "text",
+      x: 10,
+      y: 10,
+      w: 100,
+      h: 20,
+    });
+    await expect(
+      addField(once, { page: 0, name: "roll", kind: "text", x: 10, y: 50, w: 100, h: 20 }),
+    ).rejects.toThrow(/already has a field called roll/);
+  });
+
+  test("refuses a field with no name, no size, or on a page that is not there", async () => {
+    const bytes = await blankPages(1);
+    const box = { x: 10, y: 10, w: 100, h: 20 } as const;
+    await expect(addField(bytes, { page: 0, name: " ", kind: "text", ...box })).rejects.toThrow(
+      /needs a name/,
+    );
+    await expect(
+      addField(bytes, { page: 0, name: "tiny", kind: "text", x: 1, y: 1, w: 2, h: 2 }),
+    ).rejects.toThrow(/big enough to click/);
+    await expect(addField(bytes, { page: 4, name: "far", kind: "text", ...box })).rejects.toThrow(
+      /outside a 1-page document/,
+    );
+  });
+
+  test("removes a field and leaves the others", async () => {
+    let bytes = await addField(await blankPages(1), {
+      page: 0,
+      name: "one",
+      kind: "text",
+      x: 10,
+      y: 10,
+      w: 80,
+      h: 20,
+    });
+    bytes = await addField(bytes, {
+      page: 0,
+      name: "two",
+      kind: "text",
+      x: 10,
+      y: 50,
+      w: 80,
+      h: 20,
+    });
+
+    const after = await removeField(bytes, "one");
+    expect((await readForm(after)).fields.map((field) => field.name)).toEqual(["two"]);
+    await expect(removeField(after, "one")).rejects.toThrow(/no field called one/);
+  });
 });

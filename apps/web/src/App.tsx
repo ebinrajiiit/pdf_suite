@@ -76,6 +76,8 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    addFormField,
+    removeFormField,
     findPattern,
     setBookmarks,
     checkAccessible,
@@ -98,6 +100,17 @@ export function App() {
   const [saved, setSaved] = useState<string | undefined>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [askProtect, setAskProtect] = useState(false);
+  /** Building a form: what kind of field the next drag makes, and its name. */
+  const [fieldKind, setFieldKind] = useState<"text" | "checkbox" | "dropdown">("text");
+  const [fieldChoices, setFieldChoices] = useState("");
+  const [pendingField, setPendingField] = useState<{
+    page: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+
   /** Watermark, and the page labels the viewer's page box shows. */
   const [marking, setMarking] = useState(false);
   const [markText, setMarkText] = useState("DRAFT");
@@ -759,6 +772,10 @@ export function App() {
         return;
       }
       if (shape.kind === "rect") {
+        if (tool === "field") {
+          setPendingField({ page, ...shape.rect });
+          return;
+        }
         if (tool === "crop") {
           // The selection, or every page: cropping one page of a scan is rarely
           // what anyone wants.
@@ -1357,6 +1374,62 @@ export function App() {
         </form>
       ) : null}
 
+      {pendingField && info ? (
+        <form
+          className="prompt"
+          data-testid="field-prompt"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const name = String(new FormData(event.currentTarget).get("fieldName") ?? "").trim();
+            if (name === "") return;
+            const choices = fieldChoices
+              .split(",")
+              .map((choice) => choice.trim())
+              .filter((choice) => choice !== "");
+            void addFormField({
+              ...pendingField,
+              name,
+              kind: fieldKind,
+              ...(fieldKind === "dropdown" ? { options: choices } : {}),
+            }).then((done) => {
+              setPendingField(null);
+              if (done) setSaved(`Added the field ${name}`);
+            });
+          }}
+        >
+          <label htmlFor="fieldName">
+            What is this field called? The name is how its value is read back — applicant.name
+            rather than Field1.
+          </label>
+          <input id="fieldName" name="fieldName" autoFocus data-testid="field-name" />
+          <select
+            aria-label="Kind of field"
+            data-testid="field-kind"
+            value={fieldKind}
+            onChange={(event) => setFieldKind(event.target.value as typeof fieldKind)}
+          >
+            <option value="text">Text</option>
+            <option value="checkbox">Tick box</option>
+            <option value="dropdown">Choose one</option>
+          </select>
+          {fieldKind === "dropdown" ? (
+            <input
+              aria-label="Choices, separated by commas"
+              placeholder="Choices, separated by commas"
+              data-testid="field-choices"
+              value={fieldChoices}
+              onChange={(event) => setFieldChoices(event.target.value)}
+            />
+          ) : null}
+          <button type="submit" className="action action-go" data-testid="add-field">
+            Add the field
+          </button>
+          <button type="button" className="action" onClick={() => setPendingField(null)}>
+            Cancel
+          </button>
+        </form>
+      ) : null}
+
       {marking && info ? (
         <form
           className="prompt hfpanel"
@@ -1927,17 +2000,45 @@ export function App() {
                     if (position >= 0) setGoTo(position);
                   }}
                 />
+                <div className="panel-actions">
+                  {action("Add a field", () => setTool("field"), {
+                    testId: "add-field-tool",
+                    hint: "Then drag on the page where someone should fill something in",
+                  })}
+                  {info.form.fields.length > 0
+                    ? action("Write values", () => void handleForm(false), {
+                        testId: "apply-form",
+                        off: disabled || Object.keys(fieldValues).length === 0,
+                      })
+                    : null}
+                  {info.form.fields.length > 0
+                    ? action("Flatten", () => void handleForm(true), {
+                        testId: "flatten-form",
+                        hint: "Write the values in and remove the fields",
+                      })
+                    : null}
+                </div>
                 {info.form.fields.length > 0 ? (
-                  <div className="panel-actions">
-                    {action("Write values", () => void handleForm(false), {
-                      testId: "apply-form",
-                      off: disabled || Object.keys(fieldValues).length === 0,
-                    })}
-                    {action("Flatten", () => void handleForm(true), {
-                      testId: "flatten-form",
-                      hint: "Write the values in and remove the fields",
-                    })}
-                  </div>
+                  <ul className="fieldlist" data-testid="field-list">
+                    {info.form.fields.map((field) => (
+                      <li key={field.name}>
+                        <span className="fieldlist-name">{field.name}</span>
+                        <span className="fieldlist-kind">{field.kind}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove the field ${field.name}`}
+                          data-testid={`remove-field-${field.name}`}
+                          onClick={() => {
+                            void removeFormField(field.name).then(
+                              (done) => done && setSaved(`Removed the field ${field.name}`),
+                            );
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </div>
             ) : sidebar === "outline" ? (
@@ -2397,6 +2498,7 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   circle: "◯",
   ink: "✎",
   crop: "⌗",
+  field: "▭̲",
   line: "╱",
   arrow: "↗",
   stamp: "▣",
@@ -2414,6 +2516,7 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   circle: "Drag to draw an oval",
   ink: "Draw freehand",
   crop: "Drag the part of the page to keep",
+  field: "Drag where someone should fill something in",
   line: "Drag to draw a line",
   arrow: "Drag to draw an arrow, pointing where you finish",
   stamp: "Click a page to stamp it",
@@ -2431,6 +2534,7 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   circle: "Oval",
   ink: "Draw",
   crop: "Crop",
+  field: "Add a field",
   line: "Line",
   arrow: "Arrow",
   stamp: "Stamp",

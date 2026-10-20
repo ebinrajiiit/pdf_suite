@@ -6,6 +6,7 @@ import {
   type Box,
   type DocumentInfo,
   type EncryptOptions,
+  type NewField,
   type PageLabelRange,
   type WatermarkOptions,
   type FieldValues,
@@ -70,6 +71,10 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** Adds a form field to a page. */
+  addField(field: NewField, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
+  /** Removes a form field by name. */
+  removeField(name: string, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** The images on one source page. */
   images(page: number, order: number[], annotations: Annotation[]): Promise<PageImage[]>;
   /** Moves, resizes or removes images, reopening the document. */
@@ -323,6 +328,12 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async addField(field, order, annotations) {
+      return expect(await send({ kind: "addField", field, order, annotations }), "document").info;
+    },
+    async removeField(name, order, annotations) {
+      return expect(await send({ kind: "removeField", name, order, annotations }), "document").info;
     },
     async images(page, order, annotations) {
       return expect(await send({ kind: "images", page, order, annotations }), "pageImages").images;
