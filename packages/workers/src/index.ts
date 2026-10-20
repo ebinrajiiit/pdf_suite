@@ -2,6 +2,7 @@ export { createPdfWorker, createPdfWorkerClient } from "./client.js";
 export type { OnProgress, PdfWorkerClient } from "./client.js";
 export { CancelledError } from "./protocol.js";
 export type {
+  Bookmark,
   DocumentInfo,
   DocumentProperties,
   FieldValues,
@@ -11,6 +12,8 @@ export type {
   EditableText,
   FindRequest,
   Found,
+  ImageEdit,
+  PageImage,
   PatternName,
   RedactArea,
   SanitiseOptions,

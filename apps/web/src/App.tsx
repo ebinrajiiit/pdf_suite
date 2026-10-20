@@ -10,16 +10,22 @@ import {
   type AnnotationTool,
   type Highlight,
   type PlacedShape,
+  addBookmark,
   ContextMenu,
+  moveAt,
+  removeAt,
+  renameAt,
   SignaturePad,
   type MenuItem,
   type TextEditCommit,
 } from "@pdf-suite/ui";
-import type { NumberFormat, Slots } from "@pdf-suite/workers";
+import type { Bookmark, NumberFormat, Slots } from "@pdf-suite/workers";
+import type { OutlineItem } from "@pdf-suite/engine";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
 import type {
   EditableText,
   Found,
+  PageImage,
   PatternName,
   SanitiseReport,
   SearchHit,
@@ -57,12 +63,15 @@ export function App() {
     redact,
     editableText,
     editText,
+    pageImages,
+    editImages,
     addAnnotation,
     removeAnnotation,
     clearAnnotations,
     stamp,
     describe,
     findPattern,
+    setBookmarks,
     findHidden,
     sanitise,
     pageText,
@@ -125,6 +134,9 @@ export function App() {
   const [tool, setTool] = useState<AnnotationTool | undefined>();
   /** Edit-text mode, which is a different thing from the annotation tools. */
   const [editingText, setEditingText] = useState(false);
+  /** Edit-picture mode, which is the other half of editing a page. */
+  const [editingImages, setEditingImages] = useState(false);
+  const [imagesByPage, setImagesByPage] = useState<Map<number, PageImage[]>>(new Map());
   const [editRuns, setEditRuns] = useState<Map<number, EditableText[]>>(new Map());
   /** Extracted text per page, for the selectable layer over the canvas. */
   const [textRuns, setTextRuns] = useState<Map<number, TextRun[]>>(new Map());
@@ -150,6 +162,8 @@ export function App() {
   const [truncated, setTruncated] = useState(false);
   /** Display position to jump to, from a bookmark click. */
   const [goTo, setGoTo] = useState<number | undefined>();
+  /** The page the reader is looking at, as a display position. */
+  const [firstVisible, setFirstVisible] = useState(0);
 
   const info = state.info;
   const pageCount = state.order.length;
@@ -184,6 +198,7 @@ export function App() {
     setFieldValues({});
     setEditRuns(new Map());
     setTextRuns(new Map());
+    setImagesByPage(new Map());
     setRedactions(new Map());
     setSelected(new Set());
     setHits([]);
@@ -398,6 +413,26 @@ export function App() {
           }). Do not share this file.`,
     );
   }, [foundToRedact, redact]);
+
+  /**
+   * Bookmark edits write the whole tree back, which is also what makes them
+   * undoable: it is one document change, like any other.
+   */
+  const editBookmarks = useCallback(
+    async (next: OutlineItem[]) => {
+      const written = await setBookmarks(
+        next.map(function strip(item): Bookmark {
+          return {
+            title: item.title,
+            page: item.page,
+            children: item.children.map(strip),
+          };
+        }),
+      );
+      if (written) setSaved("Bookmarks saved");
+    },
+    [setBookmarks],
+  );
 
   /** Opens the panel with a report of what is actually in this document. */
   const handleInspect = useCallback(async () => {
@@ -780,6 +815,42 @@ export function App() {
       });
     },
     [pageText],
+  );
+
+  /** Reads a page's pictures once, when it first comes into view. */
+  const needImages = useCallback(
+    (page: number) => {
+      setImagesByPage((current) => {
+        if (current.has(page)) return current;
+        const next = new Map(current);
+        next.set(page, []);
+        void pageImages(page).then((found) =>
+          setImagesByPage((later) => new Map(later).set(page, found)),
+        );
+        return next;
+      });
+    },
+    [pageImages],
+  );
+
+  const handlePlaceImage = useCallback(
+    async (page: number, index: number, box: { x: number; y: number; w: number; h: number }) => {
+      const result = await editImages([{ page, index, action: "place", ...box }]);
+      if (!result) return;
+      setImagesByPage(new Map());
+      setSaved(result.rejected[0]?.reason ?? "Picture moved");
+    },
+    [editImages],
+  );
+
+  const handleRemoveImage = useCallback(
+    async (page: number, index: number) => {
+      const result = await editImages([{ page, index, action: "remove" }]);
+      if (!result) return;
+      setImagesByPage(new Map());
+      setSaved(result.rejected[0]?.reason ?? "Picture removed");
+    },
+    [editImages],
   );
 
   /** Reads a page's editable runs once, when it first comes into view. */
@@ -1533,13 +1604,35 @@ export function App() {
                 ) : null}
               </div>
             ) : sidebar === "outline" ? (
-              <Outline
-                items={info.outline}
-                onGo={(page) => {
-                  const position = state.order.indexOf(page);
-                  if (position >= 0) setGoTo(position);
-                }}
-              />
+              <div className="outline-panel">
+                <div className="action-row">
+                  {action(
+                    "Add a bookmark here",
+                    () => {
+                      const page = state.order[Math.min(firstVisible, state.order.length - 1)] ?? 0;
+                      void editBookmarks(
+                        addBookmark(info.outline, `Page ${firstVisible + 1}`, page),
+                      );
+                    },
+                    {
+                      testId: "add-bookmark",
+                      hint: "Adds a bookmark pointing at the page you are looking at",
+                    },
+                  )}
+                </div>
+                <Outline
+                  items={info.outline}
+                  onGo={(page) => {
+                    const position = state.order.indexOf(page);
+                    if (position >= 0) setGoTo(position);
+                  }}
+                  onRename={(path, title) =>
+                    void editBookmarks(renameAt(info.outline, path, title))
+                  }
+                  onRemove={(path) => void editBookmarks(removeAt(info.outline, path))}
+                  onMove={(path, by) => void editBookmarks(moveAt(info.outline, path, by))}
+                />
+              </div>
             ) : (
               <Thumbnails
                 order={state.order}
@@ -1577,6 +1670,12 @@ export function App() {
               onPageMenu={openMenu}
               text={textRuns}
               onNeedText={needText}
+              onVisible={setFirstVisible}
+              editingImages={editingImages}
+              images={imagesByPage}
+              onNeedImages={needImages}
+              onPlaceImage={(page, index, box) => void handlePlaceImage(page, index, box)}
+              onRemoveImage={(page, index) => void handleRemoveImage(page, index)}
             />
           </div>
 
@@ -1591,6 +1690,7 @@ export function App() {
                 data-testid="edit-text"
                 onClick={() => {
                   setEditingText((on) => !on);
+                  setEditingImages(false);
                   setTool(undefined);
                   setEditRuns(new Map());
                 }}
@@ -1607,6 +1707,34 @@ export function App() {
                 <p className="tool-hint" data-testid="edit-caveat">
                   Changes the words in the document itself. A paragraph re-wraps to its own width; a
                   character the embedded font lacks is set in Helvetica instead.
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                className={editingImages ? "edit-toggle edit-toggle-on" : "edit-toggle"}
+                aria-pressed={editingImages}
+                disabled={disabled}
+                data-testid="edit-images"
+                onClick={() => {
+                  setEditingImages((on) => !on);
+                  setEditingText(false);
+                  setTool(undefined);
+                  setImagesByPage(new Map());
+                }}
+              >
+                <span className="tool-icon" aria-hidden="true">
+                  ▨
+                </span>
+                <span>
+                  <strong>Edit pictures</strong>
+                  <small>Drag a picture to move it, its corner to resize it</small>
+                </span>
+              </button>
+              {editingImages ? (
+                <p className="tool-hint" data-testid="image-caveat">
+                  Moves and resizes the picture where it sits, without touching the picture itself.
+                  A rotated one straightens when it is moved.
                 </p>
               ) : null}
             </section>
@@ -1815,6 +1943,11 @@ export function App() {
       ) : null}
 
       <footer className="statusbar">
+        {info ? (
+          <span className="pagebox" data-testid="page-box">
+            Page {Math.min(firstVisible + 1, pageCount)} of {pageCount}
+          </span>
+        ) : null}
         {info ? (
           <div className="zoom" role="group" aria-label="Zoom">
             <button

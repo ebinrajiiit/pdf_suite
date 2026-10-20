@@ -581,11 +581,13 @@ test("shows the document's bookmarks and jumps to one", async ({ page }) => {
 
   await page.getByTestId("tab-outline").click();
   await expect(page.getByTestId("outline")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Chapter Two" })).toBeVisible();
+  // Addressed by position: each row also carries rename, move and remove
+  // buttons whose labels name the bookmark too.
+  await expect(page.getByTestId("bookmark-1")).toContainText("Chapter Two");
 
   // Clicking a bookmark scrolls the viewer to that page.
   const before = await page.getByTestId("viewer").evaluate((el) => el.scrollTop);
-  await page.getByRole("button", { name: "Chapter Three" }).click();
+  await page.getByTestId("bookmark-2").click();
   await expect
     .poll(() => page.getByTestId("viewer").evaluate((el) => el.scrollTop))
     .toBeGreaterThan(before);
@@ -1005,6 +1007,86 @@ async function hasColouredInk(page: Page): Promise<boolean> {
     return false;
   });
 }
+
+test("a picture can be moved and removed, in the document itself", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A page with two pictures on it.
+  const doc = await PDFDocument.create();
+  const sheet = doc.addPage([400, 400]);
+  const png = await doc.embedPng(tinyPng(2, 2));
+  sheet.drawImage(png, { x: 50, y: 280, width: 80, height: 60 });
+  sheet.drawImage(png, { x: 220, y: 80, width: 50, height: 50 });
+  await openFixture(page, "poster.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-images").click();
+  const first = page.getByTestId("image-0");
+  await expect(first).toBeVisible({ timeout: 30_000 });
+  const before = (await first.boundingBox())!;
+
+  // Dragged across the page.
+  await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(before.x + before.width / 2 + 90, before.y + before.height / 2 + 40, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect(page.getByTestId("status")).toHaveText("Picture moved", { timeout: 30_000 });
+
+  const after = (await page.getByTestId("image-0").boundingBox())!;
+  expect(after.x).toBeGreaterThan(before.x + 40);
+  expect(after.y).toBeGreaterThan(before.y + 10);
+  // Same picture, same size: moving must not rescale it.
+  expect(Math.round(after.width)).toBe(Math.round(before.width));
+
+  // And removed, leaving the other one.
+  await page.getByTestId("image-0").click();
+  await page.getByTestId("image-remove-0").click();
+  await expect(page.getByTestId("status")).toHaveText("Picture removed", { timeout: 30_000 });
+  await expect(page.getByTestId("image-1")).toBeHidden();
+  await expect(page.getByTestId("image-0")).toBeVisible();
+});
+
+test("bookmarks can be added, renamed, moved and removed", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "report.pdf", await textFixture([["One"], ["Two"], ["Three"]]));
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.getByTestId("tab-outline").click();
+  await expect(page.getByTestId("outline-empty")).toBeVisible();
+
+  // Added for the page being read, which is the first one.
+  await page.getByTestId("add-bookmark").click();
+  await expect(page.getByTestId("status")).toHaveText("Bookmarks saved", { timeout: 30_000 });
+  await expect(page.getByTestId("bookmark-0")).toContainText("Page 1");
+
+  // Renamed in place.
+  await page.getByTestId("bookmark-edit-0").click();
+  await page.getByTestId("bookmark-rename-0").fill("Introduction");
+  await page.getByTestId("bookmark-rename-0").press("Enter");
+  await expect(page.getByTestId("bookmark-0")).toContainText("Introduction", { timeout: 30_000 });
+
+  // A second one, then moved above the first.
+  await page.getByTestId("add-bookmark").click();
+  await expect(page.getByTestId("bookmark-1")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Move Page 1 up/ }).click();
+  await expect(page.getByTestId("bookmark-1")).toContainText("Introduction", { timeout: 30_000 });
+
+  // Saved into the file, where another reader will find them.
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  expect(doc.catalog.get(PDFName.of("Outlines"))).toBeDefined();
+
+  // And removable.
+  await page.getByTestId("bookmark-remove-1").click();
+  await expect(page.getByTestId("status")).toHaveText("Bookmarks saved", { timeout: 30_000 });
+  await expect(page.getByTestId("bookmark-1")).toBeHidden();
+});
 
 test("says what the document is carrying unseen, and takes it out", async ({ page }) => {
   await withoutFilePickers(page);

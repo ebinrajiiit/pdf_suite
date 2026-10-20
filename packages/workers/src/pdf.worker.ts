@@ -9,6 +9,7 @@ import {
   imagesToPdf,
   findHidden,
   readProperties,
+  setOutline,
   rotate,
   sanitise,
   setProperties,
@@ -467,6 +468,26 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
       return;
     }
+    case "images": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "pageImages", images: await engine.images(base, request.page) });
+      return;
+    }
+    case "editImages": {
+      if (!engine) throw new Error("worker not initialised");
+      const base = await materialise(id, request.order, request.annotations);
+      const result = await engine.editImages(base, request.edits);
+      throwIfCancelled(id);
+      post({
+        id,
+        kind: "imagesEdited",
+        info: await openBytes(id, result.bytes, request),
+        applied: result.applied,
+        rejected: result.rejected,
+      });
+      return;
+    }
     case "editableText": {
       if (!engine) throw new Error("worker not initialised");
       // Read from the document as it will be written, so run indices line up
@@ -489,6 +510,15 @@ async function handle(request: WorkerRequest): Promise<void> {
         addedLines: result.addedLines,
         rejected: result.rejected,
       });
+      return;
+    }
+    case "setOutline": {
+      const base = await materialise(id, request.order, request.annotations);
+      // Bookmark pages are display positions, like everything else the UI
+      // sends, and materialising has just made those the document's own.
+      const marked = await setOutline(base, request.bookmarks);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, marked, request) });
       return;
     }
     case "findHidden": {

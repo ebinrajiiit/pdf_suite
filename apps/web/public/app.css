@@ -667,6 +667,104 @@ textarea:focus-visible,
   flex-wrap: wrap;
 }
 
+/* Which page is being read, and the bookmark panel's own actions. */
+.pagebox {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.outline-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.outline-page {
+  margin-left: 0.4rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8em;
+}
+.outline-actions {
+  display: flex;
+  gap: 0.1rem;
+  margin-left: auto;
+  opacity: 0;
+}
+.outline-row:hover .outline-actions,
+.outline-row:focus-within .outline-actions {
+  opacity: 1;
+}
+.outline-actions button {
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.outline-actions button:hover:not(:disabled) {
+  background: var(--sunken);
+  color: inherit;
+}
+.outline-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.outline-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+}
+
+/* Pictures on the page, while editing them. */
+.imagelayer {
+  position: absolute;
+  inset: 0;
+}
+.imagebox {
+  position: absolute;
+  border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  cursor: move;
+  touch-action: none;
+}
+.imagebox-on {
+  border-style: solid;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.imagebox-remove {
+  position: absolute;
+  top: -0.7rem;
+  right: -0.7rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--danger);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.imagebox-handle {
+  position: absolute;
+  right: -0.4rem;
+  bottom: -0.4rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid var(--panel);
+  border-radius: 2px;
+  background: var(--accent);
+  cursor: nwse-resize;
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {

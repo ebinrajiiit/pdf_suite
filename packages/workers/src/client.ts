@@ -1,12 +1,16 @@
 import {
   CancelledError,
   type Annotation,
+  type Bookmark,
   type DocumentInfo,
   type FieldValues,
   type OcrAssets,
   type EditableText,
   type FindRequest,
   type Found,
+  type ImageEdit,
+  type ImageEditResult,
+  type PageImage,
   type RedactArea,
   type RedactionResult,
   type TextEdit,
@@ -61,6 +65,14 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** The images on one source page. */
+  images(page: number, order: number[], annotations: Annotation[]): Promise<PageImage[]>;
+  /** Moves, resizes or removes images, reopening the document. */
+  editImages(
+    edits: ImageEdit[],
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<{ info: DocumentInfo; applied: number; rejected: ImageEditResult["rejected"] }>;
   /** The paragraphs on one source page that can be edited in place. */
   editableText(page: number, order: number[], annotations: Annotation[]): Promise<EditableText[]>;
   /**
@@ -101,6 +113,12 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<{ info: DocumentInfo; order: number[]; annotations: Annotation[] }>;
+  /** Replaces the document's bookmarks. */
+  setOutline(
+    bookmarks: Bookmark[],
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
   /** Reports what the document carries but does not show, changing nothing. */
   findHidden(order: number[], annotations: Annotation[]): Promise<SanitiseReport>;
   /** Removes it, and says what went. */
@@ -268,6 +286,16 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         "document",
       ).info;
     },
+    async images(page, order, annotations) {
+      return expect(await send({ kind: "images", page, order, annotations }), "pageImages").images;
+    },
+    async editImages(edits, order, annotations) {
+      const reply = expect(
+        await send({ kind: "editImages", edits, order, annotations }),
+        "imagesEdited",
+      );
+      return { info: reply.info, applied: reply.applied, rejected: reply.rejected };
+    },
     async editableText(page, order, annotations) {
       return expect(await send({ kind: "editableText", page, order, annotations }), "editable")
         .runs;
@@ -298,6 +326,10 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     async redo(order, annotations) {
       const reply = expect(await send({ kind: "redo", order, annotations }), "restored");
       return { info: reply.info, order: reply.order, annotations: reply.annotations };
+    },
+    async setOutline(bookmarks, order, annotations) {
+      return expect(await send({ kind: "setOutline", bookmarks, order, annotations }), "document")
+        .info;
     },
     async findHidden(order, annotations) {
       return expect(await send({ kind: "findHidden", order, annotations }), "hidden").report;

@@ -3,7 +3,8 @@ import type { Annotation } from "@pdf-suite/core";
 import { AnnotationLayer, type AnnotationTool, type PlacedShape } from "./AnnotationLayer.js";
 import { TextEditLayer, type TextEditCommit } from "./TextEditLayer.js";
 import { TextLayer } from "./TextLayer.js";
-import type { EditableText } from "@pdf-suite/engine/pdfium";
+import { ImageEditLayer } from "./ImageEditLayer.js";
+import type { EditableText, PageImage } from "@pdf-suite/engine/pdfium";
 import type { TextRun } from "@pdf-suite/engine";
 import { PageCanvas } from "./PageCanvas.js";
 import { useVisibleRange } from "./use-visible-range.js";
@@ -66,6 +67,16 @@ export interface ViewerProps {
   text?: ReadonlyMap<number, TextRun[]> | undefined;
   /** Asked for the text of a page that has come into view. */
   onNeedText?: ((page: number) => void) | undefined;
+  /** The first page now in view, as a display position. */
+  onVisible?: ((position: number) => void) | undefined;
+  /** Editing pictures: the images per source page, and what to do with them. */
+  editingImages?: boolean | undefined;
+  images?: ReadonlyMap<number, PageImage[]> | undefined;
+  onNeedImages?: ((page: number) => void) | undefined;
+  onPlaceImage?:
+    | ((page: number, index: number, box: { x: number; y: number; w: number; h: number }) => void)
+    | undefined;
+  onRemoveImage?: ((page: number, index: number) => void) | undefined;
 }
 
 const GAP = 16;
@@ -97,6 +108,12 @@ export function Viewer({
   onPageMenu,
   text,
   onNeedText,
+  onVisible,
+  editingImages,
+  images,
+  onNeedImages,
+  onPlaceImage,
+  onRemoveImage,
 }: ViewerProps) {
   const widest = useMemo(
     () => Math.max(1, ...order.map((page) => pageSizes[page]?.width ?? 0)),
@@ -153,6 +170,20 @@ export function Viewer({
     }
   }, [editing, editableText, layout.boxes, onNeedEditableText, range.end, range.start]);
 
+  // Which page the reader is looking at, for the page box and for anything
+  // that acts on "this page".
+  useEffect(() => {
+    onVisible?.(range.start);
+  }, [onVisible, range.start]);
+
+  // Editing pictures needs the pictures of the pages on screen, read once each.
+  useEffect(() => {
+    if (!editingImages || !onNeedImages) return;
+    for (const box of layout.boxes.slice(range.start, range.end + 1)) {
+      if (!images?.has(box.page)) onNeedImages(box.page);
+    }
+  }, [editingImages, images, layout.boxes, onNeedImages, range.end, range.start]);
+
   // Selecting text needs the text of the pages on screen, read once each.
   useEffect(() => {
     if (!onNeedText) return;
@@ -201,6 +232,16 @@ export function Viewer({
               scale={scale}
               runs={text?.get(box.page)}
             />
+            {editingImages ? (
+              <ImageEditLayer
+                page={box.page}
+                pageHeight={pageSizes[box.page]?.height ?? 792}
+                scale={scale}
+                images={images?.get(box.page)}
+                onPlace={(page, index, area) => onPlaceImage?.(page, index, area)}
+                onRemove={(page, index) => onRemoveImage?.(page, index)}
+              />
+            ) : null}
             {editing ? (
               <TextEditLayer
                 page={box.page}

@@ -6,6 +6,7 @@
 
 import type {
   Annotation,
+  Bookmark,
   DocumentProperties,
   SanitiseOptions,
   SanitiseReport,
@@ -17,6 +18,9 @@ import type { OutlineItem, TextRun } from "@pdf-suite/engine";
 import type {
   EditableText,
   FindRequest,
+  ImageEdit,
+  ImageEditResult,
+  PageImage,
   Found,
   RedactArea,
   RedactionResult,
@@ -56,6 +60,7 @@ export interface DocumentInfo {
 export type {
   Annotation,
   AnnotRect,
+  Bookmark,
   DocumentProperties,
   SanitiseOptions,
   SanitiseReport,
@@ -71,6 +76,9 @@ export type {
   EditableText,
   FindRequest,
   Found,
+  ImageEdit,
+  ImageEditResult,
+  PageImage,
   PatternName,
   RedactArea,
   RedactRect,
@@ -142,6 +150,8 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Replaces the document's bookmarks with the tree given. */
+    | { kind: "setOutline"; bookmarks: Bookmark[]; order: number[]; annotations: Annotation[] }
     /** Reports what is hidden in the document, changing nothing. */
     | { kind: "findHidden"; order: number[]; annotations: Annotation[] }
     /** Recompresses the document, reopening the result. */
@@ -157,6 +167,10 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** The images on one source page, with where each sits. */
+    | { kind: "images"; page: number; order: number[]; annotations: Annotation[] }
+    /** Moves, resizes or removes images, then reopens the result. */
+    | { kind: "editImages"; edits: ImageEdit[]; order: number[]; annotations: Annotation[] }
     /** The paragraphs on one source page that can be edited in place. */
     | { kind: "editableText"; page: number; order: number[]; annotations: Annotation[] }
     /** Replaces the text of the named paragraphs, re-wrapping each one. */
@@ -226,6 +240,13 @@ export type WorkerResponse = { id: number } & (
   | { kind: "hits"; hits: SearchHit[]; truncated: boolean }
   | { kind: "runs"; runs: TextRun[] }
   | { kind: "editable"; runs: EditableText[] }
+  | { kind: "pageImages"; images: PageImage[] }
+  | {
+      kind: "imagesEdited";
+      info: DocumentInfo;
+      applied: number;
+      rejected: ImageEditResult["rejected"];
+    }
   | { kind: "found"; found: Found }
   | { kind: "hidden"; report: SanitiseReport }
   | { kind: "sanitised"; info: DocumentInfo; removed: SanitiseReport; wasClean: boolean }
@@ -269,6 +290,8 @@ export type TerminalResponse = Extract<
       | "hits"
       | "runs"
       | "editable"
+      | "pageImages"
+      | "imagesEdited"
       | "found"
       | "hidden"
       | "sanitised"

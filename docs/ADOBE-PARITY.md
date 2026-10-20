@@ -82,11 +82,11 @@ What an Acrobat user would miss before anything subtle:
 | --- | --- | --- |
 | ~~Print~~ | **Done.** ⌘P opens the document, marks and all, in the browser's own PDF viewer — vector, not a rasterised copy. The desktop shell has no print dialog in its webview, so it hands the file to the system viewer instead | |
 | ~~Select and copy text~~ | **Done.** A transparent text layer over each page, laid out from the runs the engine extracts, so selection, copy and the browser's own find all work on real text | |
-| **Edit images in place** | "Edit PDF" moves, resizes, replaces and deletes images too; here only text | PDFium exposes image objects the same way it exposes text ones. The matrix work is done (text reflow uses it) |
+| ~~Edit images in place~~ | **Mostly done.** Drag to move, corner to resize, button to remove. Replacing the picture inside a frame is still missing | |
 | ~~A signature you can draw~~ | **Done.** Draw it once, kept in this browser only, then click any page to place it. A drawn mark, not a digital signature | |
 | ~~Lines and arrows~~ | **Done**, with generated appearance streams — verified by rendering, not just by writing the dictionary | |
 | ~~Stamps~~ | **Done**: eight labels, drawn into an appearance stream. Dynamic stamps (name, date) would be template text on the same machinery | |
-| **Bookmarks you can edit** | The panel reads them; it cannot add, rename, reorder or point one somewhere | Writing the `/Outlines` tree. pdf-lib has no helper, so it is raw dictionary work |
+| ~~Bookmarks you can edit~~ | **Done.** Add one for the page you are reading, rename it in place, move it among its siblings, remove it with its branch | |
 | ~~Document properties~~ | **Done.** ⌘D reads and rewrites title, author, subject and keywords. XMP is still untouched | |
 
 ### Create
@@ -106,7 +106,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Edit text | Done, with paragraph reflow and font substitution |
-| Edit images | Missing — see above |
+| Edit images | Move, resize and remove: done. Replacing a picture, cropping one, and rotating or flipping it are missing |
 | Add a new paragraph in the document's own font | Missing. A text annotation is not the same thing |
 | Crop pages | Missing. `/CropBox` per page, with a dialog and a drag handle |
 | Watermark and background | Missing. The stamping engine built for headers and footers is most of it: it already measures, places and rotates text. Images and opacity are the new parts |
@@ -115,7 +115,7 @@ What an Acrobat user would miss before anything subtle:
 | Rotate, reorder, insert, extract, delete, split | Done |
 | Replace pages | Missing, though it is delete + insert |
 | Links | Missing entirely: no creating, editing or following. Link annotations are also how a table of contents works |
-| Bookmarks | Read-only — see above |
+| Bookmarks | Add, rename, move and remove, written as a real `/Outlines` tree. Nesting an existing bookmark under another is still missing |
 | Named destinations | Missing |
 | Attachments (embedded files) | Missing |
 | Layers (OCG) | Missing: no panel, no toggling, no flattening |
@@ -226,7 +226,7 @@ come from the same work.
 | Action Wizard (batch) | Missing. Phase 4 covers the institutional version: grade cards from a template and a CSV |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
-| View modes: single page, two-up, facing, full screen, split | Missing — continuous scroll and zoom only |
+| View modes: single page, two-up, facing, full screen, split | Missing — continuous scroll and zoom only, though the status bar now says which page is being read |
 | Print: booklets, posters, scaling, print comments, print a range | Missing — printing hands the whole document to the platform's viewer, which brings its own dialog |
 | Snapshot tool, rulers, guides, grid | Missing |
 | Geospatial PDF | Missing |

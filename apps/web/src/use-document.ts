@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
+  Bookmark,
   DocumentProperties,
   EditableText,
   FindRequest,
   Found,
+  ImageEdit,
+  PageImage,
   SanitiseOptions,
   SanitiseReport,
   RedactArea,
@@ -617,6 +620,60 @@ export function useDocument() {
     [run],
   );
 
+  /** The images on a page, with where each one sits. */
+  const pageImages = useCallback(async (page: number): Promise<PageImage[]> => {
+    const worker = client.current;
+    if (!worker) return [];
+    try {
+      return await worker.images(page, stateRef.current.order, stateRef.current.annotations);
+    } catch {
+      // A page whose images cannot be read simply has none to edit.
+      return [];
+    }
+  }, []);
+
+  /** Moves, resizes or removes images, rewriting the document. */
+  const editImages = useCallback(
+    async (edits: ImageEdit[]) => {
+      const result = await run("Editing the picture", (worker) =>
+        worker.editImages(edits, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!result) return undefined;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info: result.info,
+        order: result.info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return result;
+    },
+    [run],
+  );
+
+  /** Replaces the document's bookmarks with the tree given. */
+  const setBookmarks = useCallback(
+    async (bookmarks: Bookmark[]) => {
+      const info = await run("Saving bookmarks", (worker) =>
+        worker.setOutline(bookmarks, stateRef.current.order, stateRef.current.annotations),
+      );
+      if (!info) return false;
+      setDocVersion((v) => v + 1);
+      setState((s) => ({
+        ...s,
+        info,
+        order: info.pageSizes.map((_, i) => i),
+        annotations: [],
+        handle: undefined,
+        path: undefined,
+      }));
+      return true;
+    },
+    [run],
+  );
+
   /** What the document carries but does not show. Changes nothing. */
   const findHidden = useCallback(
     async (): Promise<SanitiseReport | undefined> =>
@@ -693,9 +750,12 @@ export function useDocument() {
     redact,
     editableText,
     editText,
+    pageImages,
+    editImages,
     stamp,
     describe,
     findPattern,
+    setBookmarks,
     findHidden,
     sanitise,
     addAnnotation,

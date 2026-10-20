@@ -2,6 +2,13 @@ import { init, type WrappedPdfiumModule } from "@embedpdf/pdfium";
 import { redactWithPdfium, saveCopy, type RedactArea, type RedactionResult } from "./redact.js";
 import { findPattern, type FindRequest, type Found } from "./find.js";
 import {
+  applyImageEdits,
+  listImages,
+  type ImageEdit,
+  type ImageEditResult,
+  type PageImage,
+} from "./image-edit.js";
+import {
   applyTextEdits,
   listEditableText,
   type EditableText,
@@ -252,6 +259,7 @@ function lastError(m: WrappedPdfiumModule): string {
 
 export type { RedactArea, RedactionResult, RedactRect } from "./redact.js";
 export { PATTERNS } from "./find.js";
+export type { ImageEdit, ImageEditResult, PageImage } from "./image-edit.js";
 export type { FindRequest, Found, PatternName } from "./find.js";
 export type { EditableText, TextEdit, TextEditResult } from "./text-edit.js";
 export { STANDARD_FONTS } from "./text-edit.js";
@@ -279,6 +287,10 @@ export type PdfiumEngine = PdfEngine & {
    * not from the whole-line runs search highlights with.
    */
   findPattern(bytes: Uint8Array, request: FindRequest): Promise<Found>;
+  /** The images on a page, with where each one sits. */
+  images(bytes: Uint8Array, page: number): Promise<PageImage[]>;
+  /** Moves, resizes or removes images, and returns the new document. */
+  editImages(bytes: Uint8Array, edits: ImageEdit[]): Promise<ImageEditResult>;
 };
 
 export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<PdfiumEngine> {
@@ -327,6 +339,14 @@ export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<Pdf
     wasmHeapBytes: () => m.pdfium.HEAPU8.byteLength,
 
     redact: (bytes, areas) => redactWithPdfium(m, bytes, areas, textOf),
+
+    images: async (bytes, page) => withDocument(bytes, (doc) => listImages(m, doc, page)),
+
+    editImages: async (bytes, edits) =>
+      withDocument(bytes, (doc) => {
+        const heap = { malloc: m.pdfium.wasmExports.malloc, free: m.pdfium.wasmExports.free };
+        return applyImageEdits(m, doc, edits, () => saveCopy(m, doc, heap.malloc, heap.free));
+      }),
 
     findPattern: async (bytes, request) =>
       withDocument(bytes, (doc) => findPattern(m, doc, m.FPDF_GetPageCount(doc), request)),
