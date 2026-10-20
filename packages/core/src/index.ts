@@ -1,6 +1,8 @@
 export { merge, reorder, rotate, split } from "./ops.js";
 export type { PageRange, PdfBytes } from "./ops.js";
 export { annotate } from "./annotate.js";
+export { deleteAnnotation, readAnnotations } from "./read-annots.js";
+export type { ExistingAnnotation } from "./read-annots.js";
 export type { AnnotColor, Annotation, AnnotRect, InkPoint, MarkupKind } from "./annotate.js";
 export { addField, fillForm, readForm, removeField } from "./forms.js";
 export type {

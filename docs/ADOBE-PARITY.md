@@ -50,7 +50,7 @@ text, and the tools panel hides below 980 px instead of collapsing to icons.
 | Organize pages | Reorder (drag or keyboard), rotate, delete, extract, split |
 | Comment: highlight, underline, strike-through, sticky note, text box | All five, written as real PDF annotations |
 | Drawing markup: freehand, rectangle, oval | Ink, Square and Circle, with a colour palette |
-| Comments list | Marks panel: every annotation with its page, click to jump or remove |
+| Comments list | Marks panel: the document's own marks and the ones placed here, with author, searchable and removable |
 | Protect with a password | AES-256 via qpdf; protection survives editing and saving |
 | Reduce file size | Recompress via qpdf |
 | Scan to searchable PDF | Tesseract OCR with an invisible text layer |
@@ -148,7 +148,7 @@ What an Acrobat user would miss before anything subtle:
 | Attach a file or audio as a comment | Missing |
 | Comment opacity, default properties, author name | Colour only |
 | Replies, status (accepted, rejected, completed), resolved | Missing — `/IRT` and `/RT` |
-| Comment list: filter, sort, search | Done: by kind, by text, and in page order. A printed summary is missing |
+| Comment list: filter, sort, search | Done: by kind, by text and in page order, over both the document's own marks and the unsaved ones. A printed summary is missing |
 | Import/export comments (FDF, XFDF) | Missing, and worth having: it is how review happens without a server, which fits this product exactly |
 | Shared review, Send for comment | Will not do — it uploads |
 | Measuring tools (distance, perimeter, area, scale, snap) | Missing. Engineering and architecture drawings need these |

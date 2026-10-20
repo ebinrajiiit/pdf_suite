@@ -701,6 +701,15 @@ export function useDocument() {
     [run],
   );
 
+  /** Removes a mark the document already carried. */
+  const deleteMark = useCallback(
+    async (page: number, index: number) =>
+      rewrite("Removing the mark", (worker) =>
+        worker.deleteMark(page, index, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** Compares another document with this one. Changes nothing. */
   const compare = useCallback(
     async (other: ArrayBuffer): Promise<DocumentDiff | undefined> =>
@@ -905,6 +914,7 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    deleteMark,
     compare,
     attachments,
     attach,

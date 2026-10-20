@@ -916,6 +916,15 @@ textarea:focus-visible,
   background: color-mix(in srgb, #2a8a4a 18%, transparent);
 }
 
+/* Marks the document arrived with, as against ones placed here. */
+.comment-theirs {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.comment-author {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
 /* ---------- right-click menu ---------- */
 
 .menu {

@@ -72,6 +72,16 @@ export declare function rotate(input: PdfBytes, pages: number[], degrees: 90 | 1
 - Optional local settings (theme, recent files list) in IndexedDB, opt-in, clearable from Settings.
 - PWA cache holds only the app's own code, WASM and language packs, never documents.
 
+## Running one e2e test
+
+`pnpm e2e` builds the app and starts `vite preview` before the tests. Running a
+single test with `pnpm exec playwright test -g "..."` reuses a preview that is
+already running (`reuseExistingServer` in `playwright.config.ts`), and that
+server serves whatever was built last — so a targeted run can test code from
+twenty minutes ago, and fail or pass for no reason visible in the diff.
+
+Kill it first: `lsof -ti:4173 | xargs kill`.
+
 ## Decisions still open
 | Decision | When | ADR |
 | --- | --- | --- |

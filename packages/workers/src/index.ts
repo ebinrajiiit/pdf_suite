@@ -8,6 +8,7 @@ export type {
   Box,
   DocumentDiff,
   DocumentInfo,
+  ExistingAnnotation,
   EncryptOptions,
   PageLabelRange,
   WatermarkOptions,

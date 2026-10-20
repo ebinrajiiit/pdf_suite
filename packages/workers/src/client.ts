@@ -73,6 +73,13 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** Removes a mark the document already carried. */
+  deleteMark(
+    page: number,
+    index: number,
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
   /** Compares another document with this one and reports what differs. */
   compare(
     other: ArrayBuffer,
@@ -346,6 +353,10 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async deleteMark(page, index, order, annotations) {
+      return expect(await send({ kind: "deleteMark", page, index, order, annotations }), "document")
+        .info;
     },
     async compare(other, order, annotations, onProgress) {
       return expect(

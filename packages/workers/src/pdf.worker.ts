@@ -3,8 +3,10 @@ import {
   addField,
   annotate,
   attachFile,
+  deleteAnnotation,
   diffDocuments,
   listAttachments,
+  readAnnotations,
   readAttachment,
   removeAttachment,
   createQpdf,
@@ -115,6 +117,9 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   const properties = bytesForForm
     ? await readProperties(bytesForForm).catch(() => blankProperties())
     : blankProperties();
+  // Marks already in the file, which the Marks panel shows alongside the ones
+  // placed in this session but not yet written.
+  const marks = bytesForForm ? await readAnnotations(bytesForForm).catch(() => []) : [];
   return {
     pageCount,
     pageSizes,
@@ -123,6 +128,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
     repaired,
     protected: protection !== null,
     properties,
+    marks,
     undo: past.length,
     redo: future.length,
   };
@@ -497,6 +503,13 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "deleteMark": {
+      const base = await materialise(id, request.order, request.annotations);
+      const without = await deleteAnnotation(base, request.page, request.index);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, without, request) });
       return;
     }
     case "compare": {

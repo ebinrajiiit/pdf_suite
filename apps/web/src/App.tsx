@@ -78,6 +78,7 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    deleteMark,
     compare,
     attachments,
     attach,
@@ -2127,6 +2128,10 @@ export function App() {
               <div className="sidebar-scroll">
                 <CommentList
                   annotations={state.annotations}
+                  existing={info.marks}
+                  onRemoveExisting={(page, index) => {
+                    void deleteMark(page, index).then((done) => done && setSaved("Mark removed"));
+                  }}
                   positionOf={(page) => {
                     const at = state.order.indexOf(page);
                     return at >= 0 ? at : page;

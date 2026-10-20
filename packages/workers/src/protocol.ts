@@ -9,6 +9,7 @@ import type {
   AccessibilityIssue,
   Annotation,
   Attachment,
+  ExistingAnnotation,
   DocumentDiff,
   NewField,
   Bookmark,
@@ -58,6 +59,8 @@ export interface DocumentInfo {
   form: FormInfo;
   /** Title, author, subject, keywords — what the file says about itself. */
   properties: DocumentProperties;
+  /** Marks the document already carries, as opposed to ones placed here. */
+  marks: ExistingAnnotation[];
 }
 
 /**
@@ -70,6 +73,7 @@ export type {
   AccessibilityIssue,
   Annotation,
   Attachment,
+  ExistingAnnotation,
   DocumentDiff,
   PageDiff,
   NewField,
@@ -216,6 +220,14 @@ export type WorkerRequest = { id: number } &
         kind: "fillForm";
         values: FieldValues;
         flatten: boolean;
+        order: number[];
+        annotations: Annotation[];
+      }
+    /** Removes a mark the document already carried. */
+    | {
+        kind: "deleteMark";
+        page: number;
+        index: number;
         order: number[];
         annotations: Annotation[];
       }

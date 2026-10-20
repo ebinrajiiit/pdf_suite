@@ -1008,6 +1008,53 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("shows the marks a document arrived with, and can remove one", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A document someone else has already commented on.
+  const base = await textFixture([["Draft circular"], ["Second page"]]);
+  const doc = await PDFDocument.load(base);
+  const page0 = doc.getPage(0);
+  page0.node.set(
+    PDFName.of("Annots"),
+    doc.context.obj([
+      doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Text",
+          Rect: [50, 300, 74, 324],
+          Contents: PDFString.of("Please check the dates"),
+          T: PDFString.of("A Reviewer"),
+        }),
+      ),
+    ]),
+  );
+  await openFixture(page, "returned.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  // The panel shows it, with who said it — not "no marks yet".
+  await page.getByTestId("tab-comments").click();
+  await expect(page.getByTestId("comments-existing")).toContainText("Please check the dates");
+  await expect(page.getByTestId("comments-existing")).toContainText("A Reviewer");
+
+  // Searching covers the document's own marks too.
+  await page.getByTestId("comment-search").fill("dates");
+  await expect(page.getByTestId("comments-existing")).toContainText("Please check the dates");
+  await page.getByTestId("comment-search").fill("nothing like this");
+  await expect(page.getByTestId("comments-none")).toBeVisible();
+  await page.getByTestId("comment-search").fill("");
+
+  // And it can be taken out of the file.
+  await page.getByTestId("remove-mark-0-0").click();
+  await expect(page.getByTestId("status")).toHaveText("Mark removed", { timeout: 30_000 });
+  await expect(page.getByTestId("comments-empty")).toBeVisible();
+
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual([]);
+});
+
 test("compares two versions and says what changed", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

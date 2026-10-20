@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
-import type { Annotation } from "@pdf-suite/core";
+import type { Annotation, ExistingAnnotation } from "@pdf-suite/core";
 
 export interface CommentListProps {
   /** Pending annotations, in the order they were placed. */
   annotations: Annotation[];
+  /** Marks the document already carried when it was opened. */
+  existing?: ExistingAnnotation[] | undefined;
+  /** Removes one of those, by page and index. */
+  onRemoveExisting?: ((page: number, index: number) => void) | undefined;
   /** Maps a source page index to the display position, for the page label. */
   positionOf: (page: number) => number;
   onGo: (page: number) => void;
@@ -20,7 +24,14 @@ export interface CommentListProps {
  * ponytail: still a flat list, not threads. Replies and a resolved state need
  * `/IRT` and `/RT` on the annotation plus a thread UI.
  */
-export function CommentList({ annotations, positionOf, onGo, onRemove }: CommentListProps) {
+export function CommentList({
+  annotations,
+  existing,
+  positionOf,
+  onGo,
+  onRemove,
+  onRemoveExisting,
+}: CommentListProps) {
   const [kind, setKind] = useState<"all" | Annotation["kind"]>("all");
   const [query, setQuery] = useState("");
   const [byPage, setByPage] = useState(true);
@@ -45,7 +56,20 @@ export function CommentList({ annotations, positionOf, onGo, onRemove }: Comment
       : rows;
   }, [annotations, byPage, kind, positionOf, query]);
 
-  if (annotations.length === 0) {
+  /** The document's own marks, filtered and searched the same way. */
+  const theirs = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (existing ?? [])
+      .filter((mark) => kind === "all" || mark.kind === EQUIVALENT[kind])
+      .filter(
+        (mark) =>
+          needle === "" ||
+          `${mark.contents} ${mark.author} ${mark.kind}`.toLowerCase().includes(needle),
+      )
+      .sort((a, b) => (byPage ? positionOf(a.page) - positionOf(b.page) : 0));
+  }, [byPage, existing, kind, positionOf, query]);
+
+  if (annotations.length === 0 && (existing?.length ?? 0) === 0) {
     return (
       <p className="comments-empty" data-testid="comments-empty">
         No marks yet. Use Highlight, Note, Add text, or the shape tools; they are written into the
@@ -89,7 +113,43 @@ export function CommentList({ annotations, positionOf, onGo, onRemove }: Comment
           By page
         </label>
       </div>
-      {shown.length === 0 ? (
+      {theirs.length > 0 ? (
+        <ol className="comments" data-testid="comments-existing">
+          {theirs.map((mark) => (
+            <li
+              key={`${mark.page}:${mark.index}`}
+              className="comment comment-theirs"
+              data-testid={`mark-${mark.page}-${mark.index}`}
+            >
+              <div className="comment-head">
+                <span className="comment-kind">{mark.kind}</span>
+                <button
+                  type="button"
+                  className="comment-page"
+                  onClick={() => onGo(mark.page)}
+                  title={`Go to page ${positionOf(mark.page) + 1}`}
+                >
+                  p{positionOf(mark.page) + 1}
+                </button>
+                {mark.author ? <span className="comment-author">{mark.author}</span> : null}
+                {onRemoveExisting ? (
+                  <button
+                    type="button"
+                    className="comment-remove"
+                    aria-label={`Remove the ${mark.kind} on page ${positionOf(mark.page) + 1}`}
+                    data-testid={`remove-mark-${mark.page}-${mark.index}`}
+                    onClick={() => onRemoveExisting(mark.page, mark.index)}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+              {mark.contents ? <p className="comment-text">{mark.contents}</p> : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {shown.length === 0 && theirs.length === 0 ? (
         <p className="comments-empty" data-testid="comments-none">
           No mark matches that.
         </p>
@@ -130,6 +190,21 @@ export function CommentList({ annotations, positionOf, onGo, onRemove }: Comment
     </>
   );
 }
+
+/** Our kinds, as the PDF subtypes a document's own marks are read as. */
+const EQUIVALENT: Record<string, string> = {
+  highlight: "highlight",
+  underline: "underline",
+  strike: "strikeout",
+  note: "text",
+  text: "freetext",
+  square: "square",
+  circle: "circle",
+  ink: "ink",
+  line: "line",
+  stamp: "stamp",
+  signature: "stamp",
+};
 
 const LABELS: Record<Annotation["kind"], string> = {
   highlight: "Highlight",
