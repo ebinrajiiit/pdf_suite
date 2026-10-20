@@ -974,6 +974,12 @@ export function useDocument() {
     [run],
   );
 
+  /** The tables this can find, as CSV. */
+  const exportCsv = useCallback(
+    async () => run("Looking for tables", (worker) => worker.toCsv(stateRef.current.order)),
+    [run],
+  );
+
   /** Crops pages, or puts the whole page back when the box is null. */
   const crop = useCallback(
     async (box: Box | null, pages?: number[]) =>
@@ -1135,6 +1141,7 @@ export function useDocument() {
     removeFormField,
     extractAllText,
     exportDocx,
+    exportCsv,
     crop,
     addWatermark,
     setLabels,

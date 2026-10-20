@@ -1008,6 +1008,57 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("finds a mark sheet's table and saves it as a spreadsheet", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // A mark sheet: three columns that line up down the page.
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const sheet = doc.addPage([595, 842]);
+  const rows = [
+    ["Roll", "Name", "Marks"],
+    ["21CS01", "A Student", "88"],
+    ["21CS02", "B Student", "91"],
+  ];
+  rows.forEach((row, index) => {
+    const y = 760 - index * 24;
+    sheet.drawText(row[0]!, { x: 60, y, size: 12, font });
+    sheet.drawText(row[1]!, { x: 160, y, size: 12, font });
+    sheet.drawText(row[2]!, { x: 380, y, size: 12, font });
+  });
+  await openFixture(page, "marks.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("to-csv").click(),
+  ]);
+  const path = await download.path();
+  expect(download.suggestedFilename()).toMatch(/\.csv$/);
+
+  const csv = await readFile(path!, "utf8");
+  expect(csv).toContain("Roll,Name,Marks");
+  expect(csv).toContain("21CS01,A Student,88");
+  expect(csv).toContain("21CS02,B Student,91");
+  await expect(page.getByTestId("status")).toContainText("1 table");
+});
+
+test("prose is not mistaken for a table", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "letter.pdf",
+    await textFixture([["The council met on Tuesday", "and resolved to raise the fee"]]),
+  );
+
+  await page.getByTestId("to-csv").click();
+  await expect(page.getByTestId("status")).toContainText("No table found", { timeout: 30_000 });
+});
+
 test("saves the document's words as a Word file", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");
@@ -1234,6 +1285,66 @@ test("draws a link to another page, and one to a web address", async ({ page }) 
   const action = second.lookup(PDFName.of("A"), PDFDict);
   expect(action.get(PDFName.of("S"))?.toString()).toBe("/URI");
   expect(String(action.get(PDFName.of("URI")))).toContain("iiitkottayam.ac.in");
+});
+
+test("nests a bookmark under another, and lifts it out again", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "report.pdf", await textFixture([["One"], ["Two"]]));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  await page.getByTestId("tab-outline").click();
+  await page.getByTestId("add-bookmark").click();
+  await expect(page.getByTestId("status")).toHaveText("Bookmarks saved", { timeout: 30_000 });
+  await page.getByTestId("add-bookmark").click();
+  await expect(page.getByTestId("bookmark-1")).toBeVisible({ timeout: 30_000 });
+
+  // The second goes under the first.
+  await page.getByTestId("bookmark-in-1").click();
+  await expect(page.getByTestId("status")).toHaveText("Bookmarks saved", { timeout: 30_000 });
+  await expect(page.getByTestId("bookmark-0-0")).toBeVisible();
+  await expect(page.getByTestId("bookmark-1")).toBeHidden();
+
+  // And back out to the top level.
+  await page.getByTestId("bookmark-out-0-0").click();
+  await expect(page.getByTestId("bookmark-1")).toBeVisible({ timeout: 30_000 });
+});
+
+test("summarises the marks for a reviewer to read", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  const base = await textFixture([["Draft"], ["Second page"]]);
+  const doc = await PDFDocument.load(base);
+  doc.getPage(1).node.set(
+    PDFName.of("Annots"),
+    doc.context.obj([
+      doc.context.register(
+        doc.context.obj({
+          Type: "Annot",
+          Subtype: "Text",
+          Rect: [50, 300, 74, 324],
+          Contents: PDFString.of("Check the dates"),
+          T: PDFString.of("A Reviewer"),
+        }),
+      ),
+    ]),
+  );
+  await openFixture(page, "returned.pdf", Buffer.from(await doc.save()));
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  await page.getByTestId("tab-comments").click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("marks-summary").click(),
+  ]);
+  const summary = await readFile((await download.path())!, "utf8");
+  expect(summary).toContain("Check the dates");
+  expect(summary).toContain("A Reviewer");
+  // In page order, with the page it is on.
+  expect(summary).toContain("Page 2");
 });
 
 test("sends the marks as a file, and reads a reviewer's back", async ({ page }) => {

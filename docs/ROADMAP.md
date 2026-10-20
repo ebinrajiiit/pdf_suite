@@ -85,7 +85,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 ## Phase 4 — Local AI and automation (months 7–9)
 - [ ] On-device summarise and "ask this document" (WebGPU / llama.cpp)
 - [ ] Table extraction to CSV/Excel
-- [~] PDF → Word: text done and labelled; Excel waits on table detection
+- [~] PDF → Word: text done and labelled. Tables export to CSV, which Excel opens; merged and implied-column tables are not found
 - [x] Batch workflows: grade cards, certificates and result sheets from a template and a CSV
 
 **Gate:** licence revenue funds Phase 5, or decide to license an SDK for editing.
@@ -96,6 +96,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] In-place text editing: changing a block's size and face from a format bar over the text, limited to the PDF standard fonts
 - [x] Undo and redo across both layers — page order and marks in the app, document bytes in the worker — with the usual keys, plus right-click menus on pages and Delete for the selected ones
 - [x] Batch: one action over many files, and a form filled once per spreadsheet row
+- [x] Bookmark nesting, dynamic stamps, a summary of the marks, and tables to CSV
 - [x] A command palette (⌘K), a shortcut sheet, collapsible tool groups, and one panel open at a time
 - [x] Single-page and full-screen viewing, picture replacement, picture downsampling, and form calculations without document JavaScript
 - [x] PDF → Word, for the words (a .docx written without a zip dependency), and scanning on the desktop where SANE or WIA exists

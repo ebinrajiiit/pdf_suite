@@ -370,6 +370,8 @@ export type WorkerRequest = { id: number } &
     | { kind: "toText"; order: number[] }
     /** The document's words as a Word file. Words, not layout. */
     | { kind: "toDocx"; order: number[]; title: string }
+    /** The tables this can find, as CSV — one block per page that has one. */
+    | { kind: "toCsv"; order: number[] }
     /** Renders the given display positions to PNG, for export. */
     | { kind: "toImages"; positions: number[]; order: number[]; scale: number }
     /**
@@ -414,6 +416,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "pageImages"; images: PageImage[] }
   | { kind: "text"; text: string }
   | { kind: "docx"; bytes: ArrayBuffer }
+  | { kind: "csv"; csv: string; tables: number; pages: number }
   | { kind: "attached"; files: Attachment[] }
   | { kind: "compared"; diff: DocumentDiff }
   | { kind: "xfdf"; xml: string }
@@ -475,6 +478,7 @@ export type TerminalResponse = Extract<
       | "pageImages"
       | "text"
       | "docx"
+      | "csv"
       | "attached"
       | "attachment"
       | "compared"

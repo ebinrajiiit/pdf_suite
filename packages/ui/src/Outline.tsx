@@ -9,6 +9,8 @@ export interface OutlineProps {
   onRename?: ((path: number[], title: string) => void) | undefined;
   onRemove?: ((path: number[]) => void) | undefined;
   onMove?: ((path: number[], by: -1 | 1) => void) | undefined;
+  /** Nesting: in, under the entry above, or out to the parent's level. */
+  onNest?: ((path: number[], direction: "in" | "out") => void) | undefined;
 }
 
 /**
@@ -20,7 +22,7 @@ export interface OutlineProps {
  * level down to it — so the caller never has to identify one by its title,
  * which two headings in a long report will happily share.
  */
-export function Outline({ items, onGo, onRename, onRemove, onMove }: OutlineProps) {
+export function Outline({ items, onGo, onRename, onRemove, onMove, onNest }: OutlineProps) {
   if (items.length === 0) {
     return (
       <p className="outline-empty" data-testid="outline-empty">
@@ -38,6 +40,7 @@ export function Outline({ items, onGo, onRename, onRemove, onMove }: OutlineProp
         onRename={onRename}
         onRemove={onRemove}
         onMove={onMove}
+        onNest={onNest}
       />
     </nav>
   );
@@ -51,9 +54,10 @@ interface BranchProps {
   onRename?: ((path: number[], title: string) => void) | undefined;
   onRemove?: ((path: number[]) => void) | undefined;
   onMove?: ((path: number[], by: -1 | 1) => void) | undefined;
+  onNest?: ((path: number[], direction: "in" | "out") => void) | undefined;
 }
 
-function Branch({ items, onGo, depth, path, onRename, onRemove, onMove }: BranchProps) {
+function Branch({ items, onGo, depth, path, onRename, onRemove, onMove, onNest }: BranchProps) {
   return (
     <ul className="outline-branch" style={{ paddingLeft: depth === 0 ? 0 : "0.75rem" }}>
       {items.map((item, index) => (
@@ -68,6 +72,7 @@ function Branch({ items, onGo, depth, path, onRename, onRemove, onMove }: Branch
           onRename={onRename}
           onRemove={onRemove}
           onMove={onMove}
+          onNest={onNest}
         />
       ))}
     </ul>
@@ -84,6 +89,7 @@ function Entry({
   onRename,
   onRemove,
   onMove,
+  onNest,
 }: {
   item: OutlineItem;
   onGo: (page: number) => void;
@@ -94,6 +100,7 @@ function Entry({
   onRename?: ((path: number[], title: string) => void) | undefined;
   onRemove?: ((path: number[]) => void) | undefined;
   onMove?: ((path: number[], by: -1 | 1) => void) | undefined;
+  onNest?: ((path: number[], direction: "in" | "out") => void) | undefined;
 }) {
   // Deep outlines start collapsed, or a 400-entry report fills the panel.
   const [open, setOpen] = useState(depth < 1);
@@ -148,8 +155,30 @@ function Entry({
             <span className="outline-page">{item.page + 1}</span>
           </button>
         )}
-        {onRename || onMove || onRemove ? (
+        {onRename || onMove || onRemove || onNest ? (
           <span className="outline-actions">
+            {onNest ? (
+              <>
+                <button
+                  type="button"
+                  aria-label={`Move ${item.title} out a level`}
+                  data-testid={`bookmark-out-${id}`}
+                  disabled={depth === 0}
+                  onClick={() => onNest(path, "out")}
+                >
+                  ⇤
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Move ${item.title} under the one above`}
+                  data-testid={`bookmark-in-${id}`}
+                  disabled={first}
+                  onClick={() => onNest(path, "in")}
+                >
+                  ⇥
+                </button>
+              </>
+            ) : null}
             {onMove ? (
               <>
                 <button
@@ -202,6 +231,7 @@ function Entry({
           onRename={onRename}
           onRemove={onRemove}
           onMove={onMove}
+          onNest={onNest}
         />
       ) : null}
     </li>

@@ -10,7 +10,7 @@ export { ContextMenu, type ContextMenuProps, type MenuItem } from "./ContextMenu
 export { computed, FormPanel, type FormPanelProps } from "./FormPanel.js";
 export { ImageEditLayer, type ImageEditLayerProps } from "./ImageEditLayer.js";
 export { Outline, type OutlineProps } from "./Outline.js";
-export { addBookmark, moveAt, removeAt, renameAt } from "./outline-edit.js";
+export { addBookmark, indentAt, moveAt, outdentAt, removeAt, renameAt } from "./outline-edit.js";
 export { SignaturePad, type SignaturePadProps } from "./SignaturePad.js";
 export { TextEditLayer, type TextEditCommit, type TextEditLayerProps } from "./TextEditLayer.js";
 export { TextLayer, type TextLayerProps } from "./TextLayer.js";

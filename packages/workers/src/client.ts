@@ -246,6 +246,11 @@ export interface PdfWorkerClient {
   toText(order: number[], onProgress?: OnProgress): Promise<string>;
   /** The document's words as a Word file. */
   toDocx(order: number[], title: string, onProgress?: OnProgress): Promise<ArrayBuffer>;
+  /** The tables this can find, as CSV. */
+  toCsv(
+    order: number[],
+    onProgress?: OnProgress,
+  ): Promise<{ csv: string; tables: number; pages: number }>;
   /** Crops pages, or puts the whole page back when the box is null. */
   crop(
     box: Box | null,
@@ -586,6 +591,10 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async toDocx(order, title, onProgress) {
       return expect(await send({ kind: "toDocx", order, title }, [], onProgress), "docx").bytes;
+    },
+    async toCsv(order, onProgress) {
+      const reply = expect(await send({ kind: "toCsv", order }, [], onProgress), "csv");
+      return { csv: reply.csv, tables: reply.tables, pages: reply.pages };
     },
     async crop(box, pages, order, annotations) {
       return expect(

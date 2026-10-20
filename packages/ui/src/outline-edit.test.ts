@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import type { OutlineItem } from "@pdf-suite/engine";
-import { addBookmark, moveAt, removeAt, renameAt } from "./outline-edit.js";
+import { addBookmark, indentAt, moveAt, outdentAt, removeAt, renameAt } from "./outline-edit.js";
 
 const tree = (): OutlineItem[] => [
   { title: "One", page: 0, children: [] },
@@ -48,4 +48,34 @@ test("a path that does not exist changes nothing", () => {
   expect(renameAt(tree(), [9], "x")).toEqual(tree());
   expect(removeAt(tree(), [])).toEqual(tree());
   expect(moveAt(tree(), [], 1)).toEqual(tree());
+});
+
+test("indenting makes a bookmark a child of the one above it", () => {
+  const out = indentAt(tree(), [2]);
+  expect(out.map((item) => item.title)).toEqual(["One", "Two"]);
+  // "Three" is now the last child of "Two", after its own children.
+  expect(out[1]?.children.map((item) => item.title)).toEqual(["Two a", "Two b", "Three"]);
+});
+
+test("the first entry of a level has nothing to indent under", () => {
+  expect(indentAt(tree(), [0])).toEqual(tree());
+  expect(indentAt(tree(), [1, 0])).toEqual(tree());
+});
+
+test("outdenting lifts a bookmark to its parent's level, after the parent", () => {
+  const out = outdentAt(tree(), [1, 0]);
+  expect(out.map((item) => item.title)).toEqual(["One", "Two", "Two a", "Three"]);
+  expect(out[1]?.children.map((item) => item.title)).toEqual(["Two b"]);
+});
+
+test("a top-level bookmark has nowhere further out to go", () => {
+  expect(outdentAt(tree(), [0])).toEqual(tree());
+  expect(outdentAt(tree(), [])).toEqual(tree());
+});
+
+test("indent then outdent puts a bookmark back where it was", () => {
+  const indented = indentAt(tree(), [2]);
+  const back = outdentAt(indented, [1, 2]);
+  expect(back.map((item) => item.title)).toEqual(["One", "Two", "Three"]);
+  expect(back[1]?.children.map((item) => item.title)).toEqual(["Two a", "Two b"]);
 });

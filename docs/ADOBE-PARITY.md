@@ -122,7 +122,7 @@ What an Acrobat user would miss before anything subtle:
 | Rotate, reorder, insert, extract, delete, split | Done |
 | Replace pages | Missing, though it is delete + insert |
 | Links | Draw a box and point it at a page or a web address; a reader can follow it. A web address is never opened on the document's say-so — the reader is shown where it goes and decides. Editing an existing link is missing |
-| Bookmarks | Add, rename, move and remove, written as a real `/Outlines` tree. Nesting an existing bookmark under another is still missing |
+| Bookmarks | Add, rename, move, nest under another or lift back out, and remove — written as a real `/Outlines` tree |
 | Named destinations | Written and read, sorted as a name tree has to be. Pointing a bookmark at one is missing |
 | Attachments (embedded files) | Done: attach, list, extract and remove, in a panel of their own. Sanitising removes them, which is the same feature read the other way |
 | Layers (OCG) | A panel that lists them and turns them on and off, which is what a drawing needs before it goes to a contractor. Flattening a layer away is missing; Remove hidden info is what takes one out |
@@ -136,6 +136,7 @@ What an Acrobat user would miss before anything subtle:
 | --- | --- |
 | PDF → Word | The document's **words**, as a real .docx — one paragraph per line, a page break per page. Not the layout: a PDF records where ink goes, not columns or tables, and reconstructing them is guesswork. The export says so in the status line. Excel, PowerPoint and RTF are missing; the licence trap stands — `pdf2docx` pulls PyMuPDF and is banned |
 | PDF → plain text | Done, in display order with a page break and number per page |
+| PDF → spreadsheet | Grid tables — rows and columns that line up — found and saved as CSV, which Excel opens. Merged cells, nested tables and columns implied only by a change of font are not found, and a page with no table says so rather than producing a spreadsheet that looks right and is not |
 | PDF → HTML, XML | Missing |
 | PDF → images | Done (PNG) |
 | PDF/A check | Done, as a report: encryption, fonts not embedded, no XMP, no output intent, JavaScript. Conversion is not done — it means embedding every font and an ICC profile, and a tool that says "converted" without both has produced a file that fails validation later, somewhere else. PDF/X and PDF/E are untouched |
@@ -151,11 +152,11 @@ What an Acrobat user would miss before anything subtle:
 | Polygon, polyline, cloud | Done: click each corner, double-click to finish. The cloud draws its own bumps rather than trusting a reader to honour `/BE` |
 | Rectangle, oval, pencil | Done |
 | Eraser for ink | Missing |
-| Stamps | Eight fixed labels. Dynamic (name, date) and custom (an image) are missing |
+| Stamps | Fixed labels and dynamic ones — {date} and {name} are filled in as the stamp is placed. A custom stamp from an image is missing |
 | Attach a file or audio as a comment | Missing |
 | Comment opacity, default properties, author name | Colour only |
 | Replies, status (accepted, rejected, completed) | Done, as `/IRT` with `/RT` — a reply is `R`, a status is a `Group` reply carrying `/State`, which is what Acrobat writes and reads. Threads are shown nested |
-| Comment list: filter, sort, search | Done: by kind, by text and in page order, over both the document's own marks and the unsaved ones. A printed summary is missing |
+| Comment list: filter, sort, search, summarise | All four: filtered by kind, searched by text, sorted by page, and summarised as a list of who said what on which page, replies and review states included |
 | Import/export comments (XFDF) | Done, both ways. What cannot be drawn is counted and left out rather than approximated. FDF, the older binary-ish form, is not read |
 | Shared review, Send for comment | Will not do — it uploads |
 | Measuring tools (distance, perimeter, area, scale, snap) | Missing. Engineering and architecture drawings need these |

@@ -45,6 +45,8 @@ import {
   setProperties,
   split,
   stampPages,
+  tableFrom,
+  toCsv,
   toDocx,
   toXfdf,
   uncropPages,
@@ -480,6 +482,34 @@ async function handle(request: WorkerRequest): Promise<void> {
       const written = toDocx(pages, { title: request.title });
       const buffer = written.buffer as ArrayBuffer;
       post({ id, kind: "docx", bytes: buffer }, [buffer]);
+      return;
+    }
+    case "toCsv": {
+      if (!doc) throw new Error("no document is open");
+      const blocks: string[] = [];
+      let tables = 0;
+
+      for (const [position, page] of request.order.entries()) {
+        throwIfCancelled(id);
+        const runs = await doc.extractText(page).catch(() => []);
+        const table = tableFrom(runs);
+        if (table && table.confidence >= 0.5) {
+          tables++;
+          // Each page's table is its own block, with a line saying which page
+          // it came from: a spreadsheet of three tables run together is worse
+          // than three labelled ones.
+          blocks.push(`Page ${position + 1}\n${toCsv(table.rows)}`);
+        }
+        post({ id, kind: "progress", done: position + 1, total: request.order.length });
+      }
+
+      post({
+        id,
+        kind: "csv",
+        csv: blocks.join("\n\n"),
+        tables,
+        pages: request.order.length,
+      });
       return;
     }
     case "toImages": {

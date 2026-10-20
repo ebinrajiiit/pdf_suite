@@ -12,6 +12,8 @@ import {
   type PlacedShape,
   addBookmark,
   CommandPalette,
+  indentAt,
+  outdentAt,
   computed,
   ContextMenu,
   moveAt,
@@ -98,6 +100,7 @@ export function App() {
     describe,
     extractAllText,
     exportDocx,
+    exportCsv,
     crop,
     addWatermark,
     setLabels,
@@ -264,6 +267,8 @@ export function App() {
 
   /** What a stamp says. Acrobat's own list, plus the one a registry uses. */
   const [stampLabel, setStampLabel] = useState("Approved");
+  /** Whose name a stamp carrying {name} should say. */
+  const [stampName, setStampName] = useState("");
   /**
    * The signature drawn once and kept for the next document. It lives in this
    * browser only — localStorage, never the network — and holds strokes in 0-1 of
@@ -805,6 +810,76 @@ export function App() {
     setSaved(written ? `Saved ${written} — the words, not the layout` : undefined);
   }, [exportDocx, name0]);
 
+  /**
+   * A summary of every mark in the document, as Acrobat prints one: who said
+   * what, on which page, in page order.
+   */
+  const handleSummary = useCallback(async () => {
+    if (!info) return;
+    const positionOf = (page: number) => state.order.indexOf(page) + 1;
+    const rows = [...info.marks]
+      .filter((mark) => mark.inReplyTo === undefined)
+      .sort((a, b) => positionOf(a.page) - positionOf(b.page));
+
+    if (rows.length === 0 && state.annotations.length === 0) {
+      setSaved("There are no marks to summarise");
+      return;
+    }
+
+    const lines = [
+      `Marks on ${name0}`,
+      `${rows.length + state.annotations.length} in all, ${new Date().toLocaleDateString("en-GB")}`,
+      "",
+      ...rows.flatMap((mark) => {
+        const replies = info.marks.filter(
+          (one) => one.page === mark.page && one.inReplyTo === mark.index,
+        );
+        const state_ = replies.find((reply) => reply.state)?.state;
+        return [
+          `Page ${positionOf(mark.page)} · ${mark.kind}${mark.author ? ` · ${mark.author}` : ""}` +
+            (state_ ? ` · ${state_}` : ""),
+          mark.contents ? `  ${mark.contents}` : "  (no text)",
+          ...replies
+            .filter((reply) => reply.contents !== "")
+            .map((reply) => `    ↳ ${reply.author || "reply"}: ${reply.contents}`),
+          "",
+        ];
+      }),
+      ...(state.annotations.length > 0
+        ? [`${state.annotations.length} mark(s) placed here and not yet saved into the file.`]
+        : []),
+    ];
+
+    const written = await saveBytes(
+      new TextEncoder().encode(lines.join("\n")).buffer as ArrayBuffer,
+      `${stripPdf(name0)} marks.txt`,
+      undefined,
+      "text/plain",
+    );
+    setSaved(written ? `Saved ${written}` : undefined);
+  }, [info, name0, state.annotations.length, state.order]);
+
+  /** Saves the tables this can find as a spreadsheet. */
+  const handleSaveCsv = useCallback(async () => {
+    const found = await exportCsv();
+    if (!found) return;
+    if (found.tables === 0) {
+      setSaved("No table found. This finds grid tables — rows and columns that line up");
+      return;
+    }
+    const written = await saveBytes(
+      new TextEncoder().encode(found.csv).buffer as ArrayBuffer,
+      `${stripPdf(name0)}.csv`,
+      undefined,
+      "text/csv",
+    );
+    setSaved(
+      written
+        ? `Saved ${written} — ${found.tables} table${found.tables === 1 ? "" : "s"} of ${found.pages} page${found.pages === 1 ? "" : "s"}`
+        : undefined,
+    );
+  }, [exportCsv, name0]);
+
   /** Prints what is on screen, marks and all, not the file as it was opened. */
   const handlePrint = useCallback(async () => {
     const bytes = await save(state.order);
@@ -1130,15 +1205,20 @@ export function App() {
         return;
       }
       if (tool === "stamp") {
+        // A dynamic stamp is the same stamp with today's date or the signer's
+        // name filled in, which is what Acrobat's "dynamic" ones are.
+        const label = stampLabel
+          .replace(/\{date\}/gi, new Date().toLocaleDateString("en-GB"))
+          .replace(/\{name\}/gi, stampName.trim() || "PDF Suite");
         // Sized like a rubber stamp, with the click at its top-left corner.
         addAnnotation({
           kind: "stamp",
           page,
           x: shape.x,
           y: shape.y - 36,
-          w: Math.max(120, stampLabel.length * 14),
+          w: Math.max(120, label.length * 11),
           h: 36,
-          label: stampLabel,
+          label,
           color: colour,
         });
         return;
@@ -1172,6 +1252,7 @@ export function App() {
       scaleUnit,
       signature,
       stampLabel,
+      stampName,
       tool,
     ],
   );
@@ -1968,7 +2049,9 @@ export function App() {
     handlePrint,
     handleProtect,
     handleSave,
+    handleSaveCsv,
     handleSaveDocx,
+    handleSummary,
     handleSaveText,
     handleScan,
     handleSplit,
@@ -3336,6 +3419,10 @@ export function App() {
             {sidebar === "comments" ? (
               <div className="sidebar-scroll">
                 <div className="panel-actions">
+                  {action("Summary…", () => void handleSummary(), {
+                    testId: "marks-summary",
+                    hint: "A list of every mark, who made it and on which page",
+                  })}
                   {action("Send marks…", () => void handleExportMarks(), {
                     testId: "export-marks",
                     hint: "Writes the marks as an XFDF file to send to a reviewer",
@@ -3567,6 +3654,13 @@ export function App() {
                   }
                   onRemove={(path) => void editBookmarks(removeAt(info.outline, path))}
                   onMove={(path, by) => void editBookmarks(moveAt(info.outline, path, by))}
+                  onNest={(path, direction) =>
+                    void editBookmarks(
+                      direction === "in"
+                        ? indentAt(info.outline, path)
+                        : outdentAt(info.outline, path),
+                    )
+                  }
                 />
               </div>
             ) : (
@@ -3762,6 +3856,14 @@ export function App() {
                       </option>
                     ))}
                   </select>
+                  <input
+                    className="hfslot"
+                    aria-label="Name for a stamp that carries one"
+                    placeholder="Your name, for {name}"
+                    data-testid="stamp-name"
+                    value={stampName}
+                    onChange={(event) => setStampName(event.target.value)}
+                  />
                 </div>
               ) : null}
               {tool === "signature" ? (
@@ -4008,6 +4110,10 @@ export function App() {
                 {action("To Word…", () => void handleSaveDocx(), {
                   testId: "to-docx",
                   hint: "The document's words as a .docx. Not its layout — a PDF does not record one",
+                })}
+                {action("Tables to CSV…", () => void handleSaveCsv(), {
+                  testId: "to-csv",
+                  hint: "Finds grid tables — rows and columns that line up — and saves them for a spreadsheet",
                 })}
                 {action("To text…", () => void handleSaveText(), {
                   testId: "to-text",
@@ -4298,6 +4404,9 @@ const SHORTCUTS: [string, string][] = [
 /** What a rubber stamp can say. Acrobat's own list, plus the registry's. */
 const STAMPS = [
   "Approved",
+  "Approved {date}",
+  "Received {date}",
+  "Checked by {name}",
   "Not approved",
   "Draft",
   "Final",
