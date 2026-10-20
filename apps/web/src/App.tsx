@@ -48,10 +48,12 @@ import type {
 } from "@pdf-suite/workers";
 import {
   canConvertOffice,
+  canScan,
   canUsePicker,
   convertOffice,
   OFFICE_EXTENSIONS,
   pickFiles,
+  scanPage,
   printBytes,
   readFiles,
   saveBytes,
@@ -89,6 +91,7 @@ export function App() {
     stamp,
     describe,
     extractAllText,
+    exportDocx,
     crop,
     addWatermark,
     setLabels,
@@ -146,8 +149,9 @@ export function App() {
     issues: StandardIssue[];
   } | null>(null);
 
-  /** Whether this machine can turn an Office document into a PDF. */
+  /** Whether this machine can turn an Office document into a PDF, or scan. */
   const [office, setOffice] = useState(false);
+  const [scanner, setScanner] = useState(false);
 
   /** The signature panel, shown only when the document carries signatures. */
   const [showingSignatures, setShowingSignatures] = useState(false);
@@ -694,6 +698,19 @@ export function App() {
     setSaved(written ? `Saved ${written}` : undefined);
   }, [extractAllText, name0]);
 
+  /** Saves the document's words as a Word file — words, not layout. */
+  const handleSaveDocx = useCallback(async () => {
+    const bytes = await exportDocx(stripPdf(name0));
+    if (!bytes) return;
+    const written = await saveBytes(
+      bytes,
+      `${stripPdf(name0)}.docx`,
+      undefined,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    setSaved(written ? `Saved ${written} — the words, not the layout` : undefined);
+  }, [exportDocx, name0]);
+
   /** Prints what is on screen, marks and all, not the file as it was opened. */
   const handlePrint = useCallback(async () => {
     const bytes = await save(state.order);
@@ -1129,10 +1146,21 @@ export function App() {
     [pageText],
   );
 
-  // Whether LibreOffice is on this machine, asked once (ADR 0007).
+  // What this machine can do that a browser cannot, asked once.
   useEffect(() => {
     void canConvertOffice().then(setOffice);
+    void canScan().then(setScanner);
   }, []);
+
+  const handleScan = useCallback(async () => {
+    try {
+      const page = await scanPage(300);
+      await openImages([page]);
+      setSaved("Scanned a page — recognise its text to make it searchable");
+    } catch (error) {
+      setSaved(error instanceof Error ? error.message : String(error));
+    }
+  }, [openImages]);
 
   const handleOffice = useCallback(async () => {
     const picked = await pickFiles(false, "office");
@@ -3191,6 +3219,10 @@ export function App() {
                   testId: "compare",
                   hint: "What changed between this document and another version of it",
                 })}
+                {action("To Word…", () => void handleSaveDocx(), {
+                  testId: "to-docx",
+                  hint: "The document's words as a .docx. Not its layout — a PDF does not record one",
+                })}
                 {action("To text…", () => void handleSaveText(), {
                   testId: "to-text",
                   hint: "Save the document's words as a plain text file",
@@ -3222,6 +3254,13 @@ export function App() {
             <div className="empty-actions">
               {action("Open a PDF", () => void handleOpen(), { off: !ready })}
               {action("From images…", () => void handleFromImages(), { off: !ready })}
+              {scanner
+                ? action("From a scanner…", () => void handleScan(), {
+                    testId: "from-scanner",
+                    off: !ready,
+                    hint: "Scans a page through this machine's own scanner",
+                  })
+                : null}
               {office
                 ? action("From Word or Excel…", () => void handleOffice(), {
                     testId: "from-office",

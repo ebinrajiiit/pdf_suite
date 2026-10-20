@@ -211,6 +211,80 @@ async fn convert_office(name: String, bytes: Vec<u8>) -> Result<Vec<u8>, String>
     result
 }
 
+/// Where a scanner interface lives, if one does.
+///
+/// SANE's `scanimage` is the only scanning interface a program can drive
+/// without linking a platform framework: it is standard on Linux and installs
+/// from Homebrew on macOS. Windows has WIA, which PowerShell can drive, and
+/// which is handled separately below.
+fn find_scanimage() -> Option<PathBuf> {
+    [
+        "/usr/bin/scanimage",
+        "/usr/local/bin/scanimage",
+        "/opt/homebrew/bin/scanimage",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .find(|path| path.exists())
+}
+
+/// Whether this machine offers a way to scan at all.
+#[tauri::command]
+async fn can_scan() -> bool {
+    cfg!(target_os = "windows") || find_scanimage().is_some()
+}
+
+/// Scans one page and returns it as a JPEG.
+///
+/// The scanner's own driver does the work; this only asks for a page and reads
+/// the file back. Nothing is uploaded, and the temporary file is removed
+/// whether the scan worked or not.
+#[tauri::command]
+async fn scan_page(dpi: u32) -> Result<Vec<u8>, String> {
+    // A sane range: below 75 is unreadable, above 1200 is a very large file
+    // for no gain, and the value decides a command-line argument.
+    let dpi = dpi.clamp(75, 1200);
+    let work = std::env::temp_dir().join(format!("pdf-suite-scan-{}", std::process::id()));
+    std::fs::create_dir_all(&work)
+        .map_err(|e| format!("could not make a working directory: {e}"))?;
+    let out = work.join("page.jpg");
+
+    #[cfg(target_os = "windows")]
+    let status = {
+        // WIA through PowerShell: the one interface Windows exposes without
+        // linking its imaging libraries.
+        let script = format!(
+            "$d=(New-Object -ComObject WIA.CommonDialog).ShowAcquireImage(); \
+             $d.SaveFile('{}')",
+            out.display()
+        );
+        std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .status()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let status = {
+        let scanimage = find_scanimage().ok_or_else(|| {
+            "No scanner interface on this machine. Install SANE (scanimage) and try again."
+                .to_owned()
+        })?;
+        std::process::Command::new(scanimage)
+            .arg("--format=jpeg")
+            .arg(format!("--resolution={dpi}"))
+            .arg("--output-file")
+            .arg(&out)
+            .status()
+    };
+
+    let status = status.map_err(|e| format!("could not run the scanner: {e}"))?;
+    let result = std::fs::read(&out).map_err(|e| {
+        format!("the scanner finished with status {status} but produced no page: {e}")
+    });
+    let _ = std::fs::remove_dir_all(&work);
+    result
+}
+
 fn main() {
     tauri::Builder::default()
         // Native open and save dialogs. WKWebView has no File System Access API,
@@ -222,7 +296,9 @@ fn main() {
             write_document,
             print_document,
             can_convert_office,
-            convert_office
+            convert_office,
+            can_scan,
+            scan_page
         ])
         .run(tauri::generate_context!())
         .expect("the PDF suite window failed to start");

@@ -44,6 +44,7 @@ import {
   setProperties,
   split,
   stampPages,
+  toDocx,
   toXfdf,
   uncropPages,
   type EncryptOptions,
@@ -426,6 +427,20 @@ async function handle(request: WorkerRequest): Promise<void> {
         post({ id, kind: "progress", done: position + 1, total: request.order.length });
       }
       post({ id, kind: "text", text: pages.join("\n\n") });
+      return;
+    }
+    case "toDocx": {
+      if (!doc) throw new Error("no document is open");
+      const pages: string[] = [];
+      for (const [position, page] of request.order.entries()) {
+        throwIfCancelled(id);
+        const runs = await doc.extractText(page).catch(() => []);
+        pages.push(runs.map((run) => run.text).join("\n"));
+        post({ id, kind: "progress", done: position + 1, total: request.order.length });
+      }
+      const written = toDocx(pages, { title: request.title });
+      const buffer = written.buffer as ArrayBuffer;
+      post({ id, kind: "docx", bytes: buffer }, [buffer]);
       return;
     }
     case "toImages": {

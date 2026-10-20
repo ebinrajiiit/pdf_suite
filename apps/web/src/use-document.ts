@@ -908,6 +908,13 @@ export function useDocument() {
     [run],
   );
 
+  /** The document's words as a Word file. */
+  const exportDocx = useCallback(
+    async (title: string) =>
+      run("Writing the Word file", (worker) => worker.toDocx(stateRef.current.order, title)),
+    [run],
+  );
+
   /** Crops pages, or puts the whole page back when the box is null. */
   const crop = useCallback(
     async (box: Box | null, pages?: number[]) =>
@@ -1065,6 +1072,7 @@ export function useDocument() {
     addFormField,
     removeFormField,
     extractAllText,
+    exportDocx,
     crop,
     addWatermark,
     setLabels,

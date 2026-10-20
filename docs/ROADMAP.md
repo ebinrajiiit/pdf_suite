@@ -85,7 +85,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 ## Phase 4 — Local AI and automation (months 7–9)
 - [ ] On-device summarise and "ask this document" (WebGPU / llama.cpp)
 - [ ] Table extraction to CSV/Excel
-- [ ] PDF → Word/Excel (beta, clearly labelled)
+- [~] PDF → Word: text done and labelled; Excel waits on table detection
 - [ ] Batch workflows: grade cards, certificates, result sheets from templates + CSV
 
 **Gate:** licence revenue funds Phase 5, or decide to license an SDK for editing.
@@ -95,6 +95,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] In-place text editing: paragraph detection and reflow (blocks re-wrap to their own width, measured in the real font by PDFium), and font substitution to Helvetica when the document's font has no glyph for what was typed — refused outright when no standard font has it either
 - [x] In-place text editing: changing a block's size and face from a format bar over the text, limited to the PDF standard fonts
 - [x] Undo and redo across both layers — page order and marks in the app, document bytes in the worker — with the usual keys, plus right-click menus on pages and Delete for the selected ones
+- [x] PDF → Word, for the words (a .docx written without a zip dependency), and scanning on the desktop where SANE or WIA exists
 - [x] PDF/A and print preflight checks, a trim box, and portfolios
 - [x] Office → PDF on the desktop, through the machine's own LibreOffice (ADR 0007)
 - [x] Signature panel: who signed, when, and whether anything was appended after (ADR 0006); signing itself is specified, not built

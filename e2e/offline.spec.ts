@@ -1008,6 +1008,37 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("saves the document's words as a Word file", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "circular.pdf",
+    await textFixture([["Minutes of the Council"], ["Fees are due in June"]]),
+  );
+  await expect(page.getByText("2 pages")).toBeVisible();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("to-docx").click(),
+  ]);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  expect(download.suggestedFilename()).toMatch(/\.docx$/);
+
+  // A real archive with the parts Word insists on, carrying both pages.
+  const bytes = await readFile(path!);
+  expect(bytes.subarray(0, 2).toString("latin1")).toBe("PK");
+  const inside = bytes.toString("latin1");
+  expect(inside).toContain("word/document.xml");
+  expect(inside).toContain("Minutes of the Council");
+  expect(inside).toContain("Fees are due in June");
+
+  // And the status says what this export is and is not.
+  await expect(page.getByTestId("status")).toContainText("the words, not the layout");
+});
+
 test("says what stands between the document and PDF/A, and what a press needs", async ({
   page,
 }) => {

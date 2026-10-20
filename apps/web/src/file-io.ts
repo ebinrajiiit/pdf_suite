@@ -121,6 +121,28 @@ export async function convertOffice(file: PickedFile): Promise<ArrayBuffer> {
   return new Uint8Array(out).buffer;
 }
 
+/** Whether this machine offers a way to scan at all. */
+export async function canScan(): Promise<boolean> {
+  if (!isDesktop()) return false;
+  const { invoke } = await tauri();
+  return invoke<boolean>("can_scan");
+}
+
+/**
+ * Scans one page as a JPEG, through the machine's own scanner driver. A
+ * browser cannot reach a scanner at all, which is one of the reasons the
+ * desktop build exists (ADR 0005).
+ */
+export async function scanPage(dpi = 300): Promise<PickedFile> {
+  const { invoke } = await tauri();
+  const bytes = new Uint8Array(await invoke<number[]>("scan_page", { dpi }));
+  return {
+    name: `scan-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "")}.jpg`,
+    type: "image/jpeg",
+    bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+  };
+}
+
 const PDF_FILTER = [{ name: "PDF document", extensions: ["pdf"] }];
 const IMAGE_FILTER = [{ name: "Image", extensions: ["jpg", "jpeg", "png"] }];
 

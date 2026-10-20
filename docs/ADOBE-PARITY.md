@@ -94,7 +94,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | From file (Office, images, text, HTML) | Images, and Office on the desktop through the machine's own LibreOffice (ADR 0007 — detected, not bundled). The browser build says it cannot and why. HTML and plain text are missing |
-| From scanner | Missing. The browser cannot reach a scanner; on desktop this is ICA (macOS), WIA/TWAIN (Windows), SANE (Linux) — a Rust-side job per platform |
+| From scanner | Done on the desktop where the machine offers an interface: SANE's `scanimage` (standard on Linux, Homebrew on macOS) and WIA through PowerShell on Windows. The button is hidden where neither exists. macOS without SANE has no driveable interface at all |
 | From web page (Web Capture) | Missing, and in tension with the privacy invariants: fetching a page is a network call. It would need its own ADR |
 | From clipboard, blank page | Missing. Both are small |
 | Combine files | Merge and insert-at-position are done |
@@ -127,7 +127,7 @@ What an Acrobat user would miss before anything subtle:
 
 | Acrobat | Here |
 | --- | --- |
-| PDF → Word, Excel, PowerPoint, RTF | Missing. Phase 4 lists Word and Excel as beta. Note the licence trap: `pdf2docx` pulls PyMuPDF and is banned |
+| PDF → Word | The document's **words**, as a real .docx — one paragraph per line, a page break per page. Not the layout: a PDF records where ink goes, not columns or tables, and reconstructing them is guesswork. The export says so in the status line. Excel, PowerPoint and RTF are missing; the licence trap stands — `pdf2docx` pulls PyMuPDF and is banned |
 | PDF → plain text | Done, in display order with a page break and number per page |
 | PDF → HTML, XML | Missing |
 | PDF → images | Done (PNG) |

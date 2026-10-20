@@ -346,6 +346,8 @@ export type WorkerRequest = { id: number } &
     | { kind: "fromImages"; images: { bytes: ArrayBuffer; type: string }[] }
     /** The document's text, in display order, for saving as a plain text file. */
     | { kind: "toText"; order: number[] }
+    /** The document's words as a Word file. Words, not layout. */
+    | { kind: "toDocx"; order: number[]; title: string }
     /** Renders the given display positions to PNG, for export. */
     | { kind: "toImages"; positions: number[]; order: number[]; scale: number }
     /**
@@ -389,6 +391,7 @@ export type WorkerResponse = { id: number } & (
   | { kind: "editable"; runs: EditableText[] }
   | { kind: "pageImages"; images: PageImage[] }
   | { kind: "text"; text: string }
+  | { kind: "docx"; bytes: ArrayBuffer }
   | { kind: "attached"; files: Attachment[] }
   | { kind: "compared"; diff: DocumentDiff }
   | { kind: "xfdf"; xml: string }
@@ -448,6 +451,7 @@ export type TerminalResponse = Extract<
       | "editable"
       | "pageImages"
       | "text"
+      | "docx"
       | "attached"
       | "attachment"
       | "compared"

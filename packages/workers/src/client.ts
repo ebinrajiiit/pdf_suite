@@ -220,6 +220,8 @@ export interface PdfWorkerClient {
   ): Promise<DocumentInfo>;
   /** The document's text in display order, for saving as a plain text file. */
   toText(order: number[], onProgress?: OnProgress): Promise<string>;
+  /** The document's words as a Word file. */
+  toDocx(order: number[], title: string, onProgress?: OnProgress): Promise<ArrayBuffer>;
   /** Crops pages, or puts the whole page back when the box is null. */
   crop(
     box: Box | null,
@@ -537,6 +539,9 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     async toText(order, onProgress) {
       return expect(await send({ kind: "toText", order }, [], onProgress), "text").text;
+    },
+    async toDocx(order, title, onProgress) {
+      return expect(await send({ kind: "toDocx", order, title }, [], onProgress), "docx").bytes;
     },
     async crop(box, pages, order, annotations) {
       return expect(
