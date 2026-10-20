@@ -86,6 +86,41 @@ export async function printBytes(bytes: ArrayBuffer, name: string): Promise<stri
   return "Opened in a new tab — print from there for full quality";
 }
 
+/** Office documents the desktop shell can convert, if LibreOffice is installed. */
+export const OFFICE_EXTENSIONS = [
+  "doc",
+  "docx",
+  "odt",
+  "rtf",
+  "xls",
+  "xlsx",
+  "ods",
+  "ppt",
+  "pptx",
+  "odp",
+];
+
+/** Whether this machine can convert Office documents at all. */
+export async function canConvertOffice(): Promise<boolean> {
+  if (!isDesktop()) return false;
+  const { invoke } = await tauri();
+  return invoke<boolean>("can_convert_office");
+}
+
+/**
+ * Converts an Office document to PDF with the machine's own LibreOffice
+ * (ADR 0007). Browser builds have no converter and say so rather than
+ * pretending; nothing is downloaded and nothing is sent anywhere.
+ */
+export async function convertOffice(file: PickedFile): Promise<ArrayBuffer> {
+  const { invoke } = await tauri();
+  const out = await invoke<number[]>("convert_office", {
+    name: file.name,
+    bytes: [...new Uint8Array(file.bytes)],
+  });
+  return new Uint8Array(out).buffer;
+}
+
 const PDF_FILTER = [{ name: "PDF document", extensions: ["pdf"] }];
 const IMAGE_FILTER = [{ name: "Image", extensions: ["jpg", "jpeg", "png"] }];
 
@@ -117,13 +152,22 @@ async function readPaths(paths: string[]): Promise<PickedFile[]> {
  */
 export async function pickFiles(
   multiple: boolean,
-  kind: "pdf" | "image" | "any" = "pdf",
+  kind: "pdf" | "image" | "office" | "any" = "pdf",
 ): Promise<PickedFile[]> {
   if (isDesktop()) {
     const { dialog } = await tauri();
     const chosen = await dialog.open({
       multiple,
-      ...(kind === "any" ? {} : { filters: kind === "image" ? IMAGE_FILTER : PDF_FILTER }),
+      ...(kind === "any"
+        ? {}
+        : {
+            filters:
+              kind === "image"
+                ? IMAGE_FILTER
+                : kind === "office"
+                  ? [{ name: "Office document", extensions: OFFICE_EXTENSIONS }]
+                  : PDF_FILTER,
+          }),
     });
     if (chosen === null) return [];
     return readPaths(Array.isArray(chosen) ? chosen : [chosen]);
@@ -132,7 +176,9 @@ export async function pickFiles(
   const handles = await window
     .showOpenFilePicker({
       multiple,
-      ...(kind === "any" ? {} : { types: kind === "image" ? IMAGE_TYPES : PDF_TYPES }),
+      ...(kind === "any" || kind === "office"
+        ? {}
+        : { types: kind === "image" ? IMAGE_TYPES : PDF_TYPES }),
       excludeAcceptAllOption: false,
     })
     .catch((err: unknown) => {

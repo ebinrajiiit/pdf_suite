@@ -46,7 +46,10 @@ import type {
   TextRun,
 } from "@pdf-suite/workers";
 import {
+  canConvertOffice,
   canUsePicker,
+  convertOffice,
+  OFFICE_EXTENSIONS,
   pickFiles,
   printBytes,
   readFiles,
@@ -132,6 +135,12 @@ export function App() {
   /** The document's links, read with it, and one waiting to be opened. */
   const [pageLinks, setPageLinks] = useState<Link[]>([]);
   const [following, setFollowing] = useState<string | null>(null);
+
+  /** Whether this machine can turn an Office document into a PDF. */
+  const [office, setOffice] = useState(false);
+
+  /** The signature panel, shown only when the document carries signatures. */
+  const [showingSignatures, setShowingSignatures] = useState(false);
 
   /** What a redaction box should say, if anything — the code a law requires. */
   const [redactionCode, setRedactionCode] = useState("");
@@ -1097,6 +1106,24 @@ export function App() {
     },
     [pageText],
   );
+
+  // Whether LibreOffice is on this machine, asked once (ADR 0007).
+  useEffect(() => {
+    void canConvertOffice().then(setOffice);
+  }, []);
+
+  const handleOffice = useCallback(async () => {
+    const picked = await pickFiles(false, "office");
+    const file = picked[0];
+    if (!file) return;
+    try {
+      const bytes = await convertOffice(file);
+      await open({ name: `${stripPdf(file.name)}.pdf`, type: "application/pdf", bytes });
+      setSaved(`Converted ${file.name}`);
+    } catch (error) {
+      setSaved(error instanceof Error ? error.message : String(error));
+    }
+  }, [open]);
 
   // The document's links, re-read whenever it changes.
   useEffect(() => {
@@ -2078,6 +2105,40 @@ export function App() {
         </div>
       ) : null}
 
+      {showingSignatures && info ? (
+        <div className="prompt hfpanel" data-testid="signature-panel">
+          <div className="hfrow">
+            <span className="hflabel">Signed</span>
+            <span className="hfnote">
+              What the document says about itself. The certificate chain has not been checked — this
+              says who it claims signed it and what the signature covers, not that the cryptography
+              is sound.
+            </span>
+            <button type="button" className="action" onClick={() => setShowingSignatures(false)}>
+              Close
+            </button>
+          </div>
+          <ul className="a11ylist" data-testid="signature-list">
+            {info.signatures.map((signature) => (
+              <li
+                key={signature.field}
+                className={signature.coversWholeFile ? "a11y-ok" : "a11y-fail"}
+                data-testid={`signature-${signature.field}`}
+              >
+                <strong>{signature.signer || "(no name given)"}</strong>
+                <span>
+                  {signature.date ? `${signature.date}. ` : ""}
+                  {signature.reason ? `${signature.reason}. ` : ""}
+                  {signature.coversWholeFile
+                    ? "Covers the whole file."
+                    : `${signature.bytesAppended} bytes were added after this was signed.`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {checking && info ? (
         <div className="prompt hfpanel" data-testid="accessibility-panel">
           <div className="hfrow">
@@ -2870,6 +2931,16 @@ export function App() {
               </p>
               <div className="tool-grid">{toolButton("redact")}</div>
               <div className="action-row">
+                {info.signatures.length > 0
+                  ? action(
+                      `${info.signatures.length} signature${info.signatures.length === 1 ? "" : "s"}…`,
+                      () => setShowingSignatures((open) => !open),
+                      {
+                        testId: "signatures",
+                        hint: "Who signed this document, and what their signature covers",
+                      },
+                    )
+                  : null}
                 {action("Check accessibility…", () => void handleCheckAccessible(), {
                   testId: "check-accessibility",
                   hint: "Whether a screen reader could read this document",
@@ -3062,6 +3133,13 @@ export function App() {
             <div className="empty-actions">
               {action("Open a PDF", () => void handleOpen(), { off: !ready })}
               {action("From images…", () => void handleFromImages(), { off: !ready })}
+              {office
+                ? action("From Word or Excel…", () => void handleOffice(), {
+                    testId: "from-office",
+                    off: !ready,
+                    hint: `Converts ${OFFICE_EXTENSIONS.slice(0, 3).join(", ")} and the rest with this machine's LibreOffice`,
+                  })
+                : null}
             </div>
             <p className="empty-hint">or drop a file anywhere on this window</p>
           </div>

@@ -93,7 +93,7 @@ What an Acrobat user would miss before anything subtle:
 
 | Acrobat | Here |
 | --- | --- |
-| From file (Office, images, text, HTML) | Images only. Office → PDF is planned for desktop via LibreOffice (ADR pending), and is blocked on nothing but the work |
+| From file (Office, images, text, HTML) | Images, and Office on the desktop through the machine's own LibreOffice (ADR 0007 — detected, not bundled). The browser build says it cannot and why. HTML and plain text are missing |
 | From scanner | Missing. The browser cannot reach a scanner; on desktop this is ICA (macOS), WIA/TWAIN (Windows), SANE (Linux) — a Rust-side job per platform |
 | From web page (Web Capture) | Missing, and in tension with the privacy invariants: fetching a page is a network call. It would need its own ADR |
 | From clipboard, blank page | Missing. Both are small |
@@ -185,9 +185,9 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Fill & Sign: draw a signature | Done. Typing one, in a handwriting face, is missing |
-| Certificate-based signature | Missing. Phase 3: needs the signing-library ADR, and on desktop PKCS#11 for USB DSC tokens |
+| Certificate-based signature | Specified in ADR 0006 and not built: signpdf + node-forge for a software certificate, the `cryptoki` crate for USB DSC tokens on the desktop |
 | Certify (visible or hidden) | Missing |
-| Validate signatures, trust, signature panel | Missing. Validation matters even if signing never ships: institutions receive signed PDFs |
+| Validate signatures, trust, signature panel | A panel that reads what the document says — who signed, when, why, and whether anything was appended after signing, which is the abuse that matters. It does not check the certificate chain and says so (ADR 0006) |
 | Timestamp (RFC 3161), LTV | Missing. The timestamp call is already allowed by the privacy invariants — it sends only a hash |
 | Digital ID management | Missing |
 | Compare signed version to current | Missing |

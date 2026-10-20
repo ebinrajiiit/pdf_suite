@@ -13,6 +13,7 @@ import type {
   Layer,
   Link,
   RedactionMark,
+  SignatureInfo,
   LinkTarget,
   Reply,
   DocumentDiff,
@@ -70,6 +71,8 @@ export interface DocumentInfo {
   layers: Layer[];
   /** Redaction marks waiting in the document, which nothing has applied yet. */
   redactions: RedactionMark[];
+  /** What the document says about its own signatures. Not verified. */
+  signatures: SignatureInfo[];
 }
 
 /**
@@ -86,6 +89,7 @@ export type {
   Layer,
   Link,
   RedactionMark,
+  SignatureInfo,
   LinkTarget,
   Reply,
   DocumentDiff,

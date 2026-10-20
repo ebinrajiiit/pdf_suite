@@ -18,6 +18,7 @@ import {
   readLayers,
   readLinks,
   readRedactionMarks,
+  readSignatures,
   removeAttachment,
   createQpdf,
   fillForm,
@@ -134,6 +135,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
   const marks = bytesForForm ? await readAnnotations(bytesForForm).catch(() => []) : [];
   const layers = bytesForForm ? await readLayers(bytesForForm).catch(() => []) : [];
   const redactions = bytesForForm ? await readRedactionMarks(bytesForForm).catch(() => []) : [];
+  const signatures = bytesForForm ? await readSignatures(bytesForForm).catch(() => []) : [];
   return {
     pageCount,
     pageSizes,
@@ -145,6 +147,7 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
     marks,
     layers,
     redactions,
+    signatures,
     undo: past.length,
     redo: future.length,
   };

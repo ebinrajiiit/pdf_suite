@@ -30,6 +30,59 @@ async fn write_document(path: PathBuf, bytes: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
+/// A name that is safe to use as a file name, or nothing.
+///
+/// Both commands below take a name from the open document and write a file
+/// with it. Separators, parent traversal and control characters are removed
+/// rather than escaped, because no legitimate name needs them and a
+/// half-escaped path is how this kind of thing goes wrong.
+fn safe_file_name(name: &str) -> Option<String> {
+    let kept: String = name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
+        .collect();
+    let trimmed = kept.trim_matches(['.', ' ']).to_owned();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::safe_file_name;
+
+    #[test]
+    fn strips_anything_that_could_be_a_path() {
+        assert_eq!(
+            safe_file_name("minutes.pdf").as_deref(),
+            Some("minutes.pdf")
+        );
+        assert_eq!(
+            safe_file_name("../../etc/passwd").as_deref(),
+            Some("etcpasswd")
+        );
+        assert_eq!(safe_file_name("a/b/c.docx").as_deref(), Some("abc.docx"));
+    }
+
+    #[test]
+    fn refuses_a_name_with_nothing_left_in_it() {
+        assert_eq!(safe_file_name(""), None);
+        assert_eq!(safe_file_name("..."), None);
+        assert_eq!(safe_file_name("/../"), None);
+        assert_eq!(safe_file_name("   "), None);
+    }
+
+    #[test]
+    fn keeps_the_names_people_actually_use() {
+        assert_eq!(
+            safe_file_name("Minutes 12-2026 (final).pdf").as_deref(),
+            Some("Minutes 12-2026 final.pdf")
+        );
+    }
+}
+
 /// Hands a document to whatever this machine prints PDFs with.
 ///
 /// A webview has no print dialog of its own — WKWebView does not implement
@@ -43,17 +96,8 @@ async fn write_document(path: PathBuf, bytes: Vec<u8>) -> Result<(), String> {
 #[tauri::command]
 async fn print_document(name: String, bytes: Vec<u8>) -> Result<String, String> {
     // The name comes from the open document, so it is sanitised rather than
-    // trusted: no separators, no parent traversal, no empty string.
-    let safe: String = name
-        .chars()
-        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
-        .collect();
-    let safe = safe.trim_matches(['.', ' ']).to_owned();
-    let file = if safe.is_empty() {
-        "document.pdf".to_owned()
-    } else {
-        safe
-    };
+    // trusted: it decides a path.
+    let file = safe_file_name(&name).unwrap_or_else(|| "document.pdf".to_owned());
     let path = std::env::temp_dir().join(file);
 
     std::fs::write(&path, bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
@@ -83,6 +127,90 @@ async fn print_document(name: String, bytes: Vec<u8>) -> Result<String, String> 
     Ok(path.display().to_string())
 }
 
+/// Where LibreOffice lives, if it does. Fixed list, searched in order.
+///
+/// A path from the user is not accepted: "tell me where your converter is" is
+/// a fine way to get an app to run anything at all (ADR 0007).
+fn find_soffice() -> Option<PathBuf> {
+    let candidates: Vec<PathBuf> = vec![
+        #[cfg(target_os = "macos")]
+        PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
+        #[cfg(target_os = "windows")]
+        PathBuf::from("C:\\Program Files\\LibreOffice\\program\\soffice.exe"),
+        #[cfg(target_os = "windows")]
+        PathBuf::from("C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe"),
+        PathBuf::from("/usr/bin/soffice"),
+        PathBuf::from("/usr/local/bin/soffice"),
+        PathBuf::from("/usr/lib/libreoffice/program/soffice"),
+        PathBuf::from("/snap/bin/libreoffice"),
+    ];
+
+    candidates.into_iter().find(|path| path.exists())
+}
+
+/// Whether this machine can convert Office documents at all.
+#[tauri::command]
+async fn can_convert_office() -> bool {
+    find_soffice().is_some()
+}
+
+/// Converts an Office document to PDF with LibreOffice, and returns the PDF.
+///
+/// Everything happens in a temporary directory of our own: the input is written
+/// there, LibreOffice is pointed at it with its own profile so it does not
+/// disturb the user's session, and both files are removed afterwards. No
+/// network is involved, which is the whole point of doing this locally.
+#[tauri::command]
+async fn convert_office(name: String, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+    let soffice = find_soffice().ok_or_else(|| {
+        "LibreOffice is not installed on this machine. Install it from \
+         libreoffice.org and try again."
+            .to_owned()
+    })?;
+
+    // The name is sanitised rather than trusted: it decides a path.
+    let safe = safe_file_name(&name)
+        .ok_or_else(|| "that file has no name this can work with".to_owned())?;
+
+    let work = std::env::temp_dir().join(format!("pdf-suite-convert-{}", std::process::id()));
+    std::fs::create_dir_all(&work)
+        .map_err(|e| format!("could not make a working directory: {e}"))?;
+    let input = work.join(&safe);
+    std::fs::write(&input, bytes)
+        .map_err(|e| format!("could not write {}: {e}", input.display()))?;
+
+    let profile = work.join("profile");
+    let status = std::process::Command::new(&soffice)
+        .arg("--headless")
+        .arg("--norestore")
+        .arg(format!(
+            "-env:UserInstallation=file://{}",
+            profile.display()
+        ))
+        .arg("--convert-to")
+        .arg("pdf")
+        .arg("--outdir")
+        .arg(&work)
+        .arg(&input)
+        .status()
+        .map_err(|e| format!("could not run LibreOffice: {e}"))?;
+
+    let produced = work.join(format!(
+        "{}.pdf",
+        std::path::Path::new(&safe)
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string())
+            .unwrap_or_else(|| safe.clone())
+    ));
+
+    let result = std::fs::read(&produced)
+        .map_err(|e| format!("LibreOffice finished with status {status} but produced no PDF: {e}"));
+
+    // Whatever happened, the copies go.
+    let _ = std::fs::remove_dir_all(&work);
+    result
+}
+
 fn main() {
     tauri::Builder::default()
         // Native open and save dialogs. WKWebView has no File System Access API,
@@ -92,7 +220,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             read_document,
             write_document,
-            print_document
+            print_document,
+            can_convert_office,
+            convert_office
         ])
         .run(tauri::generate_context!())
         .expect("the PDF suite window failed to start");
