@@ -94,3 +94,27 @@ test("rubbish in is counted, not guessed at", () => {
   expect(marks).toHaveLength(0);
   expect(skipped).toBe(2);
 });
+
+test("a picture stamp exports as a stamp, since XFDF carries no picture", async () => {
+  const xml = toXfdf([
+    {
+      annotation: {
+        kind: "picture",
+        page: 0,
+        x: 40,
+        y: 50,
+        w: 120,
+        h: 60,
+        image: new Uint8Array([1, 2, 3]),
+        format: "png",
+        label: "seal.png",
+      },
+      rect: { x: 40, y: 50, w: 120, h: 60 },
+    },
+  ]);
+  // A <picture> element is not XFDF; a reader would skip it and the mark would
+  // simply vanish from the review.
+  expect(xml).toContain('<stamp page="0"');
+  expect(xml).not.toContain("<picture");
+  expect(xml).toContain("<contents>seal.png</contents>");
+});

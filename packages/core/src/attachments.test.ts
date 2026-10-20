@@ -1,6 +1,12 @@
-import { PDFDocument } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName } from "pdf-lib";
 import { expect, test } from "vitest";
-import { attachFile, listAttachments, readAttachment, removeAttachment } from "./attachments.js";
+import {
+  attachFile,
+  attachToPage,
+  listAttachments,
+  readAttachment,
+  removeAttachment,
+} from "./attachments.js";
 import { findHidden, sanitise } from "./sanitise.js";
 
 async function blank(): Promise<Uint8Array> {
@@ -56,4 +62,52 @@ test("sanitising removes them, which is the other half of carrying them", async 
 
   const cleaned = await sanitise(withFile, { attachments: true });
   expect(await listAttachments(cleaned.bytes)).toEqual([]);
+});
+
+test("attaches a file at a point on the page, pointing at the one copy of it", async () => {
+  const bytes = await attachToPage(await blank(), {
+    page: 0,
+    x: 40,
+    y: 150,
+    name: "marks.csv",
+    bytes: annexure,
+    note: "Annexure A",
+    author: "Registrar",
+    type: "text/csv",
+  });
+
+  // The file is in the document and readable, as any attachment is.
+  expect(await readAttachment(bytes, "marks.csv")).toEqual(annexure);
+
+  const doc = await PDFDocument.load(bytes);
+  const annots = doc.getPage(0).node.lookup(PDFName.of("Annots"), PDFArray);
+  expect(annots.size()).toBe(1);
+  const annot = annots.lookup(0, PDFDict);
+  expect(annot.lookup(PDFName.of("Subtype"))?.toString()).toBe("/FileAttachment");
+
+  // The rectangle is where it was asked for, and there is something to draw:
+  // an attachment nobody can see on the page is the failure mode here.
+  expect(
+    annot
+      .lookup(PDFName.of("Rect"), PDFArray)
+      .asArray()
+      .map((n) => Number(n.toString())),
+  ).toEqual([40, 150, 60, 170]);
+  const appearance = annot.lookup(PDFName.of("AP"), PDFDict).lookup(PDFName.of("N"));
+  expect(appearance).toBeDefined();
+
+  // /FS points at the file specification in the name tree rather than at a
+  // second embedded copy of the same bytes.
+  const fs = annot.get(PDFName.of("FS"));
+  const names = doc.catalog
+    .lookup(PDFName.of("Names"), PDFDict)
+    .lookup(PDFName.of("EmbeddedFiles"), PDFDict)
+    .lookup(PDFName.of("Names"), PDFArray);
+  expect(fs?.toString()).toBe(names.get(1)?.toString());
+});
+
+test("will not attach to a page the document does not have", async () => {
+  await expect(
+    attachToPage(await blank(), { page: 3, x: 0, y: 0, name: "a.txt", bytes: annexure }),
+  ).rejects.toThrow(/outside a 1-page/);
 });

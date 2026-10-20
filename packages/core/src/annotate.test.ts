@@ -263,6 +263,36 @@ describe("appearances for the kinds no viewer synthesises", () => {
     expect(ops).toContain("(RECEIVED \\(COPY\\)) Tj");
   });
 
+  test("a picture stamp carries the picture and places it in its box", async () => {
+    // The smallest valid PNG: one pixel. What matters here is that it is a real
+    // PNG, since pdf-lib parses it rather than taking it on trust.
+    const png = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+      ),
+      (c) => c.charCodeAt(0),
+    );
+    const out = await annotate(await blankPage(), [
+      { kind: "picture", page: 0, x: 40, y: 50, w: 120, h: 60, image: png, format: "png" },
+    ]);
+    const [annot] = await annotsOf(out);
+    expect(annot?.get(PDFName.of("Subtype"))?.toString()).toBe("/Stamp");
+
+    const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+    // Scaled to the box and moved to its corner: drawing an image is always
+    // into the unit square, so the matrix is the whole of where and how big.
+    expect(ops).toContain("120 0 0 60 40 50 cm");
+    expect(ops).toContain("/Im0 Do");
+
+    // And the picture itself is in the form's resources, where /Im0 resolves.
+    const resources = form.dict.lookup(PDFName.of("Resources")) as PDFDict;
+    const images = resources.lookup(PDFName.of("XObject")) as PDFDict;
+    expect(images.lookup(PDFName.of("Im0"))).toBeDefined();
+  });
+
   test("a signature scales its strokes into the box it is placed in", async () => {
     const strokes = [
       [

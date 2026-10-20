@@ -29,6 +29,7 @@ import type {
   TextEdit,
 } from "@pdf-suite/workers";
 import {
+  CancelledError,
   createPdfWorkerClient,
   type DocumentInfo,
   type PdfWorkerClient,
@@ -58,6 +59,8 @@ export interface DocumentState {
    */
   annotations: Annotation[];
   busy: string | undefined;
+  /** How far a long operation has got, for the bar in the status line. */
+  progress?: { done: number; total: number } | undefined;
   error: string | undefined;
 }
 
@@ -115,18 +118,33 @@ export function useDocument() {
     ): Promise<T | undefined> => {
       const worker = client.current;
       if (!worker) return undefined;
-      setState((s) => ({ ...s, busy, error: undefined }));
+      setState((s) => ({ ...s, busy, progress: undefined, error: undefined }));
       try {
         return await work(worker);
       } catch (err) {
+        // A stop the user asked for is not an error to report back at them.
+        if (err instanceof CancelledError) return undefined;
         setState((s) => ({ ...s, error: message(err) }));
         return undefined;
       } finally {
-        setState((s) => ({ ...s, busy: undefined }));
+        setState((s) => ({ ...s, busy: undefined, progress: undefined }));
       }
     },
     [],
   );
+
+  /**
+   * What the worker reports as it works through the pages. Every long operation
+   * passes this, so the status line can show a bar rather than a word that sits
+   * there for two minutes on a 500-page scan.
+   */
+  const track = useCallback(
+    (done: number, total: number) => setState((s) => ({ ...s, progress: { done, total } })),
+    [],
+  );
+
+  /** Stops whatever is running, for the Stop button in the status line. */
+  const stop = useCallback(() => client.current?.cancelAll(), []);
 
   /**
    * Opens a file. A document that needs a password is reported as
@@ -300,13 +318,9 @@ export function useDocument() {
   const search = useCallback(
     async (query: string): Promise<{ hits: SearchHit[]; truncated: boolean } | undefined> => {
       if (query.trim() === "") return { hits: [], truncated: false };
-      return run("Searching", (worker) =>
-        worker.search(query, stateRef.current.order, (done, total) =>
-          setState((s) => ({ ...s, busy: `Searching page ${done} of ${total}` })),
-        ),
-      );
+      return run("Searching", (worker) => worker.search(query, stateRef.current.order, track));
     },
-    [run],
+    [run, track],
   );
 
   /**
@@ -526,8 +540,7 @@ export function useDocument() {
             langPath: new URL("/ocr/lang/", location.href).href,
           },
           despeckle,
-          (done, total) =>
-            setState((s) => ({ ...s, busy: `Reading text, page ${done} of ${total}` })),
+          track,
         ),
       );
       if (!result) return undefined;
@@ -543,18 +556,16 @@ export function useDocument() {
       }));
       return result;
     },
-    [run],
+    [run, track],
   );
 
   /** Renders the given display positions to PNG. */
   const exportImages = useCallback(
     async (positions: number[], scale = 2) =>
       run("Rendering images", (worker) =>
-        worker.toImages(positions, stateRef.current.order, scale, (done, total) =>
-          setState((s) => ({ ...s, busy: `Rendering page ${done} of ${total}` })),
-        ),
+        worker.toImages(positions, stateRef.current.order, scale, track),
       ),
-    [run],
+    [run, track],
   );
 
   /**
@@ -678,7 +689,7 @@ export function useDocument() {
   const downsample = useCallback(
     async (dpi: number) => {
       const result = await run("Shrinking the pictures", (worker) =>
-        worker.downsample(dpi, stateRef.current.order, stateRef.current.annotations),
+        worker.downsample(dpi, stateRef.current.order, stateRef.current.annotations, track),
       );
       if (!result) return undefined;
       setDocVersion((v) => v + 1);
@@ -895,9 +906,9 @@ export function useDocument() {
   const compare = useCallback(
     async (other: ArrayBuffer): Promise<DocumentDiff | undefined> =>
       run("Comparing", (worker) =>
-        worker.compare(other, stateRef.current.order, stateRef.current.annotations),
+        worker.compare(other, stateRef.current.order, stateRef.current.annotations, track),
       ),
-    [run],
+    [run, track],
   );
 
   /** The files carried inside the document. */
@@ -912,9 +923,13 @@ export function useDocument() {
   }, []);
 
   const attach = useCallback(
-    async (file: { name: string; bytes: ArrayBuffer; type?: string | undefined }) =>
+    async (
+      file: { name: string; bytes: ArrayBuffer; type?: string | undefined },
+      /** Pinned to a page as a paperclip comment; the attachments panel when absent. */
+      at?: { page: number; x: number; y: number; note?: string; author?: string },
+    ) =>
       rewrite("Attaching the file", (worker) =>
-        worker.attach(file, stateRef.current.order, stateRef.current.annotations),
+        worker.attach(file, stateRef.current.order, stateRef.current.annotations, at),
       ),
     [rewrite],
   );
@@ -963,21 +978,21 @@ export function useDocument() {
 
   /** The document's text, in the order on screen. */
   const extractAllText = useCallback(
-    async () => run("Extracting text", (worker) => worker.toText(stateRef.current.order)),
-    [run],
+    async () => run("Extracting text", (worker) => worker.toText(stateRef.current.order, track)),
+    [run, track],
   );
 
   /** The document's words as a Word file. */
   const exportDocx = useCallback(
     async (title: string) =>
-      run("Writing the Word file", (worker) => worker.toDocx(stateRef.current.order, title)),
-    [run],
+      run("Writing the Word file", (worker) => worker.toDocx(stateRef.current.order, title, track)),
+    [run, track],
   );
 
   /** The tables this can find, as CSV. */
   const exportCsv = useCallback(
-    async () => run("Looking for tables", (worker) => worker.toCsv(stateRef.current.order)),
-    [run],
+    async () => run("Looking for tables", (worker) => worker.toCsv(stateRef.current.order, track)),
+    [run, track],
   );
 
   /** Crops pages, or puts the whole page back when the box is null. */
@@ -1092,6 +1107,7 @@ export function useDocument() {
   return {
     ready,
     state,
+    stop,
     open,
     unlock,
     openFiles,

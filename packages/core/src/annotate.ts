@@ -122,6 +122,23 @@ export type Annotation =
   /** A rubber stamp: a labelled box, as in Approved or Draft. */
   | (Common & { kind: "stamp"; x: number; y: number; w: number; h: number; label: string })
   /**
+   * A stamp made from a picture — an office seal, a scanned signature, a logo.
+   * Acrobat calls these custom stamps, and they are the ones an institution
+   * actually uses: the words are on the seal already.
+   */
+  | (Common & {
+      kind: "picture";
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      image: Uint8Array;
+      /** PNG and JPEG are what can be embedded; nothing else is accepted. */
+      format: "png" | "jpg";
+      /** What a reader with no pictures should be told this is. */
+      label?: string | undefined;
+    })
+  /**
    * A drawn signature, placed as one object rather than as loose ink so it can
    * be moved and resized. Strokes are in 0-1 of the box, so the same signature
    * fits any size.
@@ -179,6 +196,7 @@ function appearance(
   rect: [number, number, number, number],
   operators: string,
   fonts?: Record<string, PDFRef>,
+  images?: Record<string, PDFRef>,
 ): PDFRef {
   return doc.context.register(
     doc.context.flateStream(operators, {
@@ -186,7 +204,10 @@ function appearance(
       Subtype: "Form",
       FormType: 1,
       BBox: rect,
-      Resources: fonts ? { Font: fonts } : {},
+      Resources: {
+        ...(fonts ? { Font: fonts } : {}),
+        ...(images ? { XObject: images } : {}),
+      },
     }),
   );
 }
@@ -762,6 +783,40 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
             C: colour,
             CA: 1,
             AP: { N: appearance(doc, rect, ops, { F1: font.ref }) },
+          }),
+        ),
+      );
+      continue;
+    }
+
+    if (annotation.kind === "picture") {
+      const rect: [number, number, number, number] = [
+        annotation.x,
+        annotation.y,
+        annotation.x + annotation.w,
+        annotation.y + annotation.h,
+      ];
+      const image =
+        annotation.format === "png"
+          ? await doc.embedPng(annotation.image)
+          : await doc.embedJpg(annotation.image);
+      // The matrix places the picture in its box: scaled to the box, moved to
+      // its corner. Drawing an image is always into the unit square, so this
+      // is the only way to say where and how big.
+      const ops =
+        `q\n${n(annotation.w)} 0 0 ${n(annotation.h)} ${n(rect[0])} ${n(rect[1])} cm\n` +
+        `/Im0 Do\nQ\n`;
+
+      page.node.addAnnot(
+        context.register(
+          context.obj({
+            ...shared,
+            Subtype: "Stamp",
+            Rect: rect,
+            Name: "Draft",
+            ...(annotation.label ? { Contents: PDFString.of(annotation.label) } : {}),
+            CA: 1,
+            AP: { N: appearance(doc, rect, ops, undefined, { Im0: image.ref }) },
           }),
         ),
       );

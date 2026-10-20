@@ -112,7 +112,10 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Comment replies and review states (`/IRT`, `/RT`), shown as threads
 - [x] XFDF import and export — review without a server
 - [x] Compare two versions: a word-level diff per page, saying what went and what arrived
-- [x] Attachments: files carried inside the document, attached, listed, extracted and removed
+- [x] Attachments: files carried inside the document, attached, listed, extracted and removed, and pinned to a point on a page as a `/FileAttachment` comment
+- [x] Long jobs report where they are, page by page, and can be stopped from the status line
+- [x] Picture stamps: an office seal, a scanned signature or a logo, placed as a stamp
+- [x] Batch sequences that can be named and kept for next time
 - [x] Form builder: draw, name and remove text boxes, tick boxes and dropdowns
 - [x] Permissions with the password, two-up view, export to plain text, and a marks list that filters, searches and sorts
 - [x] Crop, watermark and page labels — the page-level polish Acrobat keeps under Organize

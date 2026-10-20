@@ -302,6 +302,13 @@ export type WorkerRequest = { id: number } &
     | {
         kind: "attach";
         file: { name: string; bytes: ArrayBuffer; type?: string | undefined };
+        /**
+         * Where the paperclip goes, in the coordinates the reader sees. Absent
+         * attaches to the document rather than to a page, which is the
+         * difference between a file in the attachments panel and a comment
+         * beside the clause it belongs to.
+         */
+        at?: { page: number; x: number; y: number; note?: string; author?: string } | undefined;
         order: number[];
         annotations: Annotation[];
       }

@@ -81,7 +81,11 @@ function elementFor(kind: Annotation["kind"]): string {
     case "text":
     case "callout":
       return "freetext";
+    // A picture stamp exports as a stamp without its picture: XFDF carries no
+    // appearance, so the other side gets the box and the name of the file. That
+    // is lossy, and it is better than dropping the mark.
     case "signature":
+    case "picture":
       return "stamp";
     default:
       return kind;
@@ -131,7 +135,8 @@ function contentsOf(annotation: Annotation): string {
   return "contents" in annotation
     ? annotation.contents
     : "label" in annotation
-      ? annotation.label
+      ? // A picture stamp's label is optional: the words are on the picture.
+        (annotation.label ?? "")
       : "";
 }
 

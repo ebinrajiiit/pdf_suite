@@ -2722,3 +2722,233 @@ test("edits the text in the document itself, not a note over it", async ({ page 
   await page.getByRole("button", { name: "Find" }).click();
   await expect(page.getByTestId("hit-count")).toBeHidden();
 });
+
+test("pins a file to a point on the page, where a reader can see it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "circular.pdf", await textFixture([["Circular 12/2026"]]));
+
+  // Counts the paperclip's own colour, which nothing else on the page uses.
+  const clip = () =>
+    page
+      .getByTestId("viewer")
+      .getByRole("img", { name: "Page 1" })
+      .evaluate(async (el) => {
+        const canvas = el as HTMLCanvasElement;
+        const off = new OffscreenCanvas(canvas.width, canvas.height);
+        const ctx = off.getContext("2d")!;
+        ctx.drawImage(canvas, 0, 0);
+        const { data } = ctx.getImageData(0, 0, off.width, off.height);
+        let found = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i]! > 200 && data[i + 1]! > 170 && data[i + 1]! < 235 && data[i + 2]! < 130) {
+            found++;
+          }
+        }
+        return found;
+      });
+  expect(await clip()).toBe(0);
+
+  await page.getByTestId("tab-attachments").click();
+  await page.getByTestId("pin-attachment").click();
+  await page.setInputFiles('[data-testid="attach-input"]', {
+    name: "annexure.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("roll,marks\n1,90\n"),
+  });
+  await expect(page.getByTestId("status")).toContainText("Click the page where annexure.csv", {
+    timeout: 30_000,
+  });
+
+  // The click says where, which is the only thing left to ask.
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.click(area.x + 80, area.y + 90);
+  await expect(page.getByTestId("status")).toHaveText("Pinned annexure.csv to page 1", {
+    timeout: 30_000,
+  });
+
+  // Visible on the page, not only present in the file.
+  await expect.poll(clip, { timeout: 30_000 }).toBeGreaterThan(20);
+
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  const annots = doc.getPage(0).node.lookup(PDFName.of("Annots"), PDFArray);
+  const annot = annots.lookup(0, PDFDict);
+  expect(annot.lookup(PDFName.of("Subtype"))?.toString()).toBe("/FileAttachment");
+  expect(annot.get(PDFName.of("FS"))).toBeDefined();
+
+  // And the file itself travels with it, as any attachment does.
+  await page.getByTestId("tab-attachments").click();
+  await expect(page.getByTestId("attachment-list")).toContainText("annexure.csv");
+});
+
+test("shows how far a long job has got, and stops it when asked", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // Ten small scanned pages: enough that OCR is still working when Stop is
+  // clicked, and enough for the bar to have somewhere to go, while each page is
+  // cheap enough that a loaded machine still reaches the next page quickly —
+  // cancellation lands between pages, never inside one.
+  await page.evaluate(async () => {
+    const transfer = new DataTransfer();
+    for (let n = 1; n <= 10; n++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 700;
+      canvas.height = 120;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#000";
+      ctx.font = '48px "Helvetica Neue", Helvetica, Arial, sans-serif';
+      ctx.textBaseline = "middle";
+      ctx.fillText(`Register page number ${n}`, 20, 60);
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/png"),
+      );
+      transfer.items.add(new File([blob], `page-${n}.png`, { type: "image/png" }));
+    }
+    document
+      .querySelector(".app")!
+      .dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+  });
+  await expect(page.getByText("10 pages")).toBeVisible({ timeout: 60_000 });
+
+  await page.getByTestId("run-ocr").click();
+
+  // A word that sits there for two minutes is not a progress report; a page
+  // count and a bar are.
+  await expect(page.getByTestId("status")).toContainText(/page \d+ of 10/, { timeout: 180_000 });
+  await expect(page.getByTestId("progress")).toBeVisible();
+
+  // And it can be given up on, which is the other half of a long job.
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 60_000 });
+  await expect(page.getByTestId("progress")).toBeHidden();
+  // Stopping is not failing, and it is not finishing either: the document is
+  // still open, nothing is reported as an error, and the run did not complete.
+  await expect(page.getByTestId("status")).not.toHaveClass(/status-error/);
+  await expect(page.getByTestId("status")).not.toContainText("Read 10 pages");
+  await expect(page.getByText("10 pages")).toBeVisible();
+});
+
+test("the tools panel can be put away and brought back", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "circular.pdf", await textFixture([["Circular 12/2026"]]));
+
+  const tools = page.getByRole("complementary", { name: "Tools" });
+  await expect(tools).toBeVisible();
+
+  // Away, which is what a small screen needs and a wide one sometimes wants.
+  await page.getByTestId("toggle-tools").click();
+  await expect(tools).toBeHidden();
+
+  // And back, which is the part that used to be missing: below 980px the panel
+  // disappeared with no way to ask for it again.
+  await page.getByTestId("toggle-tools").click();
+  await expect(tools).toBeVisible();
+
+  // The palette knows it too, by name.
+  await page.getByTestId("open-palette").click();
+  await page.getByTestId("palette-input").fill("tools panel");
+  await page.keyboard.press("Enter");
+  await expect(tools).toBeHidden();
+});
+
+test("stamps a page with a picture of a seal", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "letter.pdf", await textFixture([["Office of the Registrar"]]));
+
+  // A solid blue square stands in for a seal: nothing else on the page is blue,
+  // so finding blue pixels is finding the seal.
+  const seal = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 200;
+    canvas.height = 200;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#1040c0";
+    ctx.fillRect(0, 0, 200, 200);
+    const blob = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((b) => resolve(b!), "image/png"),
+    );
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  });
+
+  const blue = () =>
+    page
+      .getByTestId("viewer")
+      .getByRole("img", { name: "Page 1" })
+      .evaluate(async (el) => {
+        const canvas = el as HTMLCanvasElement;
+        const off = new OffscreenCanvas(canvas.width, canvas.height);
+        const ctx = off.getContext("2d")!;
+        ctx.drawImage(canvas, 0, 0);
+        const { data } = ctx.getImageData(0, 0, off.width, off.height);
+        let found = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i]! < 90 && data[i + 1]! < 120 && data[i + 2]! > 150) found++;
+        }
+        return found;
+      });
+  expect(await blue()).toBe(0);
+
+  await page.getByTestId("tool-picture").click();
+  await page.setInputFiles('[data-testid="seal-input"]', {
+    name: "seal.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(seal),
+  });
+  await expect(page.getByTestId("seal-name")).toContainText("seal.png");
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.click(area.x + 120, area.y + 200);
+  // Shown as a preview straight away, from the picture's own bytes.
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+
+  // Saved, reopened, and drawn by the engine — a stamp whose appearance stream
+  // the engine will not draw is a stamp nobody sees.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Stamp"]);
+  await openFixture(page, "sealed.pdf", saved);
+  await expect.poll(blue, { timeout: 30_000 }).toBeGreaterThan(50);
+});
+
+test("a batch sequence can be named, kept and used again", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await page.getByTestId("batch").click();
+  await page.getByTestId("batch-action").selectOption("redact");
+  await page.getByTestId("batch-add-step").click();
+  await page.getByTestId("batch-action").selectOption("compress");
+  await page.getByTestId("batch-add-step").click();
+
+  await page.getByTestId("sequence-name").fill("Before circulation");
+  await page.getByTestId("sequence-save").click();
+  await expect(page.getByTestId("status")).toHaveText("Kept the sequence Before circulation");
+
+  // Gone from the steps, still there as something to pick up again.
+  await page.getByTestId("batch-clear").click();
+  await expect(page.getByTestId("batch-steps")).toBeHidden();
+  await page.getByTestId("sequence-Before circulation").click();
+  await expect(page.getByTestId("batch-steps")).toContainText("1. Redact personal numbers");
+  await expect(page.getByTestId("batch-steps")).toContainText("2. Compress");
+
+  // And it survives a reload, which is the point of keeping it.
+  await page.reload();
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await page.getByTestId("batch").click();
+  await page.getByTestId("sequence-Before circulation").click();
+  await expect(page.getByTestId("batch-steps")).toContainText("2. Compress");
+
+  // Forgetting one takes it out of the list.
+  await page.getByTestId("sequence-remove-Before circulation").click();
+  await expect(page.getByTestId("sequence-Before circulation")).toBeHidden();
+});

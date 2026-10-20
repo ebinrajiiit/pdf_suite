@@ -8,6 +8,7 @@ import {
   clearRedactionMarks,
   drawRedactionBoxes,
   attachFile,
+  attachToPage,
   deleteAnnotation,
   diffDocuments,
   fromXfdf,
@@ -791,11 +792,25 @@ async function handle(request: WorkerRequest): Promise<void> {
     }
     case "attach": {
       const base = await materialise(id, request.order, request.annotations);
-      const withFile = await attachFile(base, {
-        name: request.file.name,
-        bytes: new Uint8Array(request.file.bytes),
-        ...(request.file.type ? { type: request.file.type } : {}),
-      });
+      const bytes = new Uint8Array(request.file.bytes);
+      const withFile = request.at
+        ? // The materialised bytes are in display order, so the position the
+          // user clicked on is the page index here.
+          await attachToPage(base, {
+            page: request.at.page,
+            x: request.at.x,
+            y: request.at.y,
+            name: request.file.name,
+            bytes,
+            ...(request.at.note ? { note: request.at.note } : {}),
+            ...(request.at.author ? { author: request.at.author } : {}),
+            ...(request.file.type ? { type: request.file.type } : {}),
+          })
+        : await attachFile(base, {
+            name: request.file.name,
+            bytes,
+            ...(request.file.type ? { type: request.file.type } : {}),
+          });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, withFile, request) });
       return;

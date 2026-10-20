@@ -28,8 +28,14 @@ export { imagesToPdf, isSupportedImage } from "./images.js";
 export type { ImagesToPdfOptions, PageBox, SourceImage } from "./images.js";
 export { formatNumber, letters, place, roman, stampPages } from "./stamp.js";
 export { readProperties, setProperties } from "./properties.js";
-export { attachFile, listAttachments, readAttachment, removeAttachment } from "./attachments.js";
-export type { Attachment } from "./attachments.js";
+export {
+  attachFile,
+  attachToPage,
+  listAttachments,
+  readAttachment,
+  removeAttachment,
+} from "./attachments.js";
+export type { Attachment, AttachmentNote } from "./attachments.js";
 export { checkPdfA, checkPrint, isPortfolio, makePortfolio, setTrimBox } from "./standards.js";
 export type { PrintCheckInput, StandardIssue } from "./standards.js";
 export { isSigned, readSignatures } from "./signatures.js";

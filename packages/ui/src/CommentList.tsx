@@ -302,6 +302,7 @@ const EQUIVALENT: Record<string, string> = {
   callout: "freetext",
   caret: "caret",
   stamp: "stamp",
+  picture: "stamp",
   signature: "stamp",
 };
 
@@ -320,5 +321,6 @@ const LABELS: Record<Annotation["kind"], string> = {
   callout: "Callout",
   caret: "Insert mark",
   stamp: "Stamp",
+  picture: "Picture stamp",
   signature: "Signature",
 };

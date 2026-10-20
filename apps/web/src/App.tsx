@@ -63,6 +63,7 @@ import {
   readFiles,
   saveBytes,
   suffixName,
+  type PickedFile,
 } from "./file-io.js";
 import { useDocument } from "./use-document.js";
 import { mailMerge, runBatch, type BatchAction, type BatchResult } from "./batch.js";
@@ -71,6 +72,7 @@ export function App() {
   const {
     ready,
     state,
+    stop,
     open,
     unlock,
     mergeIn,
@@ -145,6 +147,7 @@ export function App() {
   const xfdfInput = useRef<HTMLInputElement>(null);
   const pictureInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const sealInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const [saved, setSaved] = useState<string | undefined>();
@@ -197,6 +200,30 @@ export function App() {
   const [batchAction, setBatchAction] = useState<BatchAction["kind"]>("number");
   /** The steps to run, in order, over each file. */
   const [batchSteps, setBatchSteps] = useState<BatchAction["kind"][]>([]);
+  /**
+   * Sequences someone has named and kept, in this browser. An office does the
+   * same five steps to the same kind of file every week; retyping them every
+   * week is how a step gets forgotten.
+   */
+  const [sequences, setSequences] = useState<Record<string, BatchAction["kind"][]>>(() => {
+    try {
+      const stored = localStorage.getItem(SEQUENCES_KEY);
+      return stored ? (JSON.parse(stored) as Record<string, BatchAction["kind"][]>) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [sequenceName, setSequenceName] = useState("");
+
+  const keepSequences = useCallback((next: Record<string, BatchAction["kind"][]>) => {
+    setSequences(next);
+    try {
+      localStorage.setItem(SEQUENCES_KEY, JSON.stringify(next));
+    } catch {
+      // Private browsing, or storage turned off. The sequence still works for
+      // this session; it just will not be there next time.
+    }
+  }, []);
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const batchInput = useRef<HTMLInputElement>(null);
@@ -273,6 +300,19 @@ export function App() {
 
   /** What a stamp says. Acrobat's own list, plus the one a registry uses. */
   const [stampLabel, setStampLabel] = useState("Approved");
+  /**
+   * A picture to stamp pages with — an office seal, a scanned signature, a
+   * letterhead mark. Kept in memory only: it is the user's picture, and it goes
+   * into the document when the document is written, nowhere else.
+   */
+  const [seal, setSeal] = useState<{
+    name: string;
+    bytes: Uint8Array;
+    format: "png" | "jpg";
+    /** Points, at the size it will be placed, keeping the picture's proportions. */
+    w: number;
+    h: number;
+  } | null>(null);
   /** Whose name a stamp carrying {name} should say. */
   const [stampName, setStampName] = useState("");
   /**
@@ -360,6 +400,23 @@ export function App() {
   /** A placed point waiting for its text, for the note and text tools. */
   const [pendingPoint, setPendingPoint] = useState<{ page: number; x: number; y: number } | null>(
     null,
+  );
+  /**
+   * A file chosen for pinning to a page, waiting for the click that says where.
+   * The file is picked first because the picker needs the user's click of its
+   * own, and a click on the page is then only the position.
+   */
+  const [pendingAttachment, setPendingAttachment] = useState<PickedFile | null>(null);
+  /** Set when the hidden file input was opened by Pin rather than by Attach. */
+  const pinNext = useRef(false);
+  /**
+   * Whether the tools panel is shown. A narrow window starts without it — it
+   * used to disappear below 980 px with no way to get it back — and the button
+   * in the top bar is that way back, as well as a way to give the document the
+   * whole window on a wide one.
+   */
+  const [showTools, setShowTools] = useState(
+    () => typeof window === "undefined" || window.innerWidth > 980,
   );
   const [zoom, setZoom] = useState<number | "fit" | "page">("fit");
   const [dropping, setDropping] = useState(false);
@@ -461,6 +518,49 @@ export function App() {
     const at = positions.length === 1 ? positions[0]! + 1 : undefined;
     await mergeIn(await pickFiles(true), at);
   }, [mergeIn, positions]);
+
+  /**
+   * Loads a picture to stamp with, sized to the page rather than to its pixels:
+   * a 2000-pixel scan of a seal is not a 2000-point seal. 120 points across is
+   * about the size of a real one, and the height follows the picture.
+   */
+  const loadSeal = useCallback(async (file: PickedFile) => {
+    const format = /\.png$/i.test(file.name) || file.type === "image/png" ? "png" : "jpg";
+    const bytes = new Uint8Array(file.bytes);
+    const blob = new Blob([bytes as BlobPart], {
+      type: format === "png" ? "image/png" : "image/jpeg",
+    });
+    const w = 120;
+    let h = 120;
+    try {
+      const bitmap = await createImageBitmap(blob);
+      h = Math.round((120 * bitmap.height) / Math.max(bitmap.width, 1));
+      bitmap.close();
+    } catch {
+      // A picture the browser cannot decode will not embed either; the square
+      // default at least shows something is wrong rather than failing silently.
+    }
+    setSeal({ name: file.name, bytes, format, w, h });
+    setTool("picture");
+    setSaved(`Click a page to stamp it with ${file.name}`);
+  }, []);
+
+  const handleSeal = useCallback(async () => {
+    if (!canUsePicker()) {
+      sealInput.current?.click();
+      return;
+    }
+    const picked = await pickFiles(false, "image");
+    if (picked[0]) await loadSeal(picked[0]);
+  }, [loadSeal]);
+
+  const onSealInput = useCallback(
+    async (files: FileList | null) => {
+      const [file] = await readFiles(files ?? []);
+      if (file) await loadSeal(file);
+    },
+    [loadSeal],
+  );
 
   const onImageInput = useCallback(
     async (files: FileList | null) => openImages(await readFiles(files ?? [])),
@@ -1205,6 +1305,18 @@ export function App() {
         );
         return;
       }
+      if (tool === "attachment") {
+        const file = pendingAttachment;
+        setPendingAttachment(null);
+        setTool(undefined);
+        if (file) {
+          void attach(
+            { name: file.name, bytes: file.bytes, ...(file.type ? { type: file.type } : {}) },
+            { page, x: shape.x, y: shape.y - 20 },
+          ).then((done) => done && setSaved(`Pinned ${file.name} to page ${page + 1}`));
+        }
+        return;
+      }
       if (tool === "callout" || tool === "caret") {
         // Both need words before they are worth creating, like a note.
         setPendingPoint({ page, x: shape.x, y: shape.y });
@@ -1229,6 +1341,21 @@ export function App() {
         });
         return;
       }
+      if (tool === "picture") {
+        if (!seal) return;
+        addAnnotation({
+          kind: "picture",
+          page,
+          x: shape.x,
+          y: shape.y - seal.h,
+          w: seal.w,
+          h: seal.h,
+          image: seal.bytes,
+          format: seal.format,
+          label: seal.name,
+        });
+        return;
+      }
       if (tool === "signature") {
         if (!signature) {
           setDrawingSignature(true);
@@ -1250,11 +1377,14 @@ export function App() {
     },
     [
       addAnnotation,
+      attach,
       colour,
       crop,
+      pendingAttachment,
       placeMarkup,
       positions,
       scalePerUnit,
+      seal,
       scaleUnit,
       signature,
       stampLabel,
@@ -1573,13 +1703,37 @@ export function App() {
     if (picked[0]) await attachOne(picked[0]);
   }, [attachOne]);
 
+  /** Holds the chosen file and waits for the click that says where it goes. */
+  const startPin = useCallback((file: PickedFile) => {
+    setPendingAttachment(file);
+    setTool("attachment");
+    closePanels();
+    setSaved(`Click the page where ${file.name} should be pinned`);
+  }, []);
+
+  const handlePinAttachment = useCallback(async () => {
+    if (!canUsePicker()) {
+      // The hidden input is the only route here, so which button opened it has
+      // to be remembered until its change event arrives.
+      pinNext.current = true;
+      attachInput.current?.click();
+      return;
+    }
+    const picked = await pickFiles(false, "any");
+    if (picked[0]) startPin(picked[0]);
+  }, [startPin]);
+
   const onAttachInput = useCallback(
     async (files: FileList | null) => {
       if (!files?.length) return;
       const [file] = await readFiles(files);
-      if (file) await attachOne(file);
+      const pin = pinNext.current;
+      pinNext.current = false;
+      if (!file) return;
+      if (pin) startPin(file);
+      else await attachOne(file);
     },
-    [attachOne],
+    [attachOne, startPin],
   );
 
   const handleSaveAttachment = useCallback(
@@ -2010,6 +2164,14 @@ export function App() {
         run: () => setSinglePage((on) => !on),
       },
       {
+        id: "tools-panel",
+        label: showTools ? "Hide the tools panel" : "Show the tools panel",
+        group: "View",
+        keywords: "panel tools wide full",
+        disabled: !doc,
+        run: () => setShowTools((on) => !on),
+      },
+      {
         id: "shortcuts",
         label: "Keyboard shortcuts",
         group: "View",
@@ -2079,6 +2241,7 @@ export function App() {
     rotatePages,
     scanner,
     showingSignatures,
+    showTools,
     singlePage,
     target,
     undo,
@@ -2120,6 +2283,8 @@ export function App() {
       danger?: boolean;
       /** When the visible label is a glyph, the name assistive tech reads. */
       name?: string;
+      /** For a button that holds a state, like a panel being open. */
+      pressed?: boolean;
     } = {},
   ) => (
     <button
@@ -2129,6 +2294,7 @@ export function App() {
       disabled={options.off ?? disabled}
       {...(options.testId ? { "data-testid": options.testId } : {})}
       {...(options.name ? { "aria-label": options.name } : {})}
+      {...(options.pressed === undefined ? {} : { "aria-pressed": options.pressed })}
       title={options.hint ?? options.name ?? label}
     >
       {label}
@@ -2168,6 +2334,13 @@ export function App() {
                 },
               )
             : null}
+          {action(showTools ? "Hide tools" : "Show tools", () => setShowTools((on) => !on), {
+            testId: "toggle-tools",
+            name: showTools ? "Hide the tools panel" : "Show the tools panel",
+            hint: "Gives the document the whole window, or brings the tools back",
+            pressed: showTools,
+            off: !info,
+          })}
           {action("⌘K Actions", () => setPalette(true), {
             testId: "open-palette",
             name: "All actions by name",
@@ -2291,6 +2464,14 @@ export function App() {
         data-testid="image-input"
         className="visually-hidden"
         onChange={(event) => void onImageInput(event.target.files)}
+      />
+      <input
+        ref={sealInput}
+        type="file"
+        accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+        data-testid="seal-input"
+        className="visually-hidden"
+        onChange={(event) => void onSealInput(event.target.files)}
       />
       <input
         ref={mergeInput}
@@ -3014,7 +3195,63 @@ export function App() {
               <span className="hfnote" data-testid="batch-steps">
                 {batchSteps.map((step, index) => `${index + 1}. ${BATCH_LABELS[step]}`).join("  ")}
               </span>
-              {action("Clear the steps", () => setBatchSteps([]), { testId: "batch-clear" })}
+              {action("Clear the steps", () => setBatchSteps([]), {
+                testId: "batch-clear",
+                off: batchBusy !== null,
+              })}
+              <input
+                className="hfslot"
+                aria-label="Name for this sequence"
+                placeholder="Name it, to keep it"
+                data-testid="sequence-name"
+                value={sequenceName}
+                onChange={(event) => setSequenceName(event.target.value)}
+              />
+              {action(
+                "Keep this sequence",
+                () => {
+                  const name = sequenceName.trim();
+                  if (name === "") return;
+                  keepSequences({ ...sequences, [name]: batchSteps });
+                  setSequenceName("");
+                  setSaved(`Kept the sequence ${name}`);
+                },
+                {
+                  testId: "sequence-save",
+                  hint: "Kept in this browser, on this device",
+                  off: sequenceName.trim() === "" || batchBusy !== null,
+                },
+              )}
+            </div>
+          ) : null}
+          {Object.keys(sequences).length > 0 ? (
+            <div className="hfrow">
+              <span className="hflabel">Kept</span>
+              {Object.entries(sequences).map(([name, steps]) => (
+                <span key={name} className="hfcheck">
+                  {action(name, () => setBatchSteps(steps), {
+                    testId: `sequence-${name}`,
+                    hint: steps.map((step) => BATCH_LABELS[step]).join(", "),
+                    off: batchBusy !== null,
+                  })}
+                  <button
+                    type="button"
+                    className="action action-danger"
+                    data-testid={`sequence-remove-${name}`}
+                    aria-label={`Forget the sequence ${name}`}
+                    title={`Forget the sequence ${name}`}
+                    onClick={() =>
+                      keepSequences(
+                        Object.fromEntries(
+                          Object.entries(sequences).filter(([kept]) => kept !== name),
+                        ),
+                      )
+                    }
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
           ) : null}
           {batchBusy ? (
@@ -3437,7 +3674,7 @@ export function App() {
       ) : null}
 
       {info ? (
-        <div className="workspace">
+        <div className={showTools ? "workspace" : "workspace workspace-wide"}>
           <aside className="sidebar">
             <div className="sidebar-tabs" role="tablist" aria-label="Sidebar">
               {(
@@ -3623,6 +3860,10 @@ export function App() {
                   {action("Attach a file…", () => void handleAttach(), {
                     testId: "attach-file",
                     hint: "Carries a file inside this PDF, wherever it goes",
+                  })}
+                  {action("Pin a file to a page…", () => void handlePinAttachment(), {
+                    testId: "pin-attachment",
+                    hint: "Carried the same way, but marked on the page as a paperclip",
                   })}
                   {attached.length > 0
                     ? action(
@@ -3898,7 +4139,9 @@ export function App() {
                   </span>
                 </div>
               ) : null}
-              <div className="tool-grid">{(["stamp", "signature"] as const).map(toolButton)}</div>
+              <div className="tool-grid">
+                {(["stamp", "signature", "picture"] as const).map(toolButton)}
+              </div>
               {tool && ["polygon", "cloud", "polyline"].includes(tool) ? (
                 <p className="tool-hint" data-testid="path-hint">
                   Click each corner; double-click to finish.
@@ -3927,6 +4170,18 @@ export function App() {
                     value={stampName}
                     onChange={(event) => setStampName(event.target.value)}
                   />
+                </div>
+              ) : null}
+              {tool === "picture" ? (
+                <div className="tool-options">
+                  <span className="tool-options-label">Picture</span>
+                  {action(seal ? "Choose another…" : "Choose a picture…", () => void handleSeal(), {
+                    testId: "choose-seal",
+                    hint: "A seal, a scanned signature or a logo, from this device",
+                  })}
+                  <span className="tool-hint" data-testid="seal-name">
+                    {seal ? `${seal.name} — click a page to place it` : "Choose one first"}
+                  </span>
                 </div>
               ) : null}
               {tool === "signature" ? (
@@ -4347,6 +4602,23 @@ export function App() {
           data-testid="status"
         >
           {status ?? (ready ? "Ready" : "Starting engine…")}
+          {state.progress ? (
+            <>
+              {" — page "}
+              {state.progress.done} of {state.progress.total}
+              <progress
+                className="status-progress"
+                data-testid="progress"
+                value={state.progress.done}
+                max={state.progress.total}
+              />
+            </>
+          ) : null}
+          {state.busy ? (
+            <button type="button" className="status-stop" onClick={stop}>
+              Stop
+            </button>
+          ) : null}
         </span>
       </footer>
 
@@ -4386,6 +4658,8 @@ const TOOL_ICONS: Record<AnnotationTool, string> = {
   caret: "^",
   stamp: "▣",
   signature: "✒",
+  picture: "✿",
+  attachment: "📎",
   redact: "█",
 };
 
@@ -4412,6 +4686,8 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   caret: "Click where something is missing, then type what belongs there",
   stamp: "Click a page to stamp it",
   signature: "Click a page to sign it",
+  picture: "Click a page to stamp it with your picture",
+  attachment: "Click where the file should be pinned",
   redact: "Drag over content to delete it permanently",
 };
 
@@ -4438,6 +4714,8 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   caret: "Insert",
   stamp: "Stamp",
   signature: "Sign",
+  picture: "Seal",
+  attachment: "Pin a file",
   redact: "Redact",
 };
 
@@ -4497,6 +4775,9 @@ const SIGNATURE_KEY = "pdf-suite.signature";
 
 /** Which tool groups the reader left open, in this browser only. */
 const GROUPS_KEY = "pdf-suite.groups";
+
+/** Named batch sequences, kept in this browser only. */
+const SEQUENCES_KEY = "pdf-suite.sequences";
 
 function loadSignature(): { x: number; y: number }[][] | null {
   try {

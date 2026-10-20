@@ -1583,9 +1583,15 @@ textarea:focus-visible,
 .annots-stamp,
 .annots-signature,
 .annots-callout,
-.annots-caret {
+.annots-caret,
+.annots-picture,
+.annots-attachment {
   pointer-events: auto;
   cursor: copy;
+}
+/* A picture stamp before it is written in: shown from its own bytes. */
+.annot-picture {
+  object-fit: contain;
 }
 .annot {
   position: absolute;
@@ -1775,10 +1781,32 @@ textarea:focus-visible,
 }
 .status {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .status-error {
   color: var(--danger);
   font-weight: 600;
+}
+/* A bar for the long operations, so a 500-page scan shows how far it has got. */
+.status-progress {
+  width: 7rem;
+  height: 0.4rem;
+  accent-color: var(--accent);
+}
+.status-stop {
+  padding: 0.05rem 0.4rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.2rem;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+.status-stop:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .dropzone {
@@ -1804,12 +1832,21 @@ textarea:focus-visible,
   white-space: nowrap;
 }
 
-/* Narrow windows: the tools panel is the first thing to go. */
+/* The tools panel hidden, by the button in the top bar. A narrow window starts
+   that way, since the panel used to vanish there with no way to bring it back. */
+.workspace-wide {
+  grid-template-columns: 210px 1fr;
+}
+.workspace-wide .tools {
+  display: none;
+}
+
+/* Narrow windows: the sidebar gives up what it can spare. */
 @media (max-width: 980px) {
   .workspace {
-    grid-template-columns: 170px 1fr;
+    grid-template-columns: 170px 1fr 248px;
   }
-  .tools {
-    display: none;
+  .workspace-wide {
+    grid-template-columns: 170px 1fr;
   }
 }

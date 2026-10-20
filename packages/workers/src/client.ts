@@ -149,6 +149,8 @@ export interface PdfWorkerClient {
     file: { name: string; bytes: ArrayBuffer; type?: string | undefined },
     order: number[],
     annotations: Annotation[],
+    /** Placed on a page as a paperclip comment; document-level when absent. */
+    at?: { page: number; x: number; y: number; note?: string; author?: string },
   ): Promise<DocumentInfo>;
   readAttachment(name: string, order: number[], annotations: Annotation[]): Promise<ArrayBuffer>;
   removeAttachment(name: string, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
@@ -334,6 +336,12 @@ export interface PdfWorkerClient {
   close(): Promise<void>;
   /** Abandons the operation the returned handle identifies. */
   cancel(id: number): void;
+  /**
+   * Abandons everything now running. The app has no handle on a request — the
+   * ids are the client's own — and only ever has one long operation in flight,
+   * so "stop what you are doing" is the useful shape for a Stop button.
+   */
+  cancelAll(): void;
   terminate(): void;
 }
 
@@ -501,9 +509,11 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     async attachments(order, annotations) {
       return expect(await send({ kind: "attachments", order, annotations }), "attached").files;
     },
-    async attach(file, order, annotations) {
+    async attach(file, order, annotations, at) {
       return expect(
-        await send({ kind: "attach", file, order, annotations }, [file.bytes]),
+        await send({ kind: "attach", file, order, annotations, ...(at ? { at } : {}) }, [
+          file.bytes,
+        ]),
         "document",
       ).info;
     },
@@ -690,6 +700,11 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
     },
     cancel(id) {
       worker.postMessage({ kind: "cancel", target: id, id: nextId++ } satisfies WorkerRequest);
+    },
+    cancelAll() {
+      for (const id of pending.keys()) {
+        worker.postMessage({ kind: "cancel", target: id, id: nextId++ } satisfies WorkerRequest);
+      }
     },
     terminate() {
       worker.terminate();

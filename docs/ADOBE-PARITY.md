@@ -32,6 +32,16 @@ format and re-wraps it. The faces offered are the PDF standard set, since those
 draw everywhere without embedding anything; the document's own font stays the
 default, because it may be a face no standard font resembles.
 
+The tools panel can be put away, which gives the document the whole window, and
+brought back from the top bar or the palette. A narrow window starts without it:
+it used to disappear below 980 px with no way to ask for it again.
+
+Long jobs say how far they have got — "Reading text — page 112 of 500" with a
+bar — and can be given up on: Stop sits in the status line while anything is
+running, and stopping is not an error, so nothing is reported as one. OCR and
+the rest give up at a page boundary rather than inside a page, so Stop on a
+500-page scan takes as long as the page in hand.
+
 Undo and redo sit next to Open and Save, and cover both kinds of change: the
 page order and the marks you have placed, which live in the app until something
 writes them into the file, and the document's bytes, whose history the worker
@@ -125,6 +135,7 @@ What an Acrobat user would miss before anything subtle:
 | Bookmarks | Add, rename, move, nest under another or lift back out, and remove — written as a real `/Outlines` tree |
 | Named destinations | Written and read, sorted as a name tree has to be. Pointing a bookmark at one is missing |
 | Attachments (embedded files) | Done: attach, list, extract and remove, in a panel of their own. Sanitising removes them, which is the same feature read the other way |
+| Attach a file as a comment | Done: pin a file to a point on a page as a `/FileAttachment` with a drawn icon, so the annexure is marked beside the clause that refers to it rather than only in a panel |
 | Layers (OCG) | A panel that lists them and turns them on and off, which is what a drawing needs before it goes to a contractor. Flattening a layer away is missing; Remove hidden info is what takes one out |
 | Article threads | Missing. Rare outside journals |
 | Rich media (video, audio, 3D, buttons) | Missing, and 3D is not worth it |
@@ -152,7 +163,7 @@ What an Acrobat user would miss before anything subtle:
 | Polygon, polyline, cloud | Done: click each corner, double-click to finish. The cloud draws its own bumps rather than trusting a reader to honour `/BE` |
 | Rectangle, oval, pencil | Done |
 | Eraser for ink | Missing |
-| Stamps | Fixed labels and dynamic ones — {date} and {name} are filled in as the stamp is placed. A custom stamp from an image is missing |
+| Stamps | Fixed labels and dynamic ones — {date} and {name} are filled in as the stamp is placed — and a stamp made from a picture: an office seal, a scanned signature or a logo, drawn into the appearance stream at the proportions of the picture |
 | Attach a file or audio as a comment | Missing |
 | Comment opacity, default properties, author name | Colour only |
 | Replies, status (accepted, rejected, completed) | Done, as `/IRT` with `/RT` — a reply is `R`, a status is a `Group` reply carrying `/State`, which is what Acrobat writes and reads. Threads are shown nested |
@@ -238,7 +249,7 @@ What an Acrobat user would miss before anything subtle:
 | Acrobat | Here |
 | --- | --- |
 | Compare two documents | Text comparison, page by page, with the words that went and the words that arrived. Pages are paired by position, not matched up, and the panel says so. A visual diff is missing |
-| Action Wizard (batch) | A sequence of steps over many files — each step works on what the last produced — plus filling a form once per spreadsheet row. Each file is saved as a new document and a failure does not stop the rest. Saving a named sequence for next time is still missing |
+| Action Wizard (batch) | A sequence of steps over many files — each step works on what the last produced — plus filling a form once per spreadsheet row. Each file is saved as a new document and a failure does not stop the rest. A sequence can be named and kept, in this browser, so next week's run is one click |
 | Catalog: full-text index across many files | Missing |
 | Search across several files | Missing — one document at a time |
 | View modes | Continuous, two-up and single page, with the page box as the way through the document, and full screen. Split view is missing |

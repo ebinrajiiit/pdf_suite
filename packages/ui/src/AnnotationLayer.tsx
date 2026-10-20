@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Annotation, AnnotRect } from "@pdf-suite/core";
 
 export type AnnotationTool =
@@ -21,6 +21,10 @@ export type AnnotationTool =
   | "caret"
   | "stamp"
   | "signature"
+  /** Stamps a page with a picture: a seal, a scanned signature, a logo. */
+  | "picture"
+  /** Pins a file to a point on the page. The worker writes it, not this layer. */
+  | "attachment"
   /** Marks an area whose content will be removed. Not a PDF annotation. */
   | "redact"
   /** Marks what to keep of the page. Not a PDF annotation either. */
@@ -40,6 +44,8 @@ const POINT_TOOLS = new Set<AnnotationTool>([
   "signature",
   "callout",
   "caret",
+  "picture",
+  "attachment",
 ]);
 
 /** Tools built point by point: click each corner, double-click to finish. */
@@ -471,6 +477,18 @@ export function AnnotationLayer({
           );
         }
 
+        if (annotation.kind === "picture") {
+          return (
+            <PictureStamp
+              {...common}
+              annotation={annotation}
+              scale={scale}
+              index={index}
+              top={top(annotation.y + annotation.h, 0)}
+            />
+          );
+        }
+
         if (annotation.kind === "signature") {
           const colour = rgb(annotation.color);
           return (
@@ -633,5 +651,53 @@ export function AnnotationLayer({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A picture stamp before it is written into the document: an office seal or a
+ * scanned signature, shown from its own bytes.
+ *
+ * The bytes are in memory rather than in a file, so the preview is a blob URL
+ * of them — revoked when the mark goes, since a leaked one holds the picture
+ * for the life of the page.
+ */
+function PictureStamp({
+  annotation,
+  scale,
+  index,
+  top,
+  ...rest
+}: {
+  annotation: Extract<Annotation, { kind: "picture" }>;
+  scale: number;
+  index: number;
+  top: number;
+} & React.HTMLAttributes<HTMLImageElement>) {
+  const src = useMemo(
+    () =>
+      URL.createObjectURL(
+        new Blob([annotation.image as BlobPart], {
+          type: annotation.format === "png" ? "image/png" : "image/jpeg",
+        }),
+      ),
+    [annotation.image, annotation.format],
+  );
+  useEffect(() => () => URL.revokeObjectURL(src), [src]);
+
+  return (
+    <img
+      {...rest}
+      src={src}
+      alt={annotation.label ?? "Picture stamp"}
+      className="annot annot-picture"
+      data-testid={`annot-${index}`}
+      style={{
+        left: `${annotation.x * scale}px`,
+        top: `${top}px`,
+        width: `${annotation.w * scale}px`,
+        height: `${annotation.h * scale}px`,
+      }}
+    />
   );
 }
