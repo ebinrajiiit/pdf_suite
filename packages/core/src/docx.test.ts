@@ -199,3 +199,31 @@ test("a row that breaks a table in two leaves two tables", () => {
   ]);
   expect(blocks.map((block) => block.kind)).toEqual(["table", "paragraph", "table"]);
 });
+
+test("a landscape page keeps its orientation, in a section of its own", async () => {
+  const xml = await documentXml(
+    toDocx([
+      { blocks: [{ kind: "paragraph", text: "Letter" }], width: 595, height: 842 },
+      { blocks: [{ kind: "paragraph", text: "Plan" }], width: 842, height: 595 },
+      { blocks: [{ kind: "paragraph", text: "Annexure" }], width: 595, height: 842 },
+    ]),
+  );
+
+  // Three sections, because a section is the only thing in Word that carries a
+  // page size: two inside paragraphs, the last at the end of the body.
+  expect(xml.match(/<w:sectPr>/g)).toHaveLength(3);
+  expect(xml).toContain('<w:pgSz w:w="16840" w:h="11900" w:orient="landscape"/>');
+  // A section break is already a page break; there is no extra one with it.
+  expect(xml.match(/w:type="page"/g)).toBeNull();
+});
+
+test("pages of the same size stay in one section, with page breaks", async () => {
+  const xml = await documentXml(
+    toDocx([
+      { blocks: [{ kind: "paragraph", text: "One" }], width: 595, height: 842 },
+      { blocks: [{ kind: "paragraph", text: "Two" }], width: 595, height: 842 },
+    ]),
+  );
+  expect(xml.match(/<w:sectPr>/g)).toHaveLength(1);
+  expect(xml.match(/w:type="page"/g)).toHaveLength(1);
+});

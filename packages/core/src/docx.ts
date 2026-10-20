@@ -190,34 +190,56 @@ export function blocksFromGrid(
 /** A4 portrait, for a document that does not say what size its pages are. */
 const A4 = { width: 595, height: 842 };
 
+/** The page setup for a run of pages that are all the same size. */
+function sectionProperties(width: number, height: number): string {
+  return (
+    `<w:sectPr><w:pgSz w:w="${twips(width)}" w:h="${twips(height)}"` +
+    `${width > height ? ' w:orient="landscape"' : ""}/>` +
+    `<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr>`
+  );
+}
+
 /** Builds a .docx from each page's blocks. */
 export function toDocx(pages: DocxPage[], options: DocxOptions = {}): Uint8Array {
   const body: string[] = [];
   if (options.title) body.push(paragraph(options.title, { bold: true }));
 
-  pages.forEach((page, index) => {
-    if (index > 0) body.push(PAGE_BREAK);
-    for (const block of page.blocks) {
-      if (block.kind === "table") body.push(table(block.rows));
-      else body.push(paragraph(block.text, block));
+  // Pages of the same size are one section. A letter with a landscape annexure
+  // is two, because a section is the only thing in Word that carries a page
+  // size — one section for the document would turn the annexure portrait.
+  const sections: { pages: DocxPage[]; width: number; height: number }[] = [];
+  for (const page of pages) {
+    const width = page.width ?? A4.width;
+    const height = page.height ?? A4.height;
+    const last = sections[sections.length - 1];
+    if (last && last.width === width && last.height === height) last.pages.push(page);
+    else sections.push({ pages: [page], width, height });
+  }
+
+  sections.forEach((section, sectionIndex) => {
+    section.pages.forEach((page, index) => {
+      // Within a section, a page break. Between sections the section break is
+      // the page break, so there is no second one.
+      if (index > 0) body.push(PAGE_BREAK);
+      for (const block of page.blocks) {
+        if (block.kind === "table") body.push(table(block.rows));
+        else body.push(paragraph(block.text, block));
+      }
+    });
+    // Every section but the last carries its page setup on a paragraph of its
+    // own; the last one's goes at the end of the body, which is where Word
+    // looks for the final section.
+    if (sectionIndex < sections.length - 1) {
+      body.push(`<w:p><w:pPr>${sectionProperties(section.width, section.height)}</w:pPr></w:p>`);
     }
   });
 
-  // One section for the whole document, from the first page's size. A PDF whose
-  // pages differ in size or orientation would need a section each, and Word
-  // would then paginate it differently from the PDF anyway.
-  const first = pages[0];
-  const width = first?.width ?? A4.width;
-  const height = first?.height ?? A4.height;
-  const landscape = width > height;
-
+  const last = sections[sections.length - 1];
   const document =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
     `<w:body>${body.join("")}` +
-    `<w:sectPr><w:pgSz w:w="${twips(width)}" w:h="${twips(height)}"` +
-    `${landscape ? ' w:orient="landscape"' : ""}/>` +
-    `<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr>` +
+    sectionProperties(last?.width ?? A4.width, last?.height ?? A4.height) +
     `</w:body></w:document>`;
 
   const encoder = new TextEncoder();
