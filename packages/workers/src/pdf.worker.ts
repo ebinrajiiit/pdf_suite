@@ -2,6 +2,10 @@
 import {
   addField,
   annotate,
+  attachFile,
+  listAttachments,
+  readAttachment,
+  removeAttachment,
   createQpdf,
   fillForm,
   readForm,
@@ -492,6 +496,37 @@ async function handle(request: WorkerRequest): Promise<void> {
       const filled = await fillForm(base, request.values, { flatten: request.flatten });
       throwIfCancelled(id);
       post({ id, kind: "document", info: await openBytes(id, filled, request) });
+      return;
+    }
+    case "attachments": {
+      const base = await materialise(id, request.order, request.annotations);
+      post({ id, kind: "attached", files: await listAttachments(base) });
+      return;
+    }
+    case "attach": {
+      const base = await materialise(id, request.order, request.annotations);
+      const withFile = await attachFile(base, {
+        name: request.file.name,
+        bytes: new Uint8Array(request.file.bytes),
+        ...(request.file.type ? { type: request.file.type } : {}),
+      });
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, withFile, request) });
+      return;
+    }
+    case "readAttachment": {
+      const base = await materialise(id, request.order, request.annotations);
+      const data = await readAttachment(base, request.name);
+      // A copy, because the buffer is transferred away from the worker.
+      const buffer = data.slice().buffer as ArrayBuffer;
+      post({ id, kind: "attachment", name: request.name, bytes: buffer }, [buffer]);
+      return;
+    }
+    case "removeAttachment": {
+      const base = await materialise(id, request.order, request.annotations);
+      const without = await removeAttachment(base, request.name);
+      throwIfCancelled(id);
+      post({ id, kind: "document", info: await openBytes(id, without, request) });
       return;
     }
     case "addField": {

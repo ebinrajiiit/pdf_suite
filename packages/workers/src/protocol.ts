@@ -8,6 +8,7 @@ import type { EncryptOptions } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
   Annotation,
+  Attachment,
   NewField,
   Bookmark,
   Box,
@@ -67,6 +68,7 @@ export type { EncryptOptions } from "@pdf-suite/core";
 export type {
   AccessibilityIssue,
   Annotation,
+  Attachment,
   NewField,
   AnnotRect,
   Bookmark,
@@ -214,6 +216,16 @@ export type WorkerRequest = { id: number } &
         order: number[];
         annotations: Annotation[];
       }
+    /** Files carried inside the document. */
+    | { kind: "attachments"; order: number[]; annotations: Annotation[] }
+    | {
+        kind: "attach";
+        file: { name: string; bytes: ArrayBuffer; type?: string | undefined };
+        order: number[];
+        annotations: Annotation[];
+      }
+    | { kind: "readAttachment"; name: string; order: number[]; annotations: Annotation[] }
+    | { kind: "removeAttachment"; name: string; order: number[]; annotations: Annotation[] }
     /** Adds a form field to a page, then reopens the result. */
     | { kind: "addField"; field: NewField; order: number[]; annotations: Annotation[] }
     /** Removes a form field by name. */
@@ -298,6 +310,8 @@ export type WorkerResponse = { id: number } & (
   | { kind: "editable"; runs: EditableText[] }
   | { kind: "pageImages"; images: PageImage[] }
   | { kind: "text"; text: string }
+  | { kind: "attached"; files: Attachment[] }
+  | { kind: "attachment"; name: string; bytes: ArrayBuffer }
   | {
       kind: "imagesEdited";
       info: DocumentInfo;
@@ -350,6 +364,8 @@ export type TerminalResponse = Extract<
       | "editable"
       | "pageImages"
       | "text"
+      | "attached"
+      | "attachment"
       | "imagesEdited"
       | "found"
       | "hidden"

@@ -24,6 +24,7 @@ import type { OutlineItem } from "@pdf-suite/engine";
 import { isSupportedImage, type AnnotColor, type AnnotRect } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
+  Attachment,
   EditableText,
   PageLabelRange,
   Found,
@@ -76,6 +77,10 @@ export function App() {
     crop,
     addWatermark,
     setLabels,
+    attachments,
+    attach,
+    readAttachment,
+    removeAttachment,
     addFormField,
     removeFormField,
     findPattern,
@@ -94,6 +99,7 @@ export function App() {
   const openInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const mergeInput = useRef<HTMLInputElement>(null);
+  const attachInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -178,7 +184,11 @@ export function App() {
   const [editRuns, setEditRuns] = useState<Map<number, EditableText[]>>(new Map());
   /** Extracted text per page, for the selectable layer over the canvas. */
   const [textRuns, setTextRuns] = useState<Map<number, TextRun[]>>(new Map());
-  const [sidebar, setSidebar] = useState<"pages" | "outline" | "form" | "comments">("pages");
+  const [sidebar, setSidebar] = useState<"pages" | "outline" | "form" | "comments" | "attachments">(
+    "pages",
+  );
+  /** Files carried inside the document, read when the panel is opened. */
+  const [attached, setAttached] = useState<Attachment[]>([]);
   const [colour, setColour] = useState<AnnotColor>(COLOURS[0]!.value);
   const [fieldValues, setFieldValues] = useState<Record<string, string | string[] | boolean>>({});
   /** Areas marked for redaction, by source page, before they are applied. */
@@ -278,7 +288,7 @@ export function App() {
       imageInput.current?.click();
       return;
     }
-    await openImages(await pickFiles(true, true));
+    await openImages(await pickFiles(true, "image"));
   }, [openImages]);
 
   const handleMerge = useCallback(async () => {
@@ -905,6 +915,51 @@ export function App() {
     [pageText],
   );
 
+  // The files carried inside the document, re-read whenever it changes.
+  useEffect(() => {
+    if (!info) {
+      setAttached([]);
+      return;
+    }
+    void attachments().then(setAttached);
+  }, [attachments, info]);
+
+  const attachOne = useCallback(
+    async (file: { name: string; bytes: ArrayBuffer; type?: string | undefined }) => {
+      const done = await attach(file);
+      if (done) setSaved(`Attached ${file.name}`);
+    },
+    [attach],
+  );
+
+  const handleAttach = useCallback(async () => {
+    if (!canUsePicker()) {
+      attachInput.current?.click();
+      return;
+    }
+    const picked = await pickFiles(false, "any");
+    if (picked[0]) await attachOne(picked[0]);
+  }, [attachOne]);
+
+  const onAttachInput = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      const [file] = await readFiles(files);
+      if (file) await attachOne(file);
+    },
+    [attachOne],
+  );
+
+  const handleSaveAttachment = useCallback(
+    async (name: string) => {
+      const bytes = await readAttachment(name);
+      if (!bytes) return;
+      const written = await saveBytes(bytes, name, undefined, "application/octet-stream");
+      setSaved(written ? `Saved ${written}` : undefined);
+    },
+    [readAttachment],
+  );
+
   /** Reads a page's pictures once, when it first comes into view. */
   const needImages = useCallback(
     (page: number) => {
@@ -1189,6 +1244,13 @@ export function App() {
         data-testid="merge-input"
         className="visually-hidden"
         onChange={(event) => void onMergeInput(event.target.files)}
+      />
+      <input
+        ref={attachInput}
+        type="file"
+        data-testid="attach-input"
+        className="visually-hidden"
+        onChange={(event) => void onAttachInput(event.target.files)}
       />
 
       {state.needsPassword ? (
@@ -1955,6 +2017,7 @@ export function App() {
                   ["comments", "Marks", state.annotations.length],
                   ["form", "Form", info.form.fields.length],
                   ["outline", "Marks", info.outline.length],
+                  ["attachments", "Files", attached.length],
                 ] as const
               ).map(([key, label, count], index) => (
                 <button
@@ -2040,6 +2103,50 @@ export function App() {
                     ))}
                   </ul>
                 ) : null}
+              </div>
+            ) : sidebar === "attachments" ? (
+              <div className="sidebar-scroll">
+                <div className="panel-actions">
+                  {action("Attach a file…", () => void handleAttach(), {
+                    testId: "attach-file",
+                    hint: "Carries a file inside this PDF, wherever it goes",
+                  })}
+                </div>
+                {attached.length === 0 ? (
+                  <p className="comments-empty" data-testid="attachments-empty">
+                    No files are carried inside this document. One attached here travels with it —
+                    and is removed by Remove hidden info, which is the other half of the same thing.
+                  </p>
+                ) : (
+                  <ul className="fieldlist" data-testid="attachment-list">
+                    {attached.map((file) => (
+                      <li key={file.name}>
+                        <span className="fieldlist-name">{file.name}</span>
+                        <span className="fieldlist-kind">{Math.ceil(file.size / 1024)} kB</span>
+                        <button
+                          type="button"
+                          aria-label={`Extract ${file.name}`}
+                          data-testid={`save-attachment-${file.name}`}
+                          onClick={() => void handleSaveAttachment(file.name)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${file.name}`}
+                          data-testid={`remove-attachment-${file.name}`}
+                          onClick={() => {
+                            void removeAttachment(file.name).then(
+                              (done) => done && setSaved(`Removed ${file.name}`),
+                            );
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : sidebar === "outline" ? (
               <div className="outline-panel">

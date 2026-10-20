@@ -3,6 +3,7 @@ export type { OnProgress, PdfWorkerClient } from "./client.js";
 export { CancelledError } from "./protocol.js";
 export type {
   AccessibilityIssue,
+  Attachment,
   Bookmark,
   Box,
   DocumentInfo,

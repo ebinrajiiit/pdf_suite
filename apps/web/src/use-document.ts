@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, FieldValues } from "@pdf-suite/core";
 import type {
   AccessibilityIssue,
+  Attachment,
   EncryptOptions,
   Bookmark,
   Box,
@@ -699,6 +700,41 @@ export function useDocument() {
     [run],
   );
 
+  /** The files carried inside the document. */
+  const attachments = useCallback(async (): Promise<Attachment[]> => {
+    const worker = client.current;
+    if (!worker) return [];
+    try {
+      return await worker.attachments(stateRef.current.order, stateRef.current.annotations);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const attach = useCallback(
+    async (file: { name: string; bytes: ArrayBuffer; type?: string | undefined }) =>
+      rewrite("Attaching the file", (worker) =>
+        worker.attach(file, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
+  const readAttachment = useCallback(
+    async (name: string) =>
+      run("Reading the attachment", (worker) =>
+        worker.readAttachment(name, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [run],
+  );
+
+  const removeAttachment = useCallback(
+    async (name: string) =>
+      rewrite("Removing the attachment", (worker) =>
+        worker.removeAttachment(name, stateRef.current.order, stateRef.current.annotations),
+      ),
+    [rewrite],
+  );
+
   /** Adds a form field where the user drew it. */
   const addFormField = useCallback(
     async (field: NewField) =>
@@ -859,6 +895,10 @@ export function useDocument() {
     describe,
     findPattern,
     setBookmarks,
+    attachments,
+    attach,
+    readAttachment,
+    removeAttachment,
     addFormField,
     removeFormField,
     extractAllText,

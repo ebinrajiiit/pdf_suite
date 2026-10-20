@@ -109,20 +109,32 @@ async function readPaths(paths: string[]): Promise<PickedFile[]> {
   );
 }
 
-/** Opens the native picker. Returns [] if the user cancels. */
-export async function pickFiles(multiple: boolean, images = false): Promise<PickedFile[]> {
+/**
+ * Opens the native picker. Returns [] if the user cancels.
+ *
+ * `kind` is what the dialog offers: PDFs, images, or anything at all — the
+ * last for attaching a file, which can be a spreadsheet or a photograph.
+ */
+export async function pickFiles(
+  multiple: boolean,
+  kind: "pdf" | "image" | "any" = "pdf",
+): Promise<PickedFile[]> {
   if (isDesktop()) {
     const { dialog } = await tauri();
     const chosen = await dialog.open({
       multiple,
-      filters: images ? IMAGE_FILTER : PDF_FILTER,
+      ...(kind === "any" ? {} : { filters: kind === "image" ? IMAGE_FILTER : PDF_FILTER }),
     });
     if (chosen === null) return [];
     return readPaths(Array.isArray(chosen) ? chosen : [chosen]);
   }
 
   const handles = await window
-    .showOpenFilePicker({ multiple, types: PDF_TYPES, excludeAcceptAllOption: false })
+    .showOpenFilePicker({
+      multiple,
+      ...(kind === "any" ? {} : { types: kind === "image" ? IMAGE_TYPES : PDF_TYPES }),
+      excludeAcceptAllOption: false,
+    })
     .catch((err: unknown) => {
       if (err instanceof DOMException && err.name === "AbortError") return [];
       throw err;

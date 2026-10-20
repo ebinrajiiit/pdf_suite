@@ -117,7 +117,7 @@ What an Acrobat user would miss before anything subtle:
 | Links | Missing entirely: no creating, editing or following. Link annotations are also how a table of contents works |
 | Bookmarks | Add, rename, move and remove, written as a real `/Outlines` tree. Nesting an existing bookmark under another is still missing |
 | Named destinations | Missing |
-| Attachments (embedded files) | Missing |
+| Attachments (embedded files) | Done: attach, list, extract and remove, in a panel of their own. Sanitising removes them, which is the same feature read the other way |
 | Layers (OCG) | Missing: no panel, no toggling, no flattening |
 | Article threads | Missing. Rare outside journals |
 | Rich media (video, audio, 3D, buttons) | Missing, and 3D is not worth it |

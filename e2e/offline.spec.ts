@@ -1008,6 +1008,38 @@ async function hasColouredInk(page: Page): Promise<boolean> {
   });
 }
 
+test("carries a file inside the document, and gives it back", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "circular.pdf", await textFixture([["Circular 12/2026"]]));
+
+  await page.getByTestId("tab-attachments").click();
+  await expect(page.getByTestId("attachments-empty")).toBeVisible();
+
+  // Attaching uses the same file input the open fallback does.
+  await page.setInputFiles('[data-testid="attach-input"]', {
+    name: "annexure.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("roll,marks\n1,90\n"),
+  });
+  await expect(page.getByTestId("status")).toHaveText("Attached annexure.csv", {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("attachment-list")).toContainText("annexure.csv");
+
+  // It is in the file, where another reader will find it.
+  const saved = await saveAndRead(page, "Save");
+  const doc = await PDFDocument.load(saved);
+  const names = doc.catalog.lookup(PDFName.of("Names"), PDFDict);
+  expect(names.get(PDFName.of("EmbeddedFiles"))).toBeDefined();
+
+  // And removing it takes it out again.
+  await page.getByTestId("remove-attachment-annexure.csv").click();
+  await expect(page.getByTestId("status")).toHaveText("Removed annexure.csv", { timeout: 30_000 });
+  await expect(page.getByTestId("attachments-empty")).toBeVisible();
+});
+
 test("builds a fillable form on a blank page, then fills it", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

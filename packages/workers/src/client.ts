@@ -2,6 +2,7 @@ import {
   CancelledError,
   type AccessibilityIssue,
   type Annotation,
+  type Attachment,
   type Bookmark,
   type Box,
   type DocumentInfo,
@@ -71,6 +72,15 @@ export interface PdfWorkerClient {
     order: number[],
     annotations: Annotation[],
   ): Promise<DocumentInfo>;
+  /** Files carried inside the document. */
+  attachments(order: number[], annotations: Annotation[]): Promise<Attachment[]>;
+  attach(
+    file: { name: string; bytes: ArrayBuffer; type?: string | undefined },
+    order: number[],
+    annotations: Annotation[],
+  ): Promise<DocumentInfo>;
+  readAttachment(name: string, order: number[], annotations: Annotation[]): Promise<ArrayBuffer>;
+  removeAttachment(name: string, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** Adds a form field to a page. */
   addField(field: NewField, order: number[], annotations: Annotation[]): Promise<DocumentInfo>;
   /** Removes a form field by name. */
@@ -328,6 +338,23 @@ export function createPdfWorkerClient(worker: Worker = createPdfWorker()): PdfWo
         await send({ kind: "fillForm", values, flatten, order, annotations }),
         "document",
       ).info;
+    },
+    async attachments(order, annotations) {
+      return expect(await send({ kind: "attachments", order, annotations }), "attached").files;
+    },
+    async attach(file, order, annotations) {
+      return expect(
+        await send({ kind: "attach", file, order, annotations }, [file.bytes]),
+        "document",
+      ).info;
+    },
+    async readAttachment(name, order, annotations) {
+      return expect(await send({ kind: "readAttachment", name, order, annotations }), "attachment")
+        .bytes;
+    },
+    async removeAttachment(name, order, annotations) {
+      return expect(await send({ kind: "removeAttachment", name, order, annotations }), "document")
+        .info;
     },
     async addField(field, order, annotations) {
       return expect(await send({ kind: "addField", field, order, annotations }), "document").info;
