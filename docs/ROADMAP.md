@@ -1,4 +1,4 @@
-# Roadmap — zero-upload PDF suite
+# Roadmap — Signet, a zero-upload PDF suite
 
 ## Priority decision (2026-10-16)
 
@@ -15,6 +15,9 @@ parity gap) is a Phase 5 item, so strict sequencing would defer the
 differentiator a long way.
 
 Each phase ships at least one usable release, keeping the lab's one-launch-per-month cadence. Tick items only when implemented **and** tested.
+
+`[x]` implemented and tested. `[~]` partly done, with the remainder named in the
+item. `[ ]` not started, or deliberately declined — the reason is in the item.
 
 ## Phase 0 — Foundations (weeks 1–4)
 - [x] pnpm monorepo scaffold (apps/web, packages/engine, core, workers, ui)
@@ -43,7 +46,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Annotate: underline and strike-through (real `/Underline` and `/StrikeOut`, opaque where a highlight is a tint)
 - [x] Annotate: freehand (Ink), box (Square), oval (Circle), and a colour palette for every kind
 - [x] A Marks panel listing every annotation with its page, click to jump, click to remove
-- [ ] Annotate: stamps; reply/resolve threads (needs `/IRT` and `/RT`); editing a mark after placing it; lines and arrows — deliberately absent because PDFium does not synthesise an appearance for `/Line`, so one would be in the file and invisible in our own viewer. Lands with `/AP` generation
+- [~] Annotate: stamps, reply/resolve threads (`/IRT` and `/RT`, shown as threads) and lines and arrows are **done** — the blocker was that PDFium does not synthesise an appearance for `/Line`, so we generate the `/AP` stream ourselves and verify it by rendering. Editing a mark after placing it is still missing: a mark can be removed, not moved or reworded
 - [x] Organize: merge, insert at a position, reorder (drag thumbnails or the keyboard controls), rotate, delete, extract selected pages, save via native dialog
 - [x] `packages/core`: merge, split, reorder and rotate on pdf-lib, unit-tested
 - [x] Organize: split into several files — each selected page starts a new part, one save dialog per part (a single archive would need a zip writer)
@@ -57,35 +60,35 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Tauri desktop app: **builds and runs** on macOS (23 MB binary, ~1 min). The window opens, the web UI loads, and PDFium's wasm compiles under the Tauri CSP — the failure most expected, which did not happen. Capability set is file dialogs and nothing else: **no HTTP permission, no updater**, so the shell cannot reach the network even by accident. ADR 0005
 - [x] Desktop: native open and save dialogs, with Save writing back to the file that was opened. Two audited Rust commands rather than the filesystem plugin, whose path scope would have to be most of the home directory
 - [ ] Desktop: Windows and Linux builds (CI job added, never run) and bundled installers
-- [ ] Desktop: build it, add the icon set, and replace the File System Access fallbacks with native dialogs — WKWebView has no FSA, so inside the shell the app would quietly use the `<input type=file>` and download paths
+- [x] Desktop: built, with the icon set generated from the lab roundel (ADR 0005). Every read and write goes through one helper (`apps/web/src/file-io.ts`) that picks the native dialog inside the shell and the File System Access API in the browser, so no export quietly falls back to a download
 - [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
 - [x] OCR preprocessing: despeckle (3×3 median), on by default — turns 8% speckle from 0% accuracy into 100% (ADR 0004)
 - [ ] OCR: desktop native Tesseract and batch folders; deskew (would recover the 4 points despeckling costs on a 5° skew); per-page language detection
 - [x] Forms: fill and save AcroForms (text, multiline, checkbox, radio, dropdown, option list), with flattening; read-only fields respected, XFA-only forms reported rather than shown empty
-- [ ] Forms: a builder for creating fields, and filling by clicking the widgets on the page instead of the side panel
+- [~] Forms: the builder is **done** — draw, name and remove text boxes, tick boxes and dropdowns. Filling by clicking the widgets on the page is still missing, and deliberately so for now: the side panel is keyboard-navigable and needs no widget geometry (the note is in `packages/ui/src/FormPanel.tsx`)
 - [x] True redaction: page objects touching the area are removed via PDFium and the result is re-read to prove no text survives. Granularity is per text run, so an overlapping run goes whole — the safe direction, and the count is reported
-- [ ] Redaction: redact by search hit ("remove every occurrence of this number") and a redaction report listing what was removed
-- [ ] Office → PDF via LibreOffice (desktop only)
+- [~] Redaction: redact by search hit is **done** — Aadhaar, PAN, phone, email and any words, with per-character boxes so a match goes without taking its line. A report listing every item removed is still missing; what is reported is the count and whether verification passed
+- [x] Office → PDF via LibreOffice (desktop only), through the machine's own install rather than a bundled copy — ADR 0007
 - [x] Images → PDF (JPEG/PNG, one page per image or fitted to a page size) and PDF → PNG per page
 
 **Gate:** live in 3 offices at IIIT Kottayam.
 
 ## Phase 3 — Sign and comply (months 5–6) → Release 3 (Institution edition)
-- [ ] Visual signatures (draw/type/image)
+- [~] Visual signatures: drawn (drawn once, kept in this browser only, then placed on any page) and image (a scanned signature or office seal, placed as a picture stamp) are **done**. Typed is missing
 - [ ] Digital signatures: Class 3 DSC via PKCS#11 (desktop)
 - [ ] PAdES with RFC 3161 timestamp (hash-only network call)
 - [ ] Aadhaar eSign (hash-only network call) — after ESP partnership
-- [ ] Signature validation panel
-- [ ] Compare two versions (text + visual diff)
-- [ ] PDF/A export + validation
+- [x] Signature validation panel: who signed, when, and whether anything was appended after — ADR 0006. Signing itself is specified, not built
+- [~] Compare two versions: the word-level text diff is **done**, page by page, saying what went and what arrived. A visual diff is missing, and pages are paired by position rather than matched up — the panel says so
+- [~] PDF/A: the preflight check is **done**. Conversion is deferred — ADR 0008 records why
 - [ ] Offline machine-bound licensing for paid editions
 
 **Gate:** first external institution signs on.
 
 ## Phase 4 — Local AI and automation (months 7–9)
 - [ ] On-device summarise and "ask this document" (WebGPU / llama.cpp)
-- [ ] Table extraction to CSV/Excel
-- [~] PDF → Word: text done and labelled. Tables export to CSV, which Excel opens; merged and implied-column tables are not found
+- [x] Table extraction to CSV, found from the engine's per-character geometry, which Excel opens. Merged and implied-column tables are not found
+- [x] PDF → Word: a paragraph per paragraph rather than one per line, tables as real `<w:tbl>` with the heading above kept as a heading, and each run of same-size pages in its own section so a landscape page stays landscape. Verified by opening the result in Microsoft Word, not only by reading the XML. The layout is not reproduced — the text and the tables are
 - [x] Batch workflows: grade cards, certificates and result sheets from a template and a CSV
 
 **Gate:** licence revenue funds Phase 5, or decide to license an SDK for editing.
@@ -100,7 +103,7 @@ Each phase ships at least one usable release, keeping the lab's one-launch-per-m
 - [x] Bookmark nesting, dynamic stamps, a summary of the marks, and tables to CSV
 - [x] A command palette (⌘K), a shortcut sheet, collapsible tool groups, and one panel open at a time
 - [x] Single-page and full-screen viewing, picture replacement, picture downsampling, and form calculations without document JavaScript
-- [x] PDF → Word, for the words (a .docx written without a zip dependency), and scanning on the desktop where SANE or WIA exists
+- [x] PDF → Word as a .docx written without a zip dependency (see the Phase 4 item for what it carries), and scanning on the desktop where SANE or WIA exists
 - [x] PDF/A and print preflight checks, a trim box, and portfolios
 - [x] Office → PDF on the desktop, through the machine's own LibreOffice (ADR 0007)
 - [x] Signature panel: who signed, when, and whether anything was appended after (ADR 0006); signing itself is specified, not built
