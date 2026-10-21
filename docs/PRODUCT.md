@@ -1,4 +1,4 @@
-# Product brief — PDF Suite
+# Product brief — Signet
 
 ## One line
 A complete PDF suite where your files never leave your computer.

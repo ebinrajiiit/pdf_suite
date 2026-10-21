@@ -1,4 +1,4 @@
-# Architecture — zero-upload PDF suite
+# Architecture — Signet, a zero-upload PDF suite
 
 ## Principle
 The app is a **local tool that happens to be delivered by the web**. After the first load (or after installing the desktop app), it needs no server. There is no backend, no database and no object store.

@@ -1,4 +1,4 @@
-// Desktop shell for the PDF suite.
+// Desktop shell for Signet.
 //
 // It carries no document logic: the same web UI runs inside it, and every
 // operation still happens on this machine. What the shell adds, as Phase 2 and 3
@@ -301,5 +301,5 @@ fn main() {
             scan_page
         ])
         .run(tauri::generate_context!())
-        .expect("the PDF suite window failed to start");
+        .expect("the Signet window failed to start");
 }

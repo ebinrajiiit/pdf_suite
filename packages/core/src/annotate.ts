@@ -404,7 +404,7 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
     }
     const page = doc.getPage(annotation.page);
     const context = doc.context;
-    const author = annotation.author ?? "PDF Suite";
+    const author = annotation.author ?? "Signet";
 
     const shared = {
       Type: "Annot",

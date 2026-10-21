@@ -30,8 +30,8 @@ export default defineConfig({
         navigateFallback: "index.html",
       },
       manifest: {
-        name: "PDF Suite — FACTS-H Lab",
-        short_name: "PDF Suite",
+        name: "Signet — FACTS-H Lab",
+        short_name: "Signet",
         description: "A complete PDF suite where your files never leave your computer.",
         start_url: "/",
         display: "standalone",

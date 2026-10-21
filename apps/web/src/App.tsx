@@ -1327,7 +1327,7 @@ export function App() {
         // name filled in, which is what Acrobat's "dynamic" ones are.
         const label = stampLabel
           .replace(/\{date\}/gi, new Date().toLocaleDateString("en-GB"))
-          .replace(/\{name\}/gi, stampName.trim() || "PDF Suite");
+          .replace(/\{name\}/gi, stampName.trim() || "Signet");
         // Sized like a rubber stamp, with the click at its top-left corner.
         addAnnotation({
           kind: "stamp",
@@ -2329,7 +2329,7 @@ export function App() {
         <div className="brand">
           <BrandMark className="brand-mark" />
           <span className="brand-words">
-            <span className="brand-name">PDF Suite</span>
+            <span className="brand-name">Signet</span>
             <span className="brand-lab">FACTS-H Lab</span>
           </span>
         </div>

@@ -193,7 +193,7 @@ export async function addReply(input: PdfBytes, reply: Reply): Promise<PdfBytes>
     // Sits on the parent, because a reply has no place of its own.
     Rect: rect instanceof PDFArray ? rect.asArray() : [0, 0, 24, 24],
     Contents: PDFString.of(reply.contents),
-    T: PDFString.of(reply.author ?? "PDF Suite"),
+    T: PDFString.of(reply.author ?? "Signet"),
     M: PDFString.of(stamp),
     CreationDate: PDFString.of(stamp),
     IRT: parent,

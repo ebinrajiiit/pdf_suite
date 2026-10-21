@@ -1,23 +1,25 @@
-# PDF Suite (codename) — FACTS-H Lab, IIIT Kottayam
+# Signet — FACTS-H Lab, IIIT Kottayam
 
 A complete PDF suite where your files never leave your computer. All viewing, editing, OCR, conversion and signing run on your device.
 
+*Signet*: the seal ring that authenticates a document. The repo keeps its
+codename, `pdf-suite`, and the packages stay `@pdf-suite/*`.
+
 ## Status
-Phase 1 — view and organize. See `docs/ROADMAP.md` for what is done and what is not.
+
+Phase 5 — parity. Most of Acrobat's English feature set is here.
+`docs/ADOBE-PARITY.md` is the audited gap list, read from the code rather than
+from memory; `docs/ROADMAP.md` is the phase checklist. The largest things still
+missing are accessibility tagging, cryptographic signing (PKCS#11 / PAdES), and
+the Windows and Linux desktop builds.
 
 ## Getting started (macOS)
 
 ```bash
-# Prerequisites
 brew install node pnpm          # Node 20+, pnpm 9+
-# Later, for the desktop app (Phase 2):
+# For the desktop shell:
 # xcode-select --install && curl https://sh.rustup.rs -sSf | sh
-
-git init && git add . && git commit -m "Project scaffold"
-claude                          # start Claude Code in this folder
 ```
-
-Then paste the prompt from `KICKOFF.md` into Claude Code.
 
 ## Try it
 
@@ -28,7 +30,7 @@ pnpm dev                 # http://localhost:5173
 
 Drop a PDF onto the window, or click **Open**. Everything below runs on your
 machine; the engine is a 4.4 MB WebAssembly build of PDFium, so the first load
-takes a moment and the toolbar stays disabled until it says "Ready".
+takes a moment and the tools stay disabled until it says "Ready".
 
 | What to try | What should happen |
 | --- | --- |
@@ -76,34 +78,38 @@ is what `pnpm e2e` asserts on every run.
 
 ### Known gaps, so you are not hunting for them
 
-- **Annotations cannot be edited after placing** — remove and place again. No
-  colour picker, no underline/strike/freehand yet, and no `/AP` appearance
-  streams, so a viewer that does not synthesise appearances (PDFium, pdf.js and
-  Acrobat all do) would show nothing.
+`docs/ADOBE-PARITY.md` is the audited list. These are the ones that bite:
+
+- **A mark cannot be edited after placing** — remove it and place it again.
 - **Search highlights a whole line**, not the matched word. Narrowing it needs
   per-character geometry from the engine (ADR 0002).
 - **Repair on open** fixes a damaged header or junk before it, but not a
   destroyed cross-reference table or a truncated file (ADR 0003).
-- **Indic text** has tested *matching* (normalisation forms) but no verified
-  *extraction* from real Malayalam or Hindi documents — that needs the corpus.
+- **Indic extraction is verified on born-digital documents only** — 40 real
+  Malayalam files from Kerala LSGD and the Kerala Assembly. OCR on real Indic
+  *scans* is still unmeasured, and so is Hindi.
 - **OCR needs language data present.** Run `node scripts/fetch-tessdata.mjs`
   once; it lands in a git-ignored `vendor/` that dev, preview and builds serve
   from. A release has to host these files (ADR 0004).
 - **OCR replaces a recognised page with an image plus an invisible text layer**
   at 300 dpi, so a recognised page is re-encoded. Pages that already have text
-  are skipped untouched.
-- OCR accuracy on real scans is unmeasured — ADR 0004's numbers come from
-  generated images. No deskew or despeckle yet, which is where scanned accuracy
-  is usually won.
+  are skipped untouched. Despeckling is on by default; there is no deskew.
 - **Forms are filled from the side panel**, not by clicking the fields on the
-  page — the widget geometry is available, so overlaying the inputs is a
-  follow-up. XFA-only forms are not supported and say so.
+  page. The builder can draw fields; filling still happens in the panel.
+  XFA-only forms are not supported and say so.
 - **Redaction removes whole text runs** that overlap the area, not just the
   characters inside it — safer, but it can take neighbouring words with it. The
-  object count is reported so you can see what happened.
-- No desktop app, and no Office→PDF, yet.
+  count is reported so you can see what happened.
+- **Signing is a panel, not a signature.** It reports who signed, when, and
+  whether anything was appended after. Making a signature needs PKCS#11 and is
+  specified, not built (ADR 0006).
+- **PDF/A is checked, not converted** (ADR 0008), and there is **no
+  accessibility tag tree**, so no PDF/UA.
+- **PDF → Word carries the text and the tables, not the layout.**
 - Rendered pages are not cached between zoom levels, so zooming a 500-page
   scan re-rasterises as you scroll.
+- The desktop shell runs on **macOS only** so far; Windows and Linux have a CI
+  job that has never run.
 
 ## Testing against your own documents
 
@@ -130,7 +136,7 @@ timings and failure messages — never a filename, and never document content.
 A second run fails if a file that previously worked no longer does, and the
 baseline only moves on a clean run or with `--accept`.
 
-This is the Phase 1 gate, and the same corpus is what ADR 0002 (engine choice)
+This is the corpus gate, and the same corpus is what ADR 0002 (engine choice)
 and ADR 0004 (OCR accuracy) are waiting on.
 
 ## Desktop (Tauri)

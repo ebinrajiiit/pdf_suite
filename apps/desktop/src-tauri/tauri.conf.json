@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PDF Suite",
+  "productName": "Signet",
   "version": "0.0.0",
-  "identifier": "in.ac.iiitkottayam.factsh.pdfsuite",
+  "identifier": "in.ac.iiitkottayam.factsh.signet",
   "build": {
     "frontendDist": "../../web/dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "PDF Suite",
+        "title": "Signet",
         "width": 1280,
         "height": 860,
         "minWidth": 720,
