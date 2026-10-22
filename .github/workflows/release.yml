@@ -1,0 +1,166 @@
+name: Release
+
+# A tag publishes. A manual run builds everything and publishes nothing, so the
+# pipeline can be proved without spending a version number on it.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Not in the repo: large, and third-party Apache-2.0 data. A release has to
+  # carry it rather than fetch it later — the desktop shell has no HTTP
+  # permission at all (ADR 0005) and the web app's CSP is `connect-src 'self'`,
+  # so neither can reach a language pack that is not on its own origin. Both
+  # builds copy vendor/tessdata into the bundle; see apps/web/ocr-assets.ts.
+  TESSDATA_LANGS: eng mal hin
+
+jobs:
+  web:
+    name: PWA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/fetch-tessdata.mjs $TESSDATA_LANGS
+      - run: pnpm build
+
+      # ocr-assets.ts only warns when the language data is absent, which is right
+      # for a dev build and wrong for a release: OCR is one of the three reasons
+      # docs/PRODUCT.md gives for choosing this over Acrobat, and it would 404 in
+      # the hands of a user who cannot see the build log.
+      - name: The bundle carries its OCR data
+        run: |
+          for lang in $TESSDATA_LANGS; do
+            test -s "apps/web/dist/ocr/lang/$lang.traineddata" ||
+              { echo "missing: dist/ocr/lang/$lang.traineddata"; exit 1; }
+          done
+          test -s apps/web/dist/ocr/worker.min.js
+          ls apps/web/dist/ocr/core/*.wasm.js
+
+      # The PWA is self-hosted by whoever deploys it, so the artifact is the
+      # directory to serve, with the notices beside it.
+      - name: Pack the PWA
+        run: |
+          cp THIRD_PARTY_NOTICES.txt apps/web/dist/
+          tar -czf signet-web.tar.gz -C apps/web/dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: signet-web.tar.gz
+          if-no-files-found: error
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    strategy:
+      # Every platform's result is wanted: one of them failing is the news, and
+      # cancelling the others hides whether it is specific to that platform.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # One .dmg for both Intel and Apple silicon: an office has a mix, and
+          # choosing the wrong download is a support request.
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Linux webview dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/fetch-tessdata.mjs $TESSDATA_LANGS
+        shell: bash
+
+      # tauri build runs the web build itself (beforeBuildCommand), so the
+      # bundle picks up the language data fetched above.
+      - name: Build the bundle (universal)
+        if: matrix.os == 'macos-latest'
+        run: pnpm --filter @pdf-suite/desktop exec tauri build --target universal-apple-darwin
+      - name: Build the bundle
+        if: matrix.os != 'macos-latest'
+        run: pnpm --filter @pdf-suite/desktop exec tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          # Both layouts: a --target build nests one directory deeper.
+          path: |
+            apps/desktop/src-tauri/target/**/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/**/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/**/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/**/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [web, desktop]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: The tag is the version that was built
+        run: node scripts/check-version.mjs "$GITHUB_REF_NAME"
+
+      # A university installing an unsigned binary should be able to check it
+      # against something. Neither bundle is code-signed yet, so this is the
+      # only integrity claim a release can honestly make.
+      - name: Collect and checksum
+        run: |
+          mkdir -p release
+          find artifacts -type f \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.deb' \
+               -o -name '*.AppImage' -o -name '*.tar.gz' \) \
+            -exec cp {} release/ \;
+          cp THIRD_PARTY_NOTICES.txt release/
+          cd release
+          shasum -a 256 * > ../SHA256SUMS
+          mv ../SHA256SUMS .
+          cat SHA256SUMS
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "Signet $GITHUB_REF_NAME" \
+            --notes-file - <<'NOTES'
+          Every operation runs on your own device. No document, page, extracted
+          text or derived data leaves the machine.
+
+          | Download | For |
+          | --- | --- |
+          | `.dmg` | macOS, Intel and Apple silicon in one file |
+          | `.msi` | Windows |
+          | `.deb` / `.AppImage` | Linux |
+          | `signet-web.tar.gz` | the PWA, to serve from your own host |
+
+          Neither bundle is code-signed yet, so macOS and Windows will warn.
+          Check `SHA256SUMS` against your download.
+
+          The OCR language data for English, Malayalam and Hindi is inside each
+          build, which is why they are large.
+          NOTES

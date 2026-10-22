@@ -59,7 +59,15 @@ item. `[ ]` not started, or deliberately declined — the reason is in the item.
 ## Phase 2 — OCR, forms, redaction, desktop (months 3–4) → Release 2 (desktop + web)
 - [x] Tauri desktop app: **builds and runs** on macOS (23 MB binary, ~1 min). The window opens, the web UI loads, and PDFium's wasm compiles under the Tauri CSP — the failure most expected, which did not happen. Capability set is file dialogs and nothing else: **no HTTP permission, no updater**, so the shell cannot reach the network even by accident. ADR 0005
 - [x] Desktop: native open and save dialogs, with Save writing back to the file that was opened. Two audited Rust commands rather than the filesystem plugin, whose path scope would have to be most of the home directory
-- [ ] Desktop: Windows and Linux builds (CI job added, never run) and bundled installers
+- [~] Release pipeline: a tag builds the PWA and the macOS, Windows and Linux
+  bundles, checksums them and publishes them (`.github/workflows/release.yml`).
+  The language data goes inside each build, because neither the shell nor the
+  PWA may fetch it from another origin. **Not yet proved on a tag**, and the
+  Windows `.msi` and Linux `.deb`/`.AppImage` have never been built — the CI
+  job only ever ran `cargo check`. macOS is built and the bundle verified
+- [ ] Pin the OCR language data. `fetch-tessdata.mjs` pulls `main` with no
+  digest check, so two releases can carry different bytes under one version —
+  ADR 0004 says a release must pin them
 - [x] Desktop: built, with the icon set generated from the lab roundel (ADR 0005). Every read and write goes through one helper (`apps/web/src/file-io.ts`) that picks the native dialog inside the shell and the File System Access API in the browser, so no export quietly falls back to a download
 - [x] OCR to searchable PDF in the app (browser): eng, mal, hin; pages that already have text are skipped, not re-recognised. Assets served from our own origin, fetched on first use rather than precached
 - [x] OCR preprocessing: despeckle (3×3 median), on by default — turns 8% speckle from 0% accuracy into 100% (ADR 0004)

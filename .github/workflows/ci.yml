@@ -19,6 +19,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: node scripts/check-version.mjs
       - run: pnpm check:licenses
       - run: pnpm check:notices
       - run: pnpm exec playwright install --with-deps chromium

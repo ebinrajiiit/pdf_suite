@@ -108,8 +108,12 @@ is what `pnpm e2e` asserts on every run.
 - **PDF → Word carries the text and the tables, not the layout.**
 - Rendered pages are not cached between zoom levels, so zooming a 500-page
   scan re-rasterises as you scroll.
-- The desktop shell runs on **macOS only** so far; Windows and Linux have a CI
-  job that has never run.
+- The desktop shell is built and run on **macOS**; Windows and Linux are built
+  by the release workflow but have never been opened by anyone.
+- **The OCR language data is not pinned.** `fetch-tessdata.mjs` pulls from the
+  `main` branch of `tesseract-ocr/tessdata_fast` with no digest check, so two
+  releases can carry different bytes under the same version. ADR 0004 says a
+  release must pin them; it does not yet.
 
 ## Testing against your own documents
 
@@ -149,6 +153,27 @@ pnpm desktop         # the same UI in a native window
 Builds and runs on macOS, with native open and save dialogs. The shell has no
 HTTP permission at all, so it cannot make a network call even by accident.
 Windows and Linux have a CI job but have not been built yet.
+
+## Releases
+
+```bash
+node scripts/check-version.mjs 0.1.0   # the five manifests must agree
+# then bump them all, commit, and:
+git tag v0.1.0 && git push --tags
+```
+
+The tag triggers `.github/workflows/release.yml`, which builds the PWA and the
+macOS, Windows and Linux bundles, checksums them and publishes a GitHub release.
+A manual run of the same workflow builds everything and publishes nothing, which
+is how to prove the pipeline without spending a version number.
+
+Each build carries the OCR language data for English, Malayalam and Hindi
+inside it — the desktop shell has no HTTP permission and the web app's CSP is
+`connect-src 'self'`, so neither can fetch a language pack from anywhere but
+its own origin. That is why the downloads are large.
+
+Nothing is code-signed yet, so macOS and Windows warn on first open. `SHA256SUMS`
+in the release is the only integrity claim a release can honestly make today.
 
 ## Licences
 
