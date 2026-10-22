@@ -1,6 +1,10 @@
-# CLAUDE.md — PDF Suite (FACTS-H Lab, IIIT Kottayam)
+# CLAUDE.md — Signet (FACTS-H Lab, IIIT Kottayam)
 
-Codename: `pdf-suite` (product name TBD). An institutional PDF suite where **every operation runs on the user's device**. No document, page, extracted text or derived data ever leaves the machine.
+Product name: **Signet** — the seal ring that authenticates a document. The
+repo keeps its codename, `pdf-suite`, and the workspace packages stay
+`@pdf-suite/*`; only user-facing surfaces carry the product name.
+
+An institutional PDF suite where **every operation runs on the user's device**. No document, page, extracted text or derived data ever leaves the machine.
 
 Read `docs/PRODUCT.md`, `docs/ARCHITECTURE.md` and `docs/ROADMAP.md` before starting any non-trivial task.
 
