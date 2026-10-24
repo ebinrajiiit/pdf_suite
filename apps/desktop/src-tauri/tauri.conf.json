@@ -36,7 +36,7 @@
       "icons/icon.ico"
     ],
     "copyright": "FACTS-H Lab, IIIT Kottayam",
-    "shortDescription": "A PDF suite that never uploads your files",
-    "longDescription": "View, organise, annotate, redact, OCR and sign PDFs entirely on your own machine. No document ever leaves the device."
+    "shortDescription": "Privacy-preserving PDF editor from FACTS-H Lab",
+    "longDescription": "View, organise, annotate, redact, OCR and sign PDFs entirely on your own machine. No document ever leaves the device. Built by FACTS-H Lab at the Indian Institute of Information Technology, Kottayam."
   }
 }

@@ -41,7 +41,8 @@ export default defineConfig({
       manifest: {
         name: "Signet — FACTS-H Lab",
         short_name: "Signet",
-        description: "A complete PDF suite where your files never leave your computer.",
+        description:
+          "Privacy-preserving PDF editor from FACTS-H Lab. Read, edit, annotate, OCR, redact, convert and sign — your files never leave your computer.",
         start_url: "/",
         display: "standalone",
         background_color: "#ffffff",

@@ -124,6 +124,16 @@ body {
 
 /* ---------- about ---------- */
 
+/* The line that says what this is, before the headline says what it promises. */
+.empty-kicker {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
 .about {
   max-width: 30rem;
   text-align: left;
@@ -139,6 +149,10 @@ body {
 .about-version {
   font-weight: 500;
   color: var(--ink-soft);
+}
+.about-tagline {
+  margin: 0.1rem 0 0.3rem;
+  font-weight: 550;
 }
 .about-lab {
   margin: 0 0 0.9rem;
@@ -1843,6 +1857,8 @@ textarea:focus-visible,
 }
 .empty-mark img {
   display: block;
+  /* The span is full width, so centring has to happen on the image itself. */
+  margin-inline: auto;
   width: 72px;
   height: auto;
 }

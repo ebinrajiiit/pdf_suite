@@ -4,6 +4,17 @@
 
 ---
 
+## Tagline
+
+> **Privacy-preserving PDF editor from FACTS-H Lab**
+
+Used verbatim in the installed app's description, the desktop installer, the
+page's meta description, the welcome screen and About. `apps/web/src/brand.test.ts`
+holds those surfaces to one wording.
+
+The supporting line, wherever there is room for a second: *your files never
+leave your computer.*
+
 ## One line
 
 A complete PDF suite where your files never leave your computer.
@@ -52,6 +63,47 @@ patient files, tender documents, confidential correspondence.
 
 For these users the cloud PDF tools are not merely unattractive — they are often
 not permissible. Signet removes the question by removing the upload.
+
+## Why an Indian PDF suite
+
+Six reasons that are about this country specifically, not about sentiment.
+
+**1. The documents often cannot leave.** An institution that hands student or
+patient records to a third-party service takes on a processor relationship under
+the Digital Personal Data Protection Act, 2023, and the obligations and audits
+that follow from it. Signet never receives the document, so the relationship
+never forms and the question never arises. That is a smaller compliance surface,
+not a legal opinion — but it is smaller for a reason anyone can verify.
+
+**2. Indic scripts are not a long-tail locale here.** Malayalam and Hindi
+language data ship with the product rather than as an afterthought. Malayalam
+extraction is verified against forty real documents from Kerala LSGD and the
+Kerala Assembly, and search folds Malayalam chillu spellings, so a query matches
+whichever form the document happens to use. Foreign tools treat these scripts as
+one more entry in a locale list; here they are the reason the OCR exists.
+
+**3. The signatures that count here are Indian ones.** A Class 3 DSC on a USB
+token and Aadhaar eSign are what an Indian registrar, tender office or court
+actually accepts — not a signing service hosted abroad. *This is the next thing
+being built, not something that ships today: the panel reads signatures, it
+cannot yet make one.*
+
+**4. The paperwork is Indian paperwork.** Mark sheets, provisional certificates,
+result sheets, seating lists — produced in bulk from a template and a
+spreadsheet, because that is the work the lab and its neighbours in the
+institute actually do. Batch sequences were not a feature request; they were
+Tuesday.
+
+**5. It works where the network does not.** Campus offices, district offices,
+examination halls and anywhere the link drops at four in the afternoon. Signet
+is offline by construction rather than offline as a degraded mode, so nothing
+behaves differently when the connection goes.
+
+**6. Priced and owned here.** A site licence for a campus instead of per-seat
+subscriptions billed in dollars, and an open core that a state university's own
+IT department can read, build and verify for itself. An institution should be
+able to check the privacy claim of the software holding its students' records
+without taking anyone's word for it.
 
 ## What it does today
 

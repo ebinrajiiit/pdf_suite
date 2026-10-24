@@ -1,5 +1,7 @@
 # Signet — FACTS-H Lab, IIIT Kottayam
 
+**Privacy-preserving PDF editor from FACTS-H Lab, IIIT Kottayam.**
+
 A complete PDF suite where your files never leave your computer. All viewing, editing, OCR, conversion and signing run on your device.
 
 *Signet*: the seal ring that authenticates a document. The repo keeps its

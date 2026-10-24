@@ -34,6 +34,23 @@ test("every surface shows the same product name", () => {
   }
 });
 
+// The tagline is the one sentence a user meets before the app: in the page's
+// meta description, on the installed app's card, in the desktop installer and
+// on the welcome screen. Four places, no link between them.
+const TAGLINE = "Privacy-preserving PDF editor from FACTS-H Lab";
+
+test("the tagline is worded the same wherever it appears", () => {
+  const surfaces: [string, string][] = [
+    ["index.html meta description", read("../index.html")],
+    ["the PWA manifest", read("../vite.config.ts")],
+    ["the desktop installer", read("../../desktop/src-tauri/tauri.conf.json")],
+    ["the welcome screen", read("./App.tsx")],
+  ];
+  for (const [where, text] of surfaces) {
+    expect(text, `${where} does not carry the tagline`).toContain(TAGLINE);
+  }
+});
+
 // The lab's name belongs on the window and the installer, not only in the repo.
 test("the lab is credited where the name is shown in full", () => {
   expect(read("../index.html")).toContain("FACTS-H Lab");

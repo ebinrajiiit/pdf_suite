@@ -3208,6 +3208,7 @@ export function App() {
             <h2>
               Signet <span className="about-version">{__APP_VERSION__}</span>
             </h2>
+            <p className="about-tagline">Privacy-preserving PDF editor</p>
             <p className="about-lab">
               FACTS-H Lab
               <br />
@@ -4600,6 +4601,7 @@ export function App() {
         <main className="empty">
           <div className="empty-card">
             <BrandMark className="empty-mark" lockup />
+            <p className="empty-kicker">Privacy-preserving PDF editor from FACTS-H Lab</p>
             <h1>Your files never leave this device</h1>
             <p>
               Open a PDF to read, mark up, reorganise, redact or sign it. Every operation runs here,
