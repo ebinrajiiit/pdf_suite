@@ -51,7 +51,13 @@ jobs:
       # to keep it too.
       - run: pnpm exec playwright test offline.spec.ts -g "works with the network cut"
 
+      # enablement turns Pages on through the API if it is off, which saves
+      # finding the setting: Settings > Pages > Build and deployment > Source
+      # offers "GitHub Actions" only once the repository is public, and the
+      # page caches the private version of itself until it is reloaded.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/dist
