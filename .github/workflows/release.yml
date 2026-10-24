@@ -141,11 +141,22 @@ jobs:
           mv ../SHA256SUMS .
           cat SHA256SUMS
 
+      # The downloads live wherever DOWNLOADS_REPO says, so moving them is a
+      # repository setting rather than a commit. Unset, they stay here.
+      #
+      # Publishing to another repository needs a token that can write to it —
+      # github.token reaches only this one — so DOWNLOADS_TOKEN must be a
+      # fine-grained PAT with Contents: read and write on the target. The tag
+      # need not exist there: GitHub creates it against that repo's default
+      # branch, which is why the target needs at least one commit.
       - name: Publish the release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          TARGET: ${{ vars.DOWNLOADS_REPO || github.repository }}
         run: |
+          echo "Publishing $GITHUB_REF_NAME to $TARGET"
           gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$TARGET" \
             --title "Signet $GITHUB_REF_NAME" \
             --notes-file - <<'NOTES'
           Every operation runs on your own device. No document, page, extracted
