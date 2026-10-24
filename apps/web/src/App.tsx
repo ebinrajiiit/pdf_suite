@@ -195,6 +195,8 @@ export function App() {
   const [palette, setPalette] = useState(false);
   /** The keyboard-shortcut sheet. */
   const [keysOpen, setKeysOpen] = useState(false);
+  /** What this is, who made it, and what it promises. */
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   /** Running one action over many files at once. */
   const [batching, setBatching] = useState(false);
@@ -1016,6 +1018,12 @@ export function App() {
         event.preventDefault();
         setPalette(true);
         return;
+      }
+      // Both sheets print "Esc to close" and nothing was listening. The
+      // command palette closes itself; these two did not.
+      if (event.key === "Escape") {
+        setKeysOpen(false);
+        setAboutOpen(false);
       }
       // "?" where nothing is being typed into, which is where every app puts
       // its shortcut list.
@@ -2013,6 +2021,13 @@ export function App() {
       },
 
       {
+        id: "about",
+        label: "About Signet",
+        group: "View",
+        keywords: "version licence credits facts-h lab iiit kottayam privacy",
+        run: () => setAboutOpen(true),
+      },
+      {
         id: "numbers",
         label: "Add page numbers, headers and footers",
         group: "Pages",
@@ -2340,13 +2355,19 @@ export function App() {
       onDrop={(event) => void onDrop(event)}
     >
       <header className="topbar">
-        <div className="brand">
+        <button
+          type="button"
+          className="brand"
+          data-testid="about-open"
+          onClick={() => setAboutOpen(true)}
+          title="About Signet"
+        >
           <BrandMark className="brand-mark" />
           <span className="brand-words">
             <span className="brand-name">Signet</span>
             <span className="brand-lab">FACTS-H Lab</span>
           </span>
-        </div>
+        </button>
 
         <div className="topbar-file">
           {action("Open", () => void handleOpen(), {
@@ -3170,6 +3191,62 @@ export function App() {
       ) : null}
 
       {palette ? <CommandPalette commands={commands} onClose={() => setPalette(false)} /> : null}
+
+      {aboutOpen ? (
+        <div
+          className="palette-backdrop"
+          data-testid="about"
+          onMouseDown={() => setAboutOpen(false)}
+        >
+          <div
+            className="palette about"
+            role="dialog"
+            aria-label="About Signet"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <BrandMark className="about-mark" lockup />
+            <h2>
+              Signet <span className="about-version">{__APP_VERSION__}</span>
+            </h2>
+            <p className="about-lab">
+              FACTS-H Lab
+              <br />
+              Indian Institute of Information Technology, Kottayam
+            </p>
+            <p>
+              A complete PDF suite where your files never leave your computer. Reading, editing,
+              OCR, redaction, conversion and signing all run on this device.
+            </p>
+            <p>
+              Nothing you open is uploaded, and nothing about your use is reported. Switch off the
+              network and everything here keeps working, which is the honest way to check the claim
+              rather than take it.
+            </p>
+            <dl className="about-parts">
+              <div>
+                <dt>Renders with</dt>
+                <dd>PDFium</dd>
+              </div>
+              <div>
+                <dt>Repairs and encrypts with</dt>
+                <dd>qpdf</dd>
+              </div>
+              <div>
+                <dt>Reads scans with</dt>
+                <dd>Tesseract</dd>
+              </div>
+              <div>
+                <dt>Writes structure with</dt>
+                <dd>pdf-lib</dd>
+              </div>
+            </dl>
+            <p className="palette-hint">
+              Every component is open source and carried in this build, not fetched. Their licences
+              are in THIRD_PARTY_NOTICES.txt beside the app. Esc to close.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {keysOpen ? (
         <div className="palette-backdrop" data-testid="keys" onMouseDown={() => setKeysOpen(false)}>

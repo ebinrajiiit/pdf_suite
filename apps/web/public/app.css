@@ -77,8 +77,20 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  font: inherit;
   font-weight: 650;
   letter-spacing: -0.01em;
+  padding: 0.2rem 0.3rem;
+  margin-left: -0.3rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.brand:hover {
+  background: var(--sunken);
 }
 .brand-mark {
   display: block;
@@ -108,6 +120,54 @@ body {
 .topbar-file {
   display: flex;
   gap: 0.35rem;
+}
+
+/* ---------- about ---------- */
+
+.about {
+  max-width: 30rem;
+  text-align: left;
+}
+.about h2 {
+  margin: 0.75rem 0 0.1rem;
+}
+.about-mark img {
+  display: block;
+  width: 84px;
+  height: auto;
+}
+.about-version {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.about-lab {
+  margin: 0 0 0.9rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+.about p {
+  margin: 0 0 0.7rem;
+  line-height: 1.45;
+}
+.about-parts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+  margin: 0 0 0.8rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+.about-parts > div {
+  display: contents;
+}
+.about-parts dt {
+  color: var(--ink-soft);
+}
+.about-parts dd {
+  margin: 0;
+  font-weight: 550;
 }
 .topbar-history {
   display: flex;

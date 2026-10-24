@@ -3100,3 +3100,29 @@ test("every tool is marked by a drawing, not a text character", async ({ page })
   );
   expect(empty).toEqual([]);
 });
+
+test("the lockup says what this is, who made it and what it promises", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  // Every piece of desktop software can answer "what am I running, and who
+  // wrote it". This one could not, and the lab's name appeared only in 10px
+  // type in a corner.
+  await page.getByTestId("about-open").click();
+  const about = page.getByTestId("about");
+  await expect(about).toContainText("Signet");
+  await expect(about).toContainText("FACTS-H Lab");
+  await expect(about).toContainText("Indian Institute of Information Technology, Kottayam");
+
+  // The version comes from apps/web/package.json through vite's define, so it
+  // cannot drift from what was built.
+  const version = JSON.parse(
+    await readFile(new URL("../apps/web/package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+  await expect(about.getByRole("heading")).toHaveText(`Signet ${version.version}`);
+
+  // Both sheets print "Esc to close" and nothing used to listen.
+  await page.keyboard.press("Escape");
+  await expect(about).toBeHidden();
+});

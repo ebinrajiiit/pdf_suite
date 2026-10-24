@@ -1,12 +1,21 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { ocrAssets } from "./ocr-assets.js";
+
+// The version a user reads in About comes from the manifest, so there is no
+// second place to forget to bump. scripts/check-version.mjs holds the five
+// manifests that carry it to one value.
+const { version } = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 // No @vitejs/plugin-react on purpose: its dev Fast-Refresh preamble is an inline
 // <script>, which the CSP in docs/PRIVACY.md forbids. Vite's esbuild already
 // transpiles .tsx using tsconfig's "jsx": "react-jsx"; we trade component HMR
 // for the shipped CSP being byte-identical in dev, preview and production.
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(version) },
   server: { port: 5173, strictPort: true },
   preview: { port: 4173, strictPort: true },
   plugins: [
