@@ -7,10 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Writing a branch, not deploying through the Pages API: creating a Pages site
+# needs admin, which the workflow token does not have, and that is what
+# configure-pages kept failing on. Pushing a branch needs contents: write, which
+# the release job already proves this token has.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # One deployment at a time, and never cancel one half-done.
 concurrency:
@@ -20,9 +22,6 @@ concurrency:
 jobs:
   trial:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     env:
       SIGNET_TRIAL: "1"
       # Where the dialog sends someone who wants to keep their work. Change it
@@ -51,15 +50,22 @@ jobs:
       # to keep it too.
       - run: pnpm exec playwright test offline.spec.ts -g "works with the network cut"
 
-      # enablement turns Pages on through the API if it is off, which saves
-      # finding the setting: Settings > Pages > Build and deployment > Source
-      # offers "GitHub Actions" only once the repository is public, and the
-      # page caches the private version of itself until it is reloaded.
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/web/dist
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      # A plain branch push rather than an action: ten lines, no third-party
+      # step in a pipeline whose whole subject is not trusting other people's
+      # servers. The branch holds only build output and is replaced each time.
+      - name: Publish to the gh-pages branch
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd apps/web/dist
+          # Without this, Jekyll would try to build the site and drop anything
+          # whose name begins with an underscore.
+          touch .nojekyll
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Trial build from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          echo "Pushed. Settings > Pages > Deploy from a branch > gh-pages > / (root)"
