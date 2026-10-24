@@ -533,11 +533,13 @@ export function useDocument() {
           languages,
           // Absolute URLs, not root-relative: tesseract.js wraps its worker in
           // a blob, and inside a blob worker importScripts has no base path to
-          // resolve "/ocr/..." against.
+          // resolve "/ocr/..." against. BASE_URL rather than "/" because a
+          // GitHub Pages project site is served from /<repo>/, where a
+          // root-relative path reaches the wrong origin root.
           {
-            workerPath: new URL("/ocr/worker.min.js", location.href).href,
-            corePath: new URL("/ocr/core/", location.href).href,
-            langPath: new URL("/ocr/lang/", location.href).href,
+            workerPath: new URL(`${import.meta.env.BASE_URL}ocr/worker.min.js`, location.href).href,
+            corePath: new URL(`${import.meta.env.BASE_URL}ocr/core/`, location.href).href,
+            langPath: new URL(`${import.meta.env.BASE_URL}ocr/lang/`, location.href).href,
           },
           despeckle,
           track,

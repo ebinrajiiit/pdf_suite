@@ -10,6 +10,12 @@ const { version } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 ) as { version: string };
 
+// GitHub Pages serves a project site from /<repo>/, not from the root. Every
+// asset path, the manifest's start_url and the service worker's scope are all
+// absolute, so a build for that host has to be told where it will live or it
+// 404s on its own bundle.
+const base = process.env.SIGNET_BASE ?? "/";
+
 // No @vitejs/plugin-react on purpose: its dev Fast-Refresh preamble is an inline
 // <script>, which the CSP in docs/PRIVACY.md forbids. Vite's esbuild already
 // transpiles .tsx using tsconfig's "jsx": "react-jsx"; we trade component HMR
@@ -21,9 +27,10 @@ export default defineConfig({
     // except taking a file away. See apps/web/src/file-io.ts.
     __TRIAL__: JSON.stringify(process.env.SIGNET_TRIAL === "1"),
     __DOWNLOAD_URL__: JSON.stringify(
-      process.env.SIGNET_DOWNLOAD_URL ?? "https://github.com/ebinrajiiit/signet/releases/latest",
+      process.env.SIGNET_DOWNLOAD_URL ?? "https://github.com/ebinrajiiit/pdf_suite/releases/latest",
     ),
   },
+  base,
   server: { port: 5173, strictPort: true },
   preview: { port: 4173, strictPort: true },
   plugins: [
@@ -44,14 +51,15 @@ export default defineConfig({
         // The OCR core and language data are ~16 MB and most users never run
         // OCR, so they are fetched on first use instead of tripling first load.
         globIgnores: ["**/ocr/**"],
-        navigateFallback: "index.html",
+        navigateFallback: `${base}index.html`,
       },
       manifest: {
         name: "Signet — FACTS-H Lab",
         short_name: "Signet",
         description:
           "Privacy-preserving PDF editor from FACTS-H Lab. Read, edit, annotate, OCR, redact, convert and sign — your files never leave your computer.",
-        start_url: "/",
+        start_url: base,
+        scope: base,
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#0f172a",

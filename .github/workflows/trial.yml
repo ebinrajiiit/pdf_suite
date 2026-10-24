@@ -27,7 +27,9 @@ jobs:
       SIGNET_TRIAL: "1"
       # Where the dialog sends someone who wants to keep their work. Change it
       # with the repository that holds the installers.
-      SIGNET_DOWNLOAD_URL: https://github.com/ebinrajiiit/signet/releases/latest
+      SIGNET_DOWNLOAD_URL: https://github.com/ebinrajiiit/pdf_suite/releases/latest
+      # Pages serves a project site from /<repo>/, so the build has to know it.
+      SIGNET_BASE: /pdf_suite/
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

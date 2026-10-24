@@ -68,13 +68,17 @@ function send(res: Parameters<Connect.NextHandleFunction>[1], file: string): boo
 
 export function ocrAssets(): Plugin {
   let root = process.cwd();
+  // Vite serves a based build under that prefix, so the request arrives as
+  // /<base>/ocr/... and matching "/ocr/" alone would miss it.
+  let base = "/";
 
   const middleware: Connect.NextHandleFunction = (req, res, next) => {
     const url = (req.url ?? "").split("?")[0] ?? "";
-    if (!url.startsWith(`${OCR_BASE}/`)) return next();
+    const prefix = `${base.replace(/\/$/, "")}${OCR_BASE}/`;
+    if (!url.startsWith(prefix)) return next();
 
     // One optional directory segment and a filename, never a traversal.
-    const name = url.slice(`${OCR_BASE}/`.length);
+    const name = url.slice(prefix.length);
     if (name.includes("..") || name.split("/").length > 2) return next();
 
     if (name === "worker.min.js" && send(res, workerFile())) return;
@@ -93,6 +97,7 @@ export function ocrAssets(): Plugin {
     name: "pdf-suite:ocr-assets",
     configResolved(config) {
       root = config.root;
+      base = config.base;
     },
     configureServer(server) {
       server.middlewares.use(middleware);

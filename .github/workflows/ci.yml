@@ -23,6 +23,10 @@ jobs:
       - run: pnpm check:licenses
       - run: pnpm check:notices
       - run: pnpm exec playwright install --with-deps chromium
+      # Not in the repo (large, third-party). apps/web/ocr-assets.ts copies it
+      # into the build when it is present and only warns when it is not, so
+      # without this the OCR test fails on a 404 nobody sees.
+      - run: node scripts/fetch-tessdata.mjs eng mal hin
       - run: pnpm e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -58,6 +62,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: pnpm install --frozen-lockfile
+      # `frontendDist` points at apps/web/dist, and tauri-build fails the
+      # compile when that path does not exist — so the shell cannot be
+      # checked before the interface it wraps has been built.
+      - run: pnpm build
       # cargo check, not a full bundle: this answers "does the shell still
       # compile" on every platform without spending minutes on installers.
       # Every crate here ships inside the binary a customer installs, so it

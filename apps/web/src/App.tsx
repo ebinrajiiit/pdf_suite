@@ -5026,10 +5026,14 @@ const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
  */
 function BrandMark({ className, lockup = false }: { className: string; lockup?: boolean }) {
   const size = lockup ? "lockup" : "mark";
+  // BASE_URL, not "/": a GitHub Pages project site is served from /<repo>/,
+  // where a root-relative path asks the wrong origin root and the lockup
+  // silently disappears.
+  const at = `${import.meta.env.BASE_URL}brand/${size}`;
   return (
     <picture className={className}>
-      <source srcSet={`/brand/${size}-light.png`} media="(prefers-color-scheme: dark)" />
-      <img src={`/brand/${size}-dark.png`} alt="FACTS-H Lab" width={lockup ? 72 : 26} />
+      <source srcSet={`${at}-light.png`} media="(prefers-color-scheme: dark)" />
+      <img src={`${at}-dark.png`} alt="FACTS-H Lab" width={lockup ? 72 : 26} />
     </picture>
   );
 }
