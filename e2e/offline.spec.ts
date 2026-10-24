@@ -3063,3 +3063,40 @@ test("every action in the tools panel shows its whole label", async ({ page }) =
   // And the one that was asked about is there, by name.
   await expect(page.getByTestId("to-docx")).toHaveText("To Word…");
 });
+
+test("every tool is marked by a drawing, not a text character", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "paper.pdf", await textFixture([["Question paper"]]));
+
+  // The tools were labelled with Unicode: "U̲", "S̶", "▭̲", "📎", "✿". A
+  // combining underline renders differently on every platform or not at all, an
+  // emoji arrives in colour among monochrome marks, and a text character has no
+  // fixed optical size, so the row came out ragged. Each one is drawn now.
+  const icons = page.locator(".tool-icon");
+  await expect(icons.first()).toBeVisible();
+  const count = await icons.count();
+  expect(count).toBeGreaterThan(10);
+
+  for (let i = 0; i < count; i++) {
+    const icon = icons.nth(i);
+    await expect(icon.locator("svg")).toHaveCount(1);
+    // No stray glyph left beside the drawing.
+    expect((await icon.innerText()).trim()).toBe("");
+  }
+
+  // Each drawing has real geometry: a path that was mistyped still renders an
+  // <svg>, but it paints nothing and has no size.
+  const empty = await icons.evaluateAll((nodes) =>
+    nodes
+      .map((node) => node.querySelector("svg"))
+      .filter((svg): svg is SVGSVGElement => svg !== null)
+      .filter((svg) => {
+        const box = (svg.querySelector("path") as SVGGeometryElement | null)?.getBBox();
+        return !box || box.width < 2 || box.height < 2;
+      })
+      .map((svg) => svg.parentElement?.parentElement?.textContent ?? "?"),
+  );
+  expect(empty).toEqual([]);
+});

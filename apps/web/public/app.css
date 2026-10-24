@@ -109,18 +109,18 @@ body {
   display: flex;
   gap: 0.35rem;
 }
-/* Undo and redo sit with the file actions, a little apart from them. */
 .topbar-history {
   display: flex;
-  gap: 0.15rem;
-  margin-left: 0.25rem;
-  padding-left: 0.4rem;
-  border-left: 1px solid var(--line);
+  gap: 0.1rem;
 }
-.topbar-history .action {
-  min-width: 2rem;
-  padding-inline: 0.5rem;
-  font-size: 1rem;
+
+/* A hairline between groups of actions, so seven buttons read as three groups
+   rather than one undifferentiated row. */
+.topbar-divider {
+  width: 1px;
+  align-self: stretch;
+  margin-inline: 0.3rem;
+  background: var(--line);
 }
 
 .topbar-doc {
@@ -144,7 +144,15 @@ body {
 
 /* ---------- buttons ---------- */
 
+.icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
 .action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font: inherit;
   padding: 0.35rem 0.7rem;
   border: 1px solid var(--line);
@@ -179,6 +187,37 @@ body {
 .action-danger:hover:not(:disabled) {
   border-color: var(--danger);
   color: var(--danger);
+}
+
+/* The one action in a group that a user most likely came for. Exactly one per
+   group, or it stops meaning anything. */
+.action-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 550;
+}
+.action-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+  border-color: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+/* Icon alone: no frame until it is pointed at, so a row of them reads as marks
+   rather than as more buttons. The label lives in aria-label and the tooltip. */
+.action-quiet {
+  padding: 0.35rem;
+  border-color: transparent;
+  background: none;
+  color: var(--ink-soft);
+}
+.action-quiet:hover:not(:disabled) {
+  background: var(--sunken);
+  border-color: transparent;
+  color: var(--ink);
+}
+.action-quiet[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--ink);
 }
 
 button:focus-visible,
@@ -484,8 +523,18 @@ textarea:focus-visible,
   font-weight: 600;
 }
 .tool-icon {
-  font-size: 1rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.25rem;
+  color: var(--ink-soft);
+}
+.tool:hover:not(:disabled) .tool-icon,
+.tool-on .tool-icon {
+  color: var(--accent);
+}
+.tool-on .tool-icon {
+  color: var(--accent);
 }
 .tool-name {
   text-align: center;
@@ -526,6 +575,17 @@ textarea:focus-visible,
    panel used to shrink to "To W" and "Tabl", which is a button nobody can
    find; each one now keeps its own label and the row wraps instead. A label
    longer than the panel still takes a line of its own rather than overflowing. */
+/* A quiet heading inside a group, so a handful of related actions can carry
+   one-word labels and still say what they are. */
+.panel-subhead {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
 .action-row {
   display: flex;
   flex-wrap: wrap;
@@ -703,7 +763,10 @@ textarea:focus-visible,
   font-variant-numeric: tabular-nums;
 }
 .pagebox button {
-  padding: 0 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.25rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--panel);
@@ -1769,9 +1832,14 @@ textarea:focus-visible,
   gap: 0.15rem;
 }
 .zoom button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
-  min-width: 1.6rem;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
   padding: 0.15rem 0.4rem;
+  color: var(--ink-soft);
   border: 1px solid transparent;
   border-radius: 4px;
   background: none;
@@ -1781,6 +1849,13 @@ textarea:focus-visible,
 .zoom button:hover:not(:disabled) {
   border-color: var(--line);
   background: var(--sunken);
+  color: var(--ink);
+}
+/* A view that is on is held down, the way a toolbar toggle is. */
+.zoom button.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
 }
 .zoom button:disabled {
   opacity: 0.4;

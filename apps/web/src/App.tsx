@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Icon, type IconName } from "./Icon";
 import {
   CommentList,
   FormPanel,
@@ -2277,8 +2278,8 @@ export function App() {
         setEditingText(false);
       }}
     >
-      <span className="tool-icon" aria-hidden="true">
-        {TOOL_ICONS[which]}
+      <span className="tool-icon">
+        <Icon name={TOOL_ICONS[which]} />
       </span>
       <span className="tool-name">{TOOL_LABELS[which]}</span>
     </button>
@@ -2296,11 +2297,23 @@ export function App() {
       name?: string;
       /** For a button that holds a state, like a panel being open. */
       pressed?: boolean;
+      icon?: IconName;
+      /** The one action in a group a user most likely wants. */
+      primary?: boolean;
+      /** Icon only: the label is dropped and `name` carries it instead. */
+      quiet?: boolean;
     } = {},
   ) => (
     <button
       type="button"
-      className={options.danger ? "action action-danger" : "action"}
+      className={[
+        "action",
+        options.danger ? "action-danger" : "",
+        options.primary ? "action-primary" : "",
+        options.quiet ? "action-quiet" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onClick={onClick}
       disabled={options.off ?? disabled}
       {...(options.testId ? { "data-testid": options.testId } : {})}
@@ -2308,7 +2321,8 @@ export function App() {
       {...(options.pressed === undefined ? {} : { "aria-pressed": options.pressed })}
       title={options.hint ?? options.name ?? label}
     >
-      {label}
+      {options.icon ? <Icon name={options.icon} /> : null}
+      {options.quiet ? null : <span className="action-label">{label}</span>}
     </button>
   );
 
@@ -2335,52 +2349,49 @@ export function App() {
         </div>
 
         <div className="topbar-file">
-          {action("Open", () => void handleOpen(), { off: !ready, hint: "Open a PDF (⌘O)" })}
+          {action("Open", () => void handleOpen(), {
+            icon: "open",
+            off: !ready,
+            hint: "Open a PDF (⌘O)",
+          })}
           {info
             ? action(
                 positions.length === 1 ? "Insert after…" : "Merge…",
                 () => void handleMerge(),
-                {
-                  hint: "Add another PDF to this one",
-                },
+                { icon: "merge", hint: "Add another PDF to this one" },
               )
             : null}
-          {action(showTools ? "Hide tools" : "Show tools", () => setShowTools((on) => !on), {
-            testId: "toggle-tools",
-            name: showTools ? "Hide the tools panel" : "Show the tools panel",
-            hint: "Gives the document the whole window, or brings the tools back",
-            pressed: showTools,
-            off: !info,
-          })}
-          {action("⌘K Actions", () => setPalette(true), {
-            testId: "open-palette",
-            name: "All actions by name",
-            hint: "Every action by name (⌘K)",
-            off: !ready,
-          })}
-          {action("Batch…", () => openPanel(setBatching, batching), {
-            testId: "batch",
-            off: !ready,
-            hint: "Do one thing to many files at once",
-          })}
+          {/* The one thing a user came to do, so it is the one filled button. */}
           {info
-            ? action("Save", () => void handleSave(), { hint: "Save the document (⌘S)" })
+            ? action("Save", () => void handleSave(), {
+                icon: "save",
+                primary: true,
+                hint: "Save the document (⌘S)",
+              })
             : null}
           {info
             ? action("Print", () => void handlePrint(), {
+                icon: "print",
                 testId: "print",
                 hint: "Print the document as it is now (⌘P)",
               })
             : null}
+
+          {info ? <span className="topbar-divider" aria-hidden="true" /> : null}
+
           {info ? (
             <span className="topbar-history">
-              {action("↶", () => void undo(), {
+              {action("Undo", () => void undo(), {
+                icon: "undo",
+                quiet: true,
                 testId: "undo",
                 name: "Undo",
                 hint: "Undo the last change (⌘Z)",
                 off: disabled || !canUndo,
               })}
-              {action("↷", () => void redo(), {
+              {action("Redo", () => void redo(), {
+                icon: "redo",
+                quiet: true,
                 testId: "redo",
                 name: "Redo",
                 hint: "Redo the change just undone (⇧⌘Z)",
@@ -2388,6 +2399,31 @@ export function App() {
               })}
             </span>
           ) : null}
+
+          <span className="topbar-divider" aria-hidden="true" />
+
+          {action("Actions", () => setPalette(true), {
+            icon: "command",
+            testId: "open-palette",
+            name: "All actions by name",
+            hint: "Every action by name (⌘K)",
+            off: !ready,
+          })}
+          {action("Batch…", () => openPanel(setBatching, batching), {
+            icon: "batch",
+            testId: "batch",
+            off: !ready,
+            hint: "Do one thing to many files at once",
+          })}
+          {action(showTools ? "Hide tools" : "Show tools", () => setShowTools((on) => !on), {
+            icon: "panel",
+            quiet: true,
+            testId: "toggle-tools",
+            name: showTools ? "Hide the tools panel" : "Show the tools panel",
+            hint: "Gives the document the whole window, or brings the tools back",
+            pressed: showTools,
+            off: !info,
+          })}
         </div>
 
         {info ? (
@@ -2399,8 +2435,8 @@ export function App() {
               void handleSearch();
             }}
           >
-            <span className="search-icon" aria-hidden="true">
-              ⌕
+            <span className="search-icon">
+              <Icon name="search" />
             </span>
             <input
               ref={searchInput}
@@ -2422,10 +2458,10 @@ export function App() {
                   {truncated ? "+" : ""}
                 </span>
                 <button type="button" aria-label="Previous match" onClick={() => step(-1)}>
-                  ‹
+                  <Icon name="back" />
                 </button>
                 <button type="button" aria-label="Next match" onClick={() => step(1)}>
-                  ›
+                  <Icon name="forward" />
                 </button>
               </span>
             ) : null}
@@ -4059,8 +4095,8 @@ export function App() {
                   setEditRuns(new Map());
                 }}
               >
-                <span className="tool-icon" aria-hidden="true">
-                  ✎
+                <span className="tool-icon">
+                  <Icon name="text" />
                 </span>
                 <span>
                   <strong>Edit text</strong>
@@ -4087,8 +4123,8 @@ export function App() {
                   setImagesByPage(new Map());
                 }}
               >
-                <span className="tool-icon" aria-hidden="true">
-                  ▨
+                <span className="tool-icon">
+                  <Icon name="picture" />
                 </span>
                 <span>
                   <strong>Edit pictures</strong>
@@ -4260,18 +4296,6 @@ export function App() {
                       },
                     )
                   : null}
-                {action("Check for PDF/A…", () => void handleStandard("pdfa"), {
-                  testId: "check-pdfa",
-                  hint: "What stands between this document and being archivable",
-                })}
-                {action("Check for print…", () => void handleStandard("print"), {
-                  testId: "check-print",
-                  hint: "Fonts, image resolution and the trim box a press needs",
-                })}
-                {action("Check accessibility…", () => void handleCheckAccessible(), {
-                  testId: "check-accessibility",
-                  hint: "Whether a screen reader could read this document",
-                })}
                 {action("Remove hidden info…", () => void handleInspect(), {
                   testId: "sanitise",
                   hint: "Metadata, attached files, scripts and actions — what travels unseen",
@@ -4279,6 +4303,27 @@ export function App() {
                 {action("Redact by pattern…", () => openPanel(setHunting, hunting), {
                   testId: "find-redact",
                   hint: "Find Aadhaar or PAN numbers, emails, phone numbers or words, and remove every one",
+                })}
+              </div>
+
+              {/* Under their own heading these three need one word each, so the
+                  three of them take one row instead of three. */}
+              <p className="panel-subhead">Check against</p>
+              <div className="action-row">
+                {action("PDF/A", () => void handleStandard("pdfa"), {
+                  testId: "check-pdfa",
+                  name: "Check for PDF/A",
+                  hint: "What stands between this document and being archivable",
+                })}
+                {action("Print", () => void handleStandard("print"), {
+                  testId: "check-print",
+                  name: "Check for print",
+                  hint: "Fonts, image resolution and the trim box a press needs",
+                })}
+                {action("Accessibility", () => void handleCheckAccessible(), {
+                  testId: "check-accessibility",
+                  name: "Check accessibility",
+                  hint: "Whether a screen reader could read this document",
                 })}
               </div>
               {tool === "redact" || redactionCount > 0 ? (
@@ -4329,8 +4374,14 @@ export function App() {
                 </div>
               ) : null}
               <div className="action-row">
-                {action("↺ Left", () => void rotatePages(target, 270), { name: "Rotate left" })}
-                {action("↻ Right", () => void rotatePages(target, 90), { name: "Rotate right" })}
+                {action("Left", () => void rotatePages(target, 270), {
+                  icon: "rotateleft",
+                  name: "Rotate left",
+                })}
+                {action("Right", () => void rotatePages(target, 90), {
+                  icon: "rotateright",
+                  name: "Rotate right",
+                })}
               </div>
               <div className="action-row">
                 {action("Delete", handleDelete, {
@@ -4518,7 +4569,7 @@ export function App() {
                 disabled={firstVisible <= 0}
                 onClick={() => setFirstVisible((at) => Math.max(0, at - 1))}
               >
-                ‹
+                <Icon name="back" />
               </button>
             ) : null}
             Page {Math.min(firstVisible + 1, pageCount)} of {pageCount}
@@ -4530,7 +4581,7 @@ export function App() {
                 disabled={firstVisible >= pageCount - 1}
                 onClick={() => setFirstVisible((at) => Math.min(pageCount - 1, at + 1))}
               >
-                ›
+                <Icon name="forward" />
               </button>
             ) : null}
           </span>
@@ -4543,7 +4594,7 @@ export function App() {
               disabled={disabled}
               aria-label="Zoom out"
             >
-              −
+              <Icon name="zoomout" />
             </button>
             <span className="zoom-level" data-testid="zoom-level">
               {zoom === "fit" ? "Fit" : zoom === "page" ? "Page" : `${Math.round(zoom * 100)}%`}
@@ -4554,7 +4605,7 @@ export function App() {
               disabled={disabled}
               aria-label="Zoom in"
             >
-              +
+              <Icon name="zoomin" />
             </button>
             <button
               type="button"
@@ -4563,9 +4614,10 @@ export function App() {
               data-testid="single-page"
               onClick={() => setSinglePage((on) => !on)}
               disabled={disabled}
+              aria-label="Single"
               title="One page at a time, with the page box to move through the document"
             >
-              Single
+              <Icon name="single" />
             </button>
             <button
               type="button"
@@ -4578,9 +4630,10 @@ export function App() {
                 else void area.requestFullscreen().catch(() => setSaved("Full screen was refused"));
               }}
               disabled={disabled}
+              aria-label="Full screen"
               title="Show the document full screen"
             >
-              Full screen
+              <Icon name="fullscreen" />
             </button>
             <button
               type="button"
@@ -4589,20 +4642,29 @@ export function App() {
               data-testid="facing"
               onClick={() => setFacing((on) => !on)}
               disabled={disabled}
+              aria-label="Two-up"
               title="Two pages side by side, as a book opens"
             >
-              Two-up
+              <Icon name="twoup" />
             </button>
-            <button type="button" onClick={() => setZoom("fit")} disabled={disabled}>
-              Fit
+            <button
+              type="button"
+              onClick={() => setZoom("fit")}
+              disabled={disabled}
+              aria-label="Fit"
+              title="Fit the page width to the window"
+            >
+              <Icon name="fit" />
             </button>
             <button
               type="button"
               onClick={() => setZoom("page")}
               disabled={disabled}
               data-testid="fit-page"
+              aria-label="Page"
+              title="Fit a whole page in the window"
             >
-              Page
+              <Icon name="page" />
             </button>
           </div>
         ) : (
@@ -4647,32 +4709,32 @@ export function App() {
  * Simple glyphs rather than an icon library. A dependency for nine marks is not
  * worth it, and these read at any size without a sprite sheet.
  */
-const TOOL_ICONS: Record<AnnotationTool, string> = {
-  highlight: "▬",
-  underline: "U̲",
-  strike: "S̶",
-  note: "●",
-  text: "T",
-  square: "▭",
-  circle: "◯",
-  ink: "✎",
-  crop: "⌗",
-  field: "▭̲",
-  link: "⛓",
-  line: "╱",
-  arrow: "↗",
-  polygon: "⬠",
-  cloud: "☁",
-  measure: "↔",
-  measurearea: "▧",
-  polyline: "〰",
-  callout: "🗩",
-  caret: "^",
-  stamp: "▣",
-  signature: "✒",
-  picture: "✿",
-  attachment: "📎",
-  redact: "█",
+const TOOL_ICONS: Record<AnnotationTool, IconName> = {
+  highlight: "highlight",
+  underline: "underline",
+  strike: "strike",
+  note: "note",
+  text: "text",
+  square: "square",
+  circle: "circle",
+  ink: "ink",
+  crop: "crop",
+  field: "field",
+  link: "link",
+  line: "line",
+  arrow: "arrow",
+  polygon: "polygon",
+  cloud: "cloud",
+  measure: "measure",
+  measurearea: "measurearea",
+  polyline: "polyline",
+  callout: "callout",
+  caret: "caret",
+  stamp: "stamp",
+  signature: "signature",
+  picture: "picture",
+  attachment: "attachment",
+  redact: "redact",
 };
 
 const TOOL_HINTS: Record<AnnotationTool, string> = {
