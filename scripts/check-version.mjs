@@ -26,6 +26,12 @@ const found = [
     "apps/desktop/src-tauri/Cargo.toml",
     /^version\s*=\s*"([^"]+)"/m.exec(read("apps/desktop/src-tauri/Cargo.toml"))?.[1],
   ],
+  // The lock carries it too, and CI builds with --locked, so a bumped
+  // Cargo.toml and a stale lock fails every desktop job on every platform.
+  [
+    "apps/desktop/src-tauri/Cargo.lock",
+    /name = "pdf-suite"\nversion = "([^"]+)"/.exec(read("apps/desktop/src-tauri/Cargo.lock"))?.[1],
+  ],
 ];
 
 const missing = found.filter(([, v]) => !v);
