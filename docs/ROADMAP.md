@@ -65,6 +65,11 @@ item. `[ ]` not started, or deliberately declined — the reason is in the item.
   PWA may fetch it from another origin. **Not yet proved on a tag**, and the
   Windows `.msi` and Linux `.deb`/`.AppImage` have never been built — the CI
   job only ever ran `cargo check`. macOS is built and the bundle verified
+- [x] A public try-it-out build (`SIGNET_TRIAL=1`): the same app with one guard
+  in each of the two functions that write a file, so everything works except
+  taking the document away. Published to GitHub Pages only after a test proves
+  it refuses — a trial that quietly saves gives the product away and explains
+  nothing
 - [ ] Pin the OCR language data. `fetch-tessdata.mjs` pulls `main` with no
   digest check, so two releases can carry different bytes under one version —
   ADR 0004 says a release must pin them

@@ -15,7 +15,15 @@ const { version } = JSON.parse(
 // transpiles .tsx using tsconfig's "jsx": "react-jsx"; we trade component HMR
 // for the shipped CSP being byte-identical in dev, preview and production.
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+    // SIGNET_TRIAL=1 builds the public try-it-out copy: everything works
+    // except taking a file away. See apps/web/src/file-io.ts.
+    __TRIAL__: JSON.stringify(process.env.SIGNET_TRIAL === "1"),
+    __DOWNLOAD_URL__: JSON.stringify(
+      process.env.SIGNET_DOWNLOAD_URL ?? "https://github.com/ebinrajiiit/signet/releases/latest",
+    ),
+  },
   server: { port: 5173, strictPort: true },
   preview: { port: 4173, strictPort: true },
   plugins: [

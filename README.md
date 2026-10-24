@@ -177,6 +177,22 @@ its own origin. That is why the downloads are large.
 Nothing is code-signed yet, so macOS and Windows warn on first open. `SHA256SUMS`
 in the release is the only integrity claim a release can honestly make today.
 
+### The public trial
+
+```bash
+SIGNET_TRIAL=1 pnpm build                  # the same app, minus writing a file
+SIGNET_TRIAL=1 pnpm exec playwright test trial.spec.ts
+```
+
+`.github/workflows/trial.yml` builds it, proves it refuses to hand a file over
+and still works with the network cut, and only then publishes it to GitHub
+Pages. The restriction is one guard in `saveBytes` and one in `printBytes` —
+every path that writes a file for the user goes through those two.
+
+It is a sign on a door, not a lock. The app runs entirely in the browser, so
+anyone who opens the developer tools can defeat it. It exists to send an
+interested visitor to the installer, not to stop a determined one.
+
 ## Licences
 
 ```bash

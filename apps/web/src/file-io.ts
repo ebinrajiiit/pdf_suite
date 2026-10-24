@@ -34,6 +34,39 @@ export const IMAGE_TYPES = [
  * True inside the Tauri shell. Tauri 2 puts this on the window; checking it
  * rather than a user-agent string means the same bundle works in both places.
  */
+/**
+ * The public try-it-out build.
+ *
+ * Everything works — open, edit, annotate, redact, OCR — except the last step,
+ * taking a file away. Every path that writes a file for the user goes through
+ * saveBytes, and printing goes through printBytes, so those two are the whole
+ * of it rather than a guard on each of the twelve callers.
+ *
+ * It is a sign on a door, not a lock: the app runs entirely in the browser, so
+ * anyone willing to open the developer tools can defeat it. It is there to send
+ * an interested person to the installer, not to stop a determined one, and
+ * nothing of value is being withheld — the installed app is what the trial is
+ * advertising.
+ */
+export const TRIAL: boolean = __TRIAL__;
+
+/** Where someone who wants to keep their work should go. */
+export const DOWNLOAD_URL: string = __DOWNLOAD_URL__;
+
+/** Raised to the interface so it can explain itself, rather than failing mutely. */
+const TRIAL_EVENT = "signet:trial";
+
+function heldBackByTrial(): boolean {
+  if (!TRIAL) return false;
+  window.dispatchEvent(new CustomEvent(TRIAL_EVENT));
+  return true;
+}
+
+export function onTrialBlock(run: () => void): () => void {
+  window.addEventListener(TRIAL_EVENT, run);
+  return () => window.removeEventListener(TRIAL_EVENT, run);
+}
+
 export const isDesktop = (): boolean =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -65,6 +98,7 @@ async function tauri() {
  * Returns what to tell the user, or undefined when the print started cleanly.
  */
 export async function printBytes(bytes: ArrayBuffer, name: string): Promise<string | undefined> {
+  if (heldBackByTrial()) return undefined;
   if (isDesktop()) {
     const { invoke } = await tauri();
     await invoke<string>("print_document", {
@@ -238,6 +272,7 @@ export async function saveBytes(
   mime = "application/pdf",
   path?: string,
 ): Promise<string | undefined> {
+  if (heldBackByTrial()) return undefined;
   if (isDesktop()) {
     const { dialog, invoke } = await tauri();
     // Writing back to the file that was opened needs no dialog, exactly as the

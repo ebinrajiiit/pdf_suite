@@ -1,0 +1,57 @@
+name: Trial
+
+# The public try-it-out copy: the same app, built so that it cannot write a
+# file. Rebuilt on every push to main, verified, then published.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one half-done.
+concurrency:
+  group: trial
+  cancel-in-progress: false
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      SIGNET_TRIAL: "1"
+      # Where the dialog sends someone who wants to keep their work. Change it
+      # with the repository that holds the installers.
+      SIGNET_DOWNLOAD_URL: https://github.com/ebinrajiiit/signet/releases/latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/fetch-tessdata.mjs eng mal hin
+      - run: pnpm build
+
+      # Published only if it really does refuse to hand a file over. A trial
+      # that quietly saves is worse than no trial: it gives away the product
+      # and tells the visitor nothing about why they would install it.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test trial.spec.ts
+
+      # The offline guarantee is the claim being demonstrated, so the demo has
+      # to keep it too.
+      - run: pnpm exec playwright test offline.spec.ts -g "works with the network cut"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+      - id: deploy
+        uses: actions/deploy-pages@v4

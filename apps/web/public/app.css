@@ -135,6 +135,8 @@ body {
 }
 
 .about {
+  /* .palette has no padding of its own; .keys adds its own and so must this. */
+  padding: 1rem 1.2rem;
   max-width: 30rem;
   text-align: left;
 }
@@ -150,6 +152,27 @@ body {
   font-weight: 500;
   color: var(--ink-soft);
 }
+/* On the trial build only, beside the lockup. */
+.brand-trial {
+  align-self: center;
+  margin-left: 0.15rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trial-actions {
+  margin: 0.2rem 0 0.9rem;
+}
+.trial-actions .action {
+  text-decoration: none;
+}
+
 .about-tagline {
   margin: 0.1rem 0 0.3rem;
   font-weight: 550;

@@ -57,6 +57,9 @@ import {
   canScan,
   canUsePicker,
   convertOffice,
+  DOWNLOAD_URL,
+  onTrialBlock,
+  TRIAL,
   OFFICE_EXTENSIONS,
   pickFiles,
   scanPage,
@@ -197,6 +200,8 @@ export function App() {
   const [keysOpen, setKeysOpen] = useState(false);
   /** What this is, who made it, and what it promises. */
   const [aboutOpen, setAboutOpen] = useState(false);
+  /** Shown when the trial build is asked for a file it will not hand over. */
+  const [trialOpen, setTrialOpen] = useState(false);
 
   /** Running one action over many files at once. */
   const [batching, setBatching] = useState(false);
@@ -1024,6 +1029,7 @@ export function App() {
       if (event.key === "Escape") {
         setKeysOpen(false);
         setAboutOpen(false);
+        setTrialOpen(false);
       }
       // "?" where nothing is being typed into, which is where every app puts
       // its shortcut list.
@@ -2277,6 +2283,8 @@ export function App() {
   const status = state.error ?? state.busy ?? saved;
   const disabled = !ready || !info || state.busy !== undefined;
 
+  useEffect(() => onTrialBlock(() => setTrialOpen(true)), []);
+
   /** One tool button in the right-hand panel. */
   const toolButton = (which: AnnotationTool) => (
     <button
@@ -2367,6 +2375,7 @@ export function App() {
             <span className="brand-name">Signet</span>
             <span className="brand-lab">FACTS-H Lab</span>
           </span>
+          {TRIAL ? <span className="brand-trial">Try it</span> : null}
         </button>
 
         <div className="topbar-file">
@@ -3191,6 +3200,41 @@ export function App() {
       ) : null}
 
       {palette ? <CommandPalette commands={commands} onClose={() => setPalette(false)} /> : null}
+
+      {trialOpen ? (
+        <div
+          className="palette-backdrop"
+          data-testid="trial"
+          onMouseDown={() => setTrialOpen(false)}
+        >
+          <div
+            className="palette about"
+            role="dialog"
+            aria-label="This is the trial"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2>Install Signet to keep your work</h2>
+            <p>
+              This page is the try-it-out copy. Everything works — open a PDF, edit the text, mark
+              it up, redact it, read a scan — but it will not write a file, so the document you have
+              been working on stays here.
+            </p>
+            <p>
+              The installed app is the same program with that one restriction lifted. It is free to
+              download, runs on macOS, Windows and Linux, and does all of this without a network at
+              all.
+            </p>
+            <p className="trial-actions">
+              <a className="action action-primary" href={DOWNLOAD_URL} rel="noreferrer">
+                Download Signet
+              </a>
+            </p>
+            <p className="palette-hint">
+              Nothing you opened here was uploaded — there is nowhere for it to go. Esc to close.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {aboutOpen ? (
         <div
