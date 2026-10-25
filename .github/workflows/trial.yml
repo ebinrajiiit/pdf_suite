@@ -113,5 +113,14 @@ jobs:
             exit 0
           fi
           git commit -q -m "Signet demo from ${GITHUB_SHA}"
-          git push --quiet
+          # Cloning $DEMO_REPO proves nothing about writing to it: a public
+          # repository reads for free, so a token with no access at all gets
+          # this far and is refused only here.
+          if ! git push --quiet 2>push.err; then
+            cat push.err
+            echo "::error::DOWNLOADS_TOKEN cannot push to $DEMO_REPO."
+            echo "::error::Add that repository under the token's Repository access, then press Update token."
+            echo "::error::Contents: Read and write covers every repository the token selects, so nothing else changes."
+            exit 1
+          fi
           echo "Demo updated in ${DEMO_REPO} under /${DEMO_PATH}/"
