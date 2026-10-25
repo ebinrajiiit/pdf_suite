@@ -9,6 +9,7 @@
 //
 //   gh api repos/OWNER/REPO/releases/tags/vX.Y.Z | node scripts/download-table.mjs vX.Y.Z
 //   ... | node scripts/download-table.mjs vX.Y.Z --into README.md
+//   ... | node scripts/download-table.mjs vX.Y.Z --notes
 import { readFileSync, writeFileSync } from "node:fs";
 
 const START = "<!-- downloads:start -->";
@@ -52,6 +53,48 @@ lines.push(
 );
 
 const table = lines.join("\n");
+
+// The release page is where most people arrive, and it lists bare filenames
+// under Assets with nothing saying which is theirs. Same table, same links.
+if (process.argv.includes("--notes")) {
+  console.log(
+    [
+      "Every operation runs on your own device. No document, page, extracted",
+      "text or derived data leaves the machine.",
+      "",
+      "## Download the one for your computer",
+      "",
+      table,
+      "",
+      "### What to do with it",
+      "",
+      "- **`.dmg`** — open it and drag Signet into Applications.",
+      "- **`.msi`** — double-click it and follow the installer.",
+      "- **`.deb`** — double-click it, or `sudo apt install ./Signet_*.deb`",
+      "- **`.AppImage`** — `chmod +x Signet_*.AppImage`, then run it. Nothing is",
+      "  installed; the single file is the whole program.",
+      "- **`signet-web.tar.gz`** — unpack into any folder your web server serves.",
+      "",
+      "### The first time you open it, your computer will warn you",
+      "",
+      "Signet is not code-signed yet, so macOS and Windows say an unidentified",
+      "developer made this. It is us.",
+      "",
+      "- **macOS:** right-click Signet in Applications and choose **Open**, then",
+      "  **Open** again. Only needed once — double-clicking the first time gives",
+      "  you no Open button at all.",
+      "- **Windows:** SmartScreen shows a blue box. Click **More info**, then",
+      "  **Run anyway**.",
+      "",
+      "`SHA256SUMS` below checks any download: `shasum -a 256 <file>` on macOS or",
+      "Linux, `Get-FileHash <file>` in Windows PowerShell.",
+      "",
+      "The OCR language data for English, Malayalam and Hindi is inside every",
+      "build, which is why they are large — and why OCR works offline.",
+    ].join("\n"),
+  );
+  process.exit(0);
+}
 
 const into = process.argv.indexOf("--into");
 if (into === -1) {

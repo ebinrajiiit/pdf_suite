@@ -224,10 +224,19 @@ jobs:
           GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
           TARGET: ${{ vars.DOWNLOADS_REPO }}
         run: |
+          gh api "repos/$TARGET/releases/tags/$GITHUB_REF_NAME" > release.json
+
+          # The release page is where most people arrive — from a link, a
+          # message, a search — and it lists bare filenames under Assets with
+          # nothing saying which is theirs. Written after publishing because
+          # only then do the assets have their real URLs.
+          node scripts/download-table.mjs "$GITHUB_REF_NAME" --notes < release.json > notes.md
+          gh release edit "$GITHUB_REF_NAME" --repo "$TARGET" --notes-file notes.md
+          echo "Release notes now name a computer per file."
+
           git clone --quiet --depth 1 \
             "https://x-access-token:${GH_TOKEN}@github.com/${TARGET}.git" download-page
-          gh api "repos/$TARGET/releases/tags/$GITHUB_REF_NAME" \
-            | node scripts/download-table.mjs "$GITHUB_REF_NAME" --into download-page/README.md
+          node scripts/download-table.mjs "$GITHUB_REF_NAME" --into download-page/README.md < release.json
           cd download-page
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
