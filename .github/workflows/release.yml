@@ -168,15 +168,25 @@ jobs:
             echo "::error::It has to be a SECRET, not a variable — Settings > Secrets and variables > Actions > the Secrets tab."
             exit 1
           fi
-          if ! PUSH=$(gh api "repos/$TARGET" --jq .permissions.push 2>/dev/null); then
-            echo "::error::DOWNLOADS_TOKEN cannot even read $TARGET. Check the token names that repository under Repository access."
+          # Not `repos/$TARGET --jq .permissions.push`: that reports the
+          # USER's access to the repository, not the token's scopes. The owner
+          # of a repository reads back push: true through a token holding no
+          # Contents permission at all, which is how a 403 reached the publish
+          # step with a green check above it.
+          #
+          # So probe the capability itself. A draft release creates no tag and
+          # is deleted immediately; nothing is published by asking.
+          if ! ID=$(gh api -X POST "repos/$TARGET/releases" \
+                      -f "tag_name=preflight-$GITHUB_RUN_ID" -F draft=true \
+                      --jq .id 2>&1); then
+            echo "::error::DOWNLOADS_TOKEN cannot create a release in $TARGET."
+            echo "::error::Give it Repository permissions > Contents: Read and write."
+            echo "::error::Releases live under Contents. Actions, Administration, Secrets and Workflows do not cover them."
+            echo "$ID"
             exit 1
           fi
-          if [ "$PUSH" != "true" ]; then
-            echo "::error::DOWNLOADS_TOKEN can read $TARGET but not write to it. It needs Repository permissions > Contents: Read and write."
-            exit 1
-          fi
-          echo "Token can write to $TARGET."
+          gh api -X DELETE "repos/$TARGET/releases/$ID" --silent
+          echo "Token can create releases in $TARGET."
 
       - name: Publish the release
         env:
