@@ -70,6 +70,14 @@ item. `[ ]` not started, or deliberately declined — the reason is in the item.
   taking the document away. Published to GitHub Pages only after a test proves
   it refuses — a trial that quietly saves gives the product away and explains
   nothing
+- [ ] Code signing and notarisation. Both macOS and Windows flag an unsigned
+  application, and someone who downloads a PDF editor and is told an
+  unidentified developer wrote it will assume the worst and delete it — the
+  README can explain the dialog but cannot remove it. Needs an Apple Developer
+  ID certificate (notarisation on top, which is a build step and a wait) and an
+  OV or EV code-signing certificate for Windows; EV clears SmartScreen at once,
+  OV earns its way there on reputation. Both are paid and annual, and the keys
+  are secrets the release workflow has to hold
 - [ ] Pin the OCR language data. `fetch-tessdata.mjs` pulls `main` with no
   digest check, so two releases can carry different bytes under one version —
   ADR 0004 says a release must pin them

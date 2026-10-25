@@ -214,3 +214,32 @@ jobs:
           The OCR language data for English, Malayalam and Hindi is inside each
           build, which is why they are large.
           NOTES
+
+      # Asset names carry the version, so a download link written by hand rots
+      # at the next release — and a dead link on the page a stranger lands on
+      # is worse than no link. Rewritten from the release just published.
+      - name: Refresh the download links
+        if: vars.DOWNLOADS_REPO != ''
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          TARGET: ${{ vars.DOWNLOADS_REPO }}
+        run: |
+          git clone --quiet --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${TARGET}.git" download-page
+          gh api "repos/$TARGET/releases/tags/$GITHUB_REF_NAME" \
+            | node scripts/download-table.mjs "$GITHUB_REF_NAME" --into download-page/README.md
+          cd download-page
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Download links already current."
+            exit 0
+          fi
+          git commit -qam "Download links for ${GITHUB_REF_NAME}"
+          if ! git push --quiet 2>push.err; then
+            cat push.err
+            echo "::error::DOWNLOADS_TOKEN published the release to $TARGET but cannot push to it."
+            echo "::error::Releases and commits are both Contents; check the token still selects that repository."
+            exit 1
+          fi
+          echo "Download links in $TARGET now point at $GITHUB_REF_NAME."
