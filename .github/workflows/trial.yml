@@ -69,3 +69,49 @@ jobs:
           git commit -q -m "Trial build from ${GITHUB_SHA}"
           git push -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
           echo "Pushed. Settings > Pages > Deploy from a branch > gh-pages > / (root)"
+
+      # The branch above is only served once someone points Pages at it. Where
+      # DEMO_REPO names a repository whose Pages are already working, publish
+      # there as well and the demo updates itself with no setting to find.
+      - name: Publish the demo where Pages already works
+        if: vars.DEMO_REPO != ''
+        env:
+          TOKEN: ${{ secrets.DOWNLOADS_TOKEN }}
+          DEMO_REPO: ${{ vars.DEMO_REPO }}
+          DEMO_PATH: ${{ vars.DEMO_PATH }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::DEMO_REPO is set but DOWNLOADS_TOKEN is empty."
+            exit 1
+          fi
+          if [ -z "$DEMO_PATH" ]; then
+            echo "::error::DEMO_REPO is set but DEMO_PATH is not — it names the folder to serve from."
+            exit 1
+          fi
+
+          # Built a second time: this copy lives at a different base path from
+          # the gh-pages one, and every asset path is baked in at build time.
+          SIGNET_BASE="/$DEMO_PATH/" pnpm build
+
+          git clone --quiet --depth 1 \
+            "https://x-access-token:${TOKEN}@github.com/${DEMO_REPO}.git" demo-site
+          rm -rf "demo-site/$DEMO_PATH"
+          mkdir -p "demo-site/$DEMO_PATH"
+          cp -R apps/web/dist/. "demo-site/$DEMO_PATH/"
+          # So the wasm, the service worker and the language data are served as
+          # built rather than passed through Jekyll.
+          touch demo-site/.nojekyll
+
+          cd demo-site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          # Vite names assets by content hash, so an unchanged build is a
+          # genuinely empty diff and deserves no commit.
+          if git diff --cached --quiet; then
+            echo "Demo unchanged; nothing to push."
+            exit 0
+          fi
+          git commit -q -m "Signet demo from ${GITHUB_SHA}"
+          git push --quiet
+          echo "Demo updated in ${DEMO_REPO} under /${DEMO_PATH}/"
