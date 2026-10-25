@@ -149,6 +149,35 @@ jobs:
       # fine-grained PAT with Contents: read and write on the target. The tag
       # need not exist there: GitHub creates it against that repo's default
       # branch, which is why the target needs at least one commit.
+      # A 403 from `gh release create` says "Resource not accessible", which is
+      # true of a missing secret, a secret added as a variable, and a token
+      # without Contents: write — three different fixes. This says which.
+      - name: The token can write where the downloads go
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          TARGET: ${{ vars.DOWNLOADS_REPO || github.repository }}
+          HAVE_TOKEN: ${{ secrets.DOWNLOADS_TOKEN != '' }}
+        run: |
+          echo "Publishing to $TARGET"
+          if [ "$TARGET" = "$GITHUB_REPOSITORY" ]; then
+            echo "Same repository as the build; the built-in token is enough."
+            exit 0
+          fi
+          if [ "$HAVE_TOKEN" != "true" ]; then
+            echo "::error::DOWNLOADS_REPO is $TARGET but DOWNLOADS_TOKEN is empty."
+            echo "::error::It has to be a SECRET, not a variable — Settings > Secrets and variables > Actions > the Secrets tab."
+            exit 1
+          fi
+          if ! PUSH=$(gh api "repos/$TARGET" --jq .permissions.push 2>/dev/null); then
+            echo "::error::DOWNLOADS_TOKEN cannot even read $TARGET. Check the token names that repository under Repository access."
+            exit 1
+          fi
+          if [ "$PUSH" != "true" ]; then
+            echo "::error::DOWNLOADS_TOKEN can read $TARGET but not write to it. It needs Repository permissions > Contents: Read and write."
+            exit 1
+          fi
+          echo "Token can write to $TARGET."
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
