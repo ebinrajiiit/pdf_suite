@@ -1,6 +1,6 @@
 [package]
 name = "pdf-suite"
-version = "0.1.1"
+version = "0.1.2"
 description = "Privacy-preserving PDF editor from FACTS-H Lab"
 authors = ["FACTS-H Lab, IIIT Kottayam"]
 edition = "2021"
