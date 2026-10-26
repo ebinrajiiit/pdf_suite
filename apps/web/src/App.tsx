@@ -53,6 +53,7 @@ import type {
   TextRun,
 } from "@pdf-suite/workers";
 import {
+  asEmbeddableImage,
   canConvertOffice,
   canScan,
   canUsePicker,
@@ -509,13 +510,48 @@ export function App() {
     if (picked[0]) await open(picked[0]);
   }, [open]);
 
+  /**
+   * Turns pictures into a document, re-encoding any the PDF writer cannot embed.
+   * The picker offers WebP and AVIF because phones produce them; this is where
+   * they become PNG, and where one unreadable file says so instead of failing
+   * the whole conversion.
+   */
+  const openPictures = useCallback(
+    async (files: PickedFile[]) => {
+      const usable: PickedFile[] = [];
+      const refused: string[] = [];
+      for (const file of files) {
+        try {
+          const { bytes, format } = await asEmbeddableImage(file);
+          usable.push({
+            name: file.name,
+            type: format === "png" ? "image/png" : "image/jpeg",
+            bytes: bytes.buffer.slice(
+              bytes.byteOffset,
+              bytes.byteOffset + bytes.byteLength,
+            ) as ArrayBuffer,
+          });
+        } catch {
+          refused.push(file.name);
+        }
+      }
+      if (usable.length > 0) await openImages(usable);
+      if (refused.length > 0) {
+        setSaved(
+          `Could not read ${refused.join(", ")} — save ${refused.length === 1 ? "it" : "them"} as PNG or JPEG`,
+        );
+      }
+    },
+    [openImages],
+  );
+
   const handleFromImages = useCallback(async () => {
     if (!canUsePicker()) {
       imageInput.current?.click();
       return;
     }
-    await openImages(await pickFiles(true, "image"));
-  }, [openImages]);
+    await openPictures(await pickFiles(true, "image"));
+  }, [openPictures]);
 
   const handleMerge = useCallback(async () => {
     if (!canUsePicker()) {
@@ -528,15 +564,22 @@ export function App() {
   }, [mergeIn, positions]);
 
   /**
-   * Loads a picture to stamp with, sized to the page rather than to its pixels:
-   * a 2000-pixel scan of a seal is not a 2000-point seal. 120 points across is
-   * about the size of a real one, and the height follows the picture.
+   * Loads a picture to place, sized to the page rather than to its pixels: a
+   * 2000-pixel photo is not a 2000-point picture. 120 points across is about
+   * the size of a seal, and the height follows the picture's proportions; a
+   * drag on the page overrides both (see onPlace).
    */
   const loadSeal = useCallback(async (file: PickedFile) => {
-    const format = /\.png$/i.test(file.name) || file.type === "image/png" ? "png" : "jpg";
-    const bytes = new Uint8Array(file.bytes);
-    const blob = new Blob([bytes as BlobPart], {
-      type: format === "png" ? "image/png" : "image/jpeg",
+    let picture: { bytes: Uint8Array; format: "png" | "jpg" };
+    try {
+      picture = await asEmbeddableImage(file);
+    } catch (error) {
+      // Said now, about this file, rather than at save time about something else.
+      setSaved(error instanceof Error ? error.message : `${file.name} could not be read`);
+      return;
+    }
+    const blob = new Blob([picture.bytes as BlobPart], {
+      type: picture.format === "png" ? "image/png" : "image/jpeg",
     });
     const w = 120;
     let h = 120;
@@ -545,12 +588,12 @@ export function App() {
       h = Math.round((120 * bitmap.height) / Math.max(bitmap.width, 1));
       bitmap.close();
     } catch {
-      // A picture the browser cannot decode will not embed either; the square
-      // default at least shows something is wrong rather than failing silently.
+      // Decoded once already in asEmbeddableImage, so this only trips on a PNG
+      // or JPEG the decoder dislikes; a square default still shows something.
     }
-    setSeal({ name: file.name, bytes, format, w, h });
+    setSeal({ name: file.name, bytes: picture.bytes, format: picture.format, w, h });
     setTool("picture");
-    setSaved(`Click a page to stamp it with ${file.name}`);
+    setSaved(`Click or drag on a page to place ${file.name}`);
   }, []);
 
   const handleSeal = useCallback(async () => {
@@ -571,8 +614,8 @@ export function App() {
   );
 
   const onImageInput = useCallback(
-    async (files: FileList | null) => openImages(await readFiles(files ?? [])),
-    [openImages],
+    async (files: FileList | null) => openPictures(await readFiles(files ?? [])),
+    [openPictures],
   );
 
   const onMergeInput = useCallback(
@@ -603,12 +646,31 @@ export function App() {
       const pdfs = files.filter(
         (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
       );
-      const images = files.filter((file) => isSupportedImage(file.type || file.name));
+      const images = files.filter(
+        (file) =>
+          (file.type || "").startsWith("image/") ||
+          isSupportedImage(file.name) ||
+          /\.(webp|avif|gif|bmp)$/i.test(file.name),
+      );
 
-      // Images become a document of their own; mixing the two in one drop is
-      // ambiguous, so PDFs win and the images are ignored rather than guessed at.
+      // Mixing the two in one drop is ambiguous, so PDFs win and the images are
+      // ignored rather than guessed at.
       if (pdfs.length === 0 && images.length > 0) {
-        await openImages(await readFiles(images));
+        const picked = await readFiles(images);
+        // With a document already open, a dropped picture belongs *on* it. Making
+        // it a document of its own would discard the open one, its annotations
+        // and its save target — which is what dropping a photo used to do.
+        if (info) {
+          if (picked[0]) await loadSeal(picked[0]);
+          if (picked.length > 1) {
+            setSaved(
+              `Click or drag on a page to place ${picked[0]?.name} — ` +
+                `the other ${picked.length - 1} were not used`,
+            );
+          }
+          return;
+        }
+        await openPictures(picked);
         return;
       }
       if (pdfs.length === 0) return;
@@ -619,7 +681,7 @@ export function App() {
       }
       await mergeIn(picked);
     },
-    [info, mergeIn, open, openImages],
+    [info, loadSeal, mergeIn, open, openPictures],
   );
 
   const handleSave = useCallback(async () => {
@@ -1235,6 +1297,25 @@ export function App() {
         }
         if (tool === "square" || tool === "circle") {
           addAnnotation({ kind: tool, page, ...shape.rect, color: colour });
+          return;
+        }
+        if (tool === "picture") {
+          if (!seal) return;
+          // The drawn box says how big. The picture keeps its proportions inside
+          // it and is centred, so a box of roughly the right shape is enough —
+          // the alternative was being stuck with whatever 120 points looked like.
+          const fit = Math.min(shape.rect.w / seal.w, shape.rect.h / seal.h);
+          const size = { w: seal.w * fit, h: seal.h * fit };
+          addAnnotation({
+            kind: "picture",
+            page,
+            x: shape.rect.x + (shape.rect.w - size.w) / 2,
+            y: shape.rect.y + (shape.rect.h - size.h) / 2,
+            ...size,
+            image: seal.bytes,
+            format: seal.format,
+            label: seal.name,
+          });
           return;
         }
         if (tool === "redact") {
@@ -1944,6 +2025,14 @@ export function App() {
         run: () => void handleFromImages(),
       },
       {
+        id: "add-picture",
+        label: "Add a picture to a page",
+        group: "Edit",
+        keywords: "image photo logo seal signature stamp insert jpg png",
+        disabled: !doc,
+        run: () => void handleSeal(),
+      },
+      {
         id: "to-word",
         label: "Save as Word",
         group: "Export",
@@ -2249,6 +2338,7 @@ export function App() {
     handleInspect,
     handleMerge,
     handleOcr,
+    handleSeal,
     handleOffice,
     handleOpen,
     handlePrint,
@@ -2299,6 +2389,10 @@ export function App() {
         setTool((current) => (current === which ? undefined : which));
         setPendingPoint(null);
         setEditingText(false);
+        // Picking "Add a picture" used to reveal a panel holding a second button
+        // that opened the file dialog. Three clicks to choose a file is two too
+        // many, so choosing the tool with no picture yet opens the dialog.
+        if (which === "picture" && tool !== which && !seal) void handleSeal();
       }}
     >
       <span className="tool-icon">
@@ -4347,10 +4441,12 @@ export function App() {
                   <span className="tool-options-label">Picture</span>
                   {action(seal ? "Choose another…" : "Choose a picture…", () => void handleSeal(), {
                     testId: "choose-seal",
-                    hint: "A seal, a scanned signature or a logo, from this device",
+                    hint: "A photo, a scanned signature, a seal or a logo, from this device",
                   })}
                   <span className="tool-hint" data-testid="seal-name">
-                    {seal ? `${seal.name} — click a page to place it` : "Choose one first"}
+                    {seal
+                      ? `${seal.name} — click a page to place it, or drag the size you want`
+                      : "Choose one first"}
                   </span>
                 </div>
               ) : null}
@@ -4883,7 +4979,7 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   caret: "Click where something is missing, then type what belongs there",
   stamp: "Click a page to stamp it",
   signature: "Click a page to sign it",
-  picture: "Click a page to stamp it with your picture",
+  picture: "Click or drag where the picture should go",
   attachment: "Click where the file should be pinned",
   redact: "Drag over content to delete it permanently",
 };
@@ -4911,7 +5007,7 @@ const TOOL_LABELS: Record<AnnotationTool, string> = {
   caret: "Insert",
   stamp: "Stamp",
   signature: "Sign",
-  picture: "Seal",
+  picture: "Add a picture",
   attachment: "Pin a file",
   redact: "Redact",
 };

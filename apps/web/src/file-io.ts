@@ -24,10 +24,24 @@ export interface PickedFile {
 
 const PDF_TYPES = [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }];
 
-/** Images we can turn into a PDF. HEIC is deliberately absent: pdf-lib cannot
- *  embed it, and silently skipping a dropped file is worse than saying so. */
+/**
+ * Pictures the user may choose. pdf-lib embeds only PNG and JPEG, but a phone
+ * photo or a screenshot is just as likely to be WebP or AVIF, so the rest are
+ * offered and re-encoded by asEmbeddableImage() below. HEIC is deliberately
+ * absent: no browser decodes it, and offering it would only fail later.
+ */
 export const IMAGE_TYPES = [
-  { description: "Image", accept: { "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"] } },
+  {
+    description: "Picture",
+    accept: {
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/png": [".png"],
+      "image/webp": [".webp"],
+      "image/avif": [".avif"],
+      "image/gif": [".gif"],
+      "image/bmp": [".bmp"],
+    },
+  },
 ];
 
 /**
@@ -178,7 +192,9 @@ export async function scanPage(dpi = 300): Promise<PickedFile> {
 }
 
 const PDF_FILTER = [{ name: "PDF document", extensions: ["pdf"] }];
-const IMAGE_FILTER = [{ name: "Image", extensions: ["jpg", "jpeg", "png"] }];
+const IMAGE_FILTER = [
+  { name: "Picture", extensions: ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp"] },
+];
 
 /** Reads the files a native dialog returned. Paths, not handles. */
 async function readPaths(paths: string[]): Promise<PickedFile[]> {
@@ -258,6 +274,44 @@ export async function readFiles(files: FileList | File[]): Promise<PickedFile[]>
       bytes: await file.arrayBuffer(),
     })),
   );
+}
+
+/**
+ * PNG or JPEG bytes from any picture the browser can decode.
+ *
+ * pdf-lib embeds those two formats only. The format used to be guessed from the
+ * filename — anything without a .png extension was called a JPEG — so a WebP or
+ * AVIF photo was accepted, placed, and then failed at save time with an error
+ * about the wrong thing. Decoding it here re-encodes it to PNG on the device,
+ * through the browser's own image decoder, so the failure happens at the moment
+ * the user chooses the file, in words about that file.
+ *
+ * Nothing leaves the machine: createImageBitmap and OffscreenCanvas are local.
+ */
+export async function asEmbeddableImage(
+  file: PickedFile,
+): Promise<{ bytes: Uint8Array; format: "png" | "jpg" }> {
+  const bytes = new Uint8Array(file.bytes);
+  if (file.type === "image/png" || /\.png$/i.test(file.name)) return { bytes, format: "png" };
+  if (file.type === "image/jpeg" || /\.jpe?g$/i.test(file.name)) return { bytes, format: "jpg" };
+
+  const blob = new Blob([bytes as BlobPart], { type: file.type ?? "" });
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(blob);
+  } catch {
+    throw new Error(`${file.name} is not a picture this device can read — save it as PNG or JPEG`);
+  }
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error(`${file.name} could not be converted to a PNG`);
+    context.drawImage(bitmap, 0, 0);
+    const png = await canvas.convertToBlob({ type: "image/png" });
+    return { bytes: new Uint8Array(await png.arrayBuffer()), format: "png" };
+  } finally {
+    bitmap.close();
+  }
 }
 
 /**

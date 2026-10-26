@@ -2963,6 +2963,126 @@ test("stamps a page with a picture of a seal", async ({ page }) => {
   await expect.poll(blue, { timeout: 30_000 }).toBeGreaterThan(50);
 });
 
+test("a picture dropped on an open document goes onto it, not instead of it", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "register.pdf",
+    await fixture([
+      [400, 600],
+      [400, 600],
+      [400, 600],
+    ]),
+  );
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 120;
+    canvas.height = 60;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#1040c0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((b) => resolve(b!), "image/png"),
+    );
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], "photo.png", { type: "image/png" }));
+    document
+      .querySelector(".app")!
+      .dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+  });
+
+  // Dropping a photo on an open document used to convert it into a one-page
+  // document of its own, throwing away the open file, its annotations and the
+  // handle Save writes back through. The open document must survive.
+  await expect(page.getByTestId("status")).toContainText("place photo.png");
+  await expect(page.getByText("3 pages")).toBeVisible();
+
+  // And the picture is ready to go on, which is what the drop meant.
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.click(area.x + 100, area.y + 150);
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+});
+
+test("a WebP photo can be placed, re-encoded on the device", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "letter.pdf", await fixture([[595, 842]]));
+  // The drop means "onto this document", so the document has to be open first.
+  await expect(page.getByTestId("annots-0")).toBeVisible();
+
+  // A phone photo or a screenshot is as likely to be WebP as JPEG, and the PDF
+  // writer embeds neither WebP nor AVIF. It used to be called a JPEG on the
+  // strength of not ending in .png, placed happily, and then failed at save
+  // time about a different thing entirely.
+  const encoded = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 200;
+    canvas.height = 100;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#1040c0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp"));
+    if (!blob || blob.type !== "image/webp") return false;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], "photo.webp", { type: "image/webp" }));
+    document
+      .querySelector(".app")!
+      .dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+    return true;
+  });
+  expect(encoded, "this browser cannot encode WebP, so the test proves nothing").toBe(true);
+
+  await expect(page.getByTestId("status")).toContainText("place photo.webp");
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.click(area.x + 100, area.y + 150);
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+
+  // In the file, not just on the screen: a stamp whose picture never embedded
+  // would have thrown on the way here.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Stamp"]);
+});
+
+test("a dragged box sets how big a placed picture is, keeping its proportions", async ({
+  page,
+}) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "letter.pdf", await fixture([[595, 842]]));
+
+  await page.getByTestId("tool-picture").click();
+  // Twice as wide as it is tall, so the proportions are checkable.
+  await page.setInputFiles('[data-testid="seal-input"]', {
+    name: "logo.png",
+    mimeType: "image/png",
+    buffer: tinyPng(200, 100),
+  });
+  await expect(page.getByTestId("seal-name")).toContainText("logo.png");
+
+  // A 300x150 box, drawn where the picture should go. The picture was fixed at
+  // 120 points wide however big the page was, with no way to change it after.
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.move(area.x + 40, area.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 340, area.y + 190, { steps: 8 });
+  await page.mouse.up();
+
+  const box = (await page.getByTestId("annot-0").boundingBox())!;
+  expect(box.width).toBeGreaterThan(280);
+  expect(box.width).toBeLessThan(320);
+  expect(box.width / box.height).toBeCloseTo(2, 1);
+
+  // One picture, not one per gesture: the pointer-up is followed by a click, and
+  // the picture tool answers to both.
+  await expect(page.getByTestId("annot-1")).toHaveCount(0);
+});
+
 test("a batch sequence can be named, kept and used again", async ({ page }) => {
   await withoutFilePickers(page);
   await page.goto("/");

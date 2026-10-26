@@ -62,6 +62,7 @@ const BOX_TOOLS = new Set<AnnotationTool>([
   "crop",
   "field",
   "link",
+  "picture",
 ]);
 
 /** A CSS colour from an annotation's 0-1 RGB triple. */
@@ -121,6 +122,12 @@ export function AnnotationLayer({
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
   /** Where the pointer is while a path is being built, for the rubber band. */
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * Set when a drag just placed a box. A pointer-up is followed by a click, and
+   * "picture" is in both BOX_TOOLS and POINT_TOOLS, so without this a drag would
+   * place the picture twice: once at the size drawn, once at the default.
+   */
+  const boxed = useRef(false);
 
   /** Pointer position in CSS pixels relative to the page. */
   const positionIn = (event: React.PointerEvent) => {
@@ -146,10 +153,15 @@ export function AnnotationLayer({
     const right = Math.max(drag.x1, drag.x2);
     const top = Math.min(drag.y1, drag.y2);
     const bottom = Math.max(drag.y1, drag.y2);
-    // A click rather than a drag: too small to be a deliberate box.
-    if (right - left < 4 || bottom - top < 4) return;
+    // A click rather than a drag: too small to be a deliberate box. A picture
+    // needs more slop than the rest — a click meant to drop one at the default
+    // size usually moves the pointer a pixel or two, and a 6-point-wide picture
+    // is never what anyone meant.
+    const slop = tool === "picture" ? 16 : 4;
+    if (right - left < slop || bottom - top < slop) return;
     const topLeft = toPdf(left, top);
     const bottomRight = toPdf(right, bottom);
+    boxed.current = true;
     onPlace?.(page, {
       kind: "rect",
       rect: {
@@ -217,6 +229,10 @@ export function AnnotationLayer({
           // Each click adds a corner; the shape is finished by double-clicking,
           // which is how every drawing program does a polygon.
           setPath((current) => [...current, at]);
+          return;
+        }
+        if (boxed.current) {
+          boxed.current = false;
           return;
         }
         if (!tool || !POINT_TOOLS.has(tool)) return;
