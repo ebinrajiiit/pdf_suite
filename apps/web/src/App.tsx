@@ -1222,9 +1222,12 @@ export function App() {
 
   const handleSearch = useCallback(async () => {
     const found = await search(query);
-    if (!found) return;
-    setHits(found.hits);
-    setTruncated(found.truncated);
+    // A search that failed or was stopped must not leave the previous one's
+    // count on screen: the number then belongs to a different query. After a
+    // redaction that is the difference between "1 of 1" and nothing, which
+    // reads as the text still being there when it has gone.
+    setHits(found?.hits ?? []);
+    setTruncated(found?.truncated ?? false);
     setHitIndex(0);
   }, [query, search]);
 
@@ -1243,8 +1246,15 @@ export function App() {
    * stays as drawn.
    */
   const placeMarkup = useCallback(
-    async (page: number, rect: AnnotRect, kind: "highlight" | "underline" | "strike") => {
-      const runs = await pageText(page);
+    (page: number, rect: AnnotRect, kind: "highlight" | "underline" | "strike") => {
+      // The page's text as already read when the page came into view, and
+      // deliberately not awaited here. Fetching it is a worker round trip, and
+      // nothing waits for a placement still in flight — so a mark dragged and
+      // then saved straight away was simply missing from the file, silently.
+      // Snapping is worth having and not worth losing the mark for: a page
+      // whose text has not arrived yet snaps to nothing and the mark stays as
+      // drawn, which is already what a scan with no text layer does.
+      const runs = textRuns.get(page) ?? [];
       const overlapping = runs
         .filter(
           (r) =>
@@ -1262,7 +1272,7 @@ export function App() {
         ...(kind === "highlight" ? {} : { color: colour }),
       });
     },
-    [addAnnotation, colour, pageText],
+    [addAnnotation, colour, textRuns],
   );
 
   const onPlace = useCallback(
@@ -1344,7 +1354,7 @@ export function App() {
           return;
         }
         if (tool === "highlight" || tool === "underline" || tool === "strike") {
-          void placeMarkup(page, shape.rect, tool);
+          placeMarkup(page, shape.rect, tool);
         }
         return;
       }
