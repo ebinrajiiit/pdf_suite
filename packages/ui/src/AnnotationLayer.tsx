@@ -158,6 +158,22 @@ export function AnnotationLayer({
    */
   const boxed = useRef(false);
 
+  /**
+   * Keeps the pointer's events coming to this layer even when the pointer
+   * leaves it mid-drag. It is an optimisation, so it is taken after the gesture
+   * has been recorded and its failure is not allowed to end the gesture:
+   * setPointerCapture throws when the browser does not consider the pointer
+   * active, and before this that threw out of the handler and the drag was
+   * never started at all — a silent dropped gesture.
+   */
+  const capture = (event: React.PointerEvent) => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Without capture a drag that leaves the page simply ends there.
+    }
+  };
+
   /** Pointer position in CSS pixels relative to the page. */
   const positionIn = (event: React.PointerEvent) => {
     const box = layer.current?.getBoundingClientRect();
@@ -216,13 +232,13 @@ export function AnnotationLayer({
         // ever suppress the click belonging to the drag that set it.
         boxed.current = false;
         if (tool === "ink") {
-          event.currentTarget.setPointerCapture(event.pointerId);
           showStroke([{ x, y }]);
+          capture(event);
           return;
         }
         if (!tool || !(BOX_TOOLS.has(tool) || VECTOR_TOOLS.has(tool))) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
         showDrag({ x1: x, y1: y, x2: x, y2: y });
+        capture(event);
       }}
       onPointerMove={(event) => {
         const { x, y } = positionIn(event);

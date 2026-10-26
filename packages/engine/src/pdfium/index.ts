@@ -324,16 +324,56 @@ export type PdfiumEngine = PdfEngine & {
   ): Promise<{ width: number; height: number; rgba: Uint8Array } | undefined>;
 };
 
+/**
+ * Makes a crash inside PDFium say which call crashed.
+ *
+ * Every PDFium function reaches us through Emscripten's `cwrap`, so when one
+ * hits an impossible state the wasm traps and what surfaces is a bare
+ * `WebAssembly.RuntimeError`: "Unreachable code should not be executed
+ * (evaluating 'K(...se)')", where `K(...se)` is the minified name of the one
+ * `ccall` every function shares. It says nothing about which document, which
+ * page or which call — and a trap that cannot be attributed cannot be fixed.
+ * Naming the function costs a try/catch per call and turns an unreportable
+ * crash into a line someone can act on.
+ *
+ * Exported for its own test: a real trap cannot be provoked to order.
+ */
+export function naming(m: WrappedPdfiumModule): WrappedPdfiumModule {
+  // Rebuilt rather than mutated so the module the package handed us is left
+  // exactly as it was: `pdfium` carries the heap and must pass through as is.
+  const named: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(m)) {
+    if (typeof value !== "function") {
+      named[key] = value;
+      continue;
+    }
+    // The wrapped signatures are the package's own and vary per function;
+    // there is nothing to gain by restating 200 of them here.
+    const call = value as (...args: unknown[]) => unknown;
+    named[key] = (...args: unknown[]) => {
+      try {
+        return call(...args);
+      } catch (err) {
+        if (!(err instanceof WebAssembly.RuntimeError)) throw err;
+        throw new Error(`PDFium crashed inside ${key}: ${err.message}`, { cause: err });
+      }
+    };
+  }
+  return named as unknown as WrappedPdfiumModule;
+}
+
 export async function createPdfiumEngine(opts: PdfiumEngineOptions): Promise<PdfiumEngine> {
   const t0 = performance.now();
   const wasmBinary = await resolveWasm(opts);
-  const m = await init({
-    wasmBinary,
-    // Emscripten resolves the wasm filename before it looks at wasmBinary, so
-    // locateFile must answer. A bare relative name can only ever be same-origin;
-    // in practice wasmBinary above means it is never fetched at all.
-    locateFile: (path: string) => path,
-  });
+  const m = naming(
+    await init({
+      wasmBinary,
+      // Emscripten resolves the wasm filename before it looks at wasmBinary, so
+      // locateFile must answer. A bare relative name can only ever be same-origin;
+      // in practice wasmBinary above means it is never fetched at all.
+      locateFile: (path: string) => path,
+    }),
+  );
   m.PDFiumExt_Init();
   opts.onTiming?.("parse", performance.now() - t0);
 

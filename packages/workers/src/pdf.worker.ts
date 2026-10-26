@@ -1264,12 +1264,16 @@ function serve(request: WorkerRequest): Promise<void> {
       // minified wrapper called into the module: "Unreachable code should not
       // be executed (evaluating 'K(...se)')" is what the user is shown. Say
       // which operation it was and that nothing was changed, and keep the
-      // original text at the end so a bug report still carries it.
-      const message =
-        error instanceof WebAssembly.RuntimeError
-          ? `The PDF engine could not ${request.kind} this document — it hit a state it ` +
-            `could not handle. Nothing was changed. (${error.message})`
-          : error.message;
+      // original text at the end so a bug report still carries it. The engine
+      // re-throws PDFium's traps with the failing function's name attached, so
+      // the trap is the cause rather than the error itself.
+      const trapped =
+        error instanceof WebAssembly.RuntimeError ||
+        error.cause instanceof WebAssembly.RuntimeError;
+      const message = trapped
+        ? `The PDF engine could not ${request.kind} this document — it hit a state it ` +
+          `could not handle. Nothing was changed. (${error.message})`
+        : error.message;
       post({ id: request.id, kind: "error", message, name: error.name });
     })
     .finally(() => cancelled.delete(request.id));
