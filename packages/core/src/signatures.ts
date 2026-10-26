@@ -37,7 +37,12 @@ export interface SignatureInfo {
 }
 
 export async function readSignatures(input: PdfBytes): Promise<SignatureInfo[]> {
-  const doc = await PDFDocument.load(input, { updateMetadata: false, ignoreEncryption: true });
+  // Deliberately not `ignoreEncryption`: that parses the structure of an
+  // encrypted file but decrypts nothing, so every name, date and reason below
+  // would be read straight out of the ciphertext and reported as the signer.
+  // Refusing to answer beats inventing a registrar. The worker decrypts a
+  // locked document when it opens it, so it asks with readable bytes.
+  const doc = await PDFDocument.load(input, { updateMetadata: false });
   const form = doc.catalog.lookup(PDFName.of("AcroForm"));
   if (!(form instanceof PDFDict)) return [];
   const fields = form.lookup(PDFName.of("Fields"));

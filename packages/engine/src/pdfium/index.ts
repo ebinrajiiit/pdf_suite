@@ -66,6 +66,17 @@ class PdfiumDocHandle implements DocHandle {
     return this.#count;
   }
 
+  /**
+   * PDFium reports the standard security handler's revision, and -1 when there
+   * is no /Encrypt dictionary at all. A document encrypted with an empty *user*
+   * password opens here without one, so this is the only way to find out that it
+   * is encrypted before handing it to something that cannot read encryption.
+   */
+  isEncrypted(): boolean {
+    this.#assertOpen();
+    return this.#m.FPDF_GetSecurityHandlerRevision(this.#doc) !== -1;
+  }
+
   pageSize(index: number): { width: number; height: number } {
     this.#assertOpen();
     if (index < 0 || index >= this.#count) throw new RangeError(`page ${index} out of range`);

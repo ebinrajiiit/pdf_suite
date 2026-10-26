@@ -137,7 +137,16 @@ signature, type your name, or use a photo or scan of a real one. Made once,
 kept in this browser only, and placed on any page by a click or by dragging the
 size the form's line needs. This is an electronic signature — a mark on the
 page, proving what a signature on a paper form proves. Cryptographic signing is
-listed below as not yet built, and these are not a substitute for it. Comment replies and review states as threads. XFDF import and export, so
+listed below as not yet built, and these are not a substitute for it.
+
+**A document that arrives signed.** It opens, and it can be read, searched and
+edited like any other. Who it says signed it, when, and whether anything was
+added after signing is in the signature panel, read from the file itself — the
+certificate chain is not checked. A file locked against changes with an owner
+password (what a signing tool usually leaves behind) is unlocked so it can be
+edited, and says so: the copy you save will not carry the lock, because the
+password that set it was never given to us. Editing rewrites the file, so a
+signature already in it stops verifying — the panel says that too. Comment replies and review states as threads. XFDF import and export, so
 a review needs no server. A marks panel that filters, searches and sorts.
 
 **Forms.** Fill and save AcroForms of every field kind, with flattening and

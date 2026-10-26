@@ -56,6 +56,17 @@ export interface DocumentInfo {
   pageSizes: { width: number; height: number }[];
   /** Set when the file was damaged and qpdf reconstructed it to open it. */
   repaired?: boolean;
+  /**
+   * Set when the file arrived locked against changes and the lock was taken off
+   * so it could be edited. The copy saved from here will not be locked: the
+   * owner password that set the lock is not something we were given.
+   */
+  unlocked?: boolean;
+  /**
+   * Set when the file is encrypted and the encryption could not be removed. It
+   * can be read and printed; editing it is refused.
+   */
+  stillEncrypted?: boolean;
   /** Set when the document arrived encrypted and will be re-protected on save. */
   protected?: boolean;
   /** Steps that can be undone, and redone: what the Undo and Redo buttons need. */

@@ -2,8 +2,17 @@
 // working with the network cut. The viewer flow runs inside the guard so the
 // assertion covers real work, not just the shell loading.
 import { test, expect, type Page } from "@playwright/test";
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
+import {
+  PDFArray,
+  PDFDict,
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFString,
+  StandardFonts,
+} from "pdf-lib";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 
 type Size = [number, number];
 
@@ -3322,4 +3331,82 @@ test("the lockup says what this is, who made it and what it promises", async ({ 
   // Both sheets print "Esc to close" and nothing used to listen.
   await page.keyboard.press("Escape");
   await expect(about).toBeHidden();
+});
+
+/**
+ * A signed document, locked against changes: an owner password with an *empty*
+ * user password, which is what a DSC signing tool usually leaves behind. It
+ * opens in any reader without being asked for anything, and until the lock is
+ * taken off, pdf-lib — which every edit goes through — refuses to read it.
+ *
+ * qpdf is driven directly rather than through our own encrypt(), which requires
+ * a user password; the whole point of this fixture is that it needs none.
+ */
+async function signedAndLocked(): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  doc.addPage(PORTRAIT).drawText("Sanction is accorded.", { x: 50, y: 300, size: 12, font });
+  const value = doc.context.register(
+    doc.context.obj({
+      Type: "Sig",
+      Filter: PDFName.of("Adobe.PPKLite"),
+      SubFilter: PDFName.of("adbe.pkcs7.detached"),
+      Name: PDFString.of("The Registrar, IIIT Kottayam"),
+      M: PDFString.of("D:20261020101500+05'30'"),
+      Contents: PDFHexString.of("00".repeat(16)),
+      ByteRange: [0, 100, 200, 300],
+    }),
+  );
+  const field = doc.context.register(
+    doc.context.obj({ FT: PDFName.of("Sig"), T: PDFString.of("registrar.sig"), V: value }),
+  );
+  doc.catalog.set(PDFName.of("AcroForm"), doc.context.obj({ Fields: [field], SigFlags: 3 }));
+
+  const factory = (await import("@neslinesli93/qpdf-wasm")).default as unknown as (arg: {
+    locateFile: () => string;
+  }) => Promise<{
+    callMain(args: string[]): number;
+    FS: { writeFile(p: string, d: Uint8Array): void; readFile(p: string): Uint8Array };
+  }>;
+  const qpdf = await factory({
+    locateFile: () =>
+      createRequire(import.meta.url).resolve("@neslinesli93/qpdf-wasm/dist/qpdf.wasm"),
+  });
+  qpdf.FS.writeFile("/in.pdf", await doc.save({ useObjectStreams: false }));
+  const code = qpdf.callMain([
+    "/in.pdf",
+    "/out.pdf",
+    "--encrypt",
+    "--user-password=",
+    "--owner-password=registrar",
+    "--bits=256",
+    "--modify=none",
+    "--",
+  ]);
+  expect(code, "qpdf should have written the locked fixture").toBe(0);
+  return Buffer.from(qpdf.FS.readFile("/out.pdf"));
+}
+
+test("a signed document locked against changes can still be edited", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "sanction.pdf", await signedAndLocked());
+  await expect(page.getByText("1 page")).toBeVisible();
+  // Nothing was asked of the user: the lock came off on its own, and the badge
+  // is what tells them the copy they save will not carry it.
+  await expect(page.getByTestId("unlocked-badge")).toBeVisible();
+  await expect(page.getByTestId("password-prompt")).toHaveCount(0);
+
+  // The signer's name, not the ciphertext it decodes to while still encrypted.
+  await page.getByTestId("signatures").click();
+  await expect(page.getByTestId("signature-list")).toContainText("The Registrar, IIIT Kottayam");
+  await page.getByTestId("signature-panel").getByRole("button", { name: "Close" }).click();
+
+  // The edit that used to fail: every one of them goes through pdf-lib.
+  await page.getByTestId("select-0").click();
+  await page.getByRole("button", { name: "Rotate right" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  expect(await rotationsOf(await saveAndRead(page, "Save"))).toEqual([90]);
 });

@@ -16,6 +16,7 @@
     "@embedpdf/pdfium": "^2.15.1"
   },
   "devDependencies": {
+    "@neslinesli93/qpdf-wasm": "^0.3.0",
     "@types/emscripten": "^1.41.6",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299"

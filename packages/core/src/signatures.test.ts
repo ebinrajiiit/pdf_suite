@@ -91,3 +91,30 @@ test("an empty signature field is not a signature", async () => {
   doc.catalog.set(PDFName.of("AcroForm"), doc.context.obj({ Fields: [field] }));
   expect(await readSignatures(await doc.save())).toEqual([]);
 });
+
+test("an encrypted document is refused rather than read as a signer's name", async () => {
+  // pdf-lib's `ignoreEncryption` parses an encrypted file's structure without
+  // decrypting any of it, so reading this one's strings would report the signer
+  // as whatever the ciphertext happens to decode to. The trailer's /Encrypt
+  // entry is all pdf-lib needs to know it cannot answer.
+  const doc = await PDFDocument.create();
+  doc.addPage([200, 200]);
+  const value = doc.context.register(
+    doc.context.obj({
+      Type: "Sig",
+      Name: PDFString.of("The Registrar, IIIT Kottayam"),
+      ByteRange: [0, 100, 200, 300],
+    }),
+  );
+  const field = doc.context.register(
+    doc.context.obj({ FT: PDFName.of("Sig"), T: PDFString.of("registrar.sig"), V: value }),
+  );
+  doc.catalog.set(PDFName.of("AcroForm"), doc.context.obj({ Fields: [field], SigFlags: 3 }));
+  doc.context.trailerInfo.Encrypt = doc.context.register(
+    doc.context.obj({ Filter: PDFName.of("Standard"), V: 2, R: 3, P: -4 }),
+  );
+
+  const bytes = await doc.save({ useObjectStreams: false });
+  await expect(readSignatures(bytes)).rejects.toThrow(/encrypted/i);
+  await expect(isSigned(bytes)).rejects.toThrow(/encrypted/i);
+});

@@ -113,6 +113,17 @@ function trimHistory(): void {
   }
 }
 let repaired = false;
+/**
+ * Set when the chosen file was encrypted and the encryption was taken off to
+ * make it editable, so the UI can say that the copy saved will not be locked.
+ */
+let unlocked = false;
+/**
+ * Set when the chosen file is encrypted and could *not* be decrypted. It still
+ * renders, because PDFium reads it; every edit has to refuse it, because
+ * pdf-lib cannot read encryption at all.
+ */
+let stillEncrypted = false;
 /** Bytes of a document that needs a password, held until one arrives. */
 let locked: Uint8Array | undefined;
 const cancelled = new Set<number>();
@@ -153,6 +164,8 @@ async function info(handle: DocHandle, bytesForForm?: Uint8Array): Promise<Docum
     outline,
     form,
     repaired,
+    unlocked,
+    stillEncrypted,
     protected: protection !== null,
     properties,
     marks,
@@ -240,6 +253,31 @@ async function openBytes(
   const buffer = next.buffer as ArrayBuffer;
   const handle = await engine.open(buffer);
   throwIfCancelled(id);
+
+  // PDFium opens a file whose *user* password is empty, so a document locked
+  // only against changes — which is what a signing tool usually leaves behind —
+  // arrives looking unprotected and then refuses every edit, because every op
+  // goes through pdf-lib and pdf-lib cannot read encryption at all. The working
+  // copy has to stay pdf-lib-readable (see "protect", which encrypts on save
+  // rather than now), so the encryption comes off here, once, instead of each
+  // operation failing in its own way.
+  //
+  // Only a file the user chose can arrive encrypted: everything else here is
+  // pdf-lib's or qpdf's own output. So this recurses without `from`, which
+  // would otherwise record a second, identical step in the undo history.
+  if (handle.isEncrypted?.()) {
+    const open = await (await qpdf()).decrypt(next, "").catch(() => undefined);
+    throwIfCancelled(id);
+    if (open) {
+      handle.close();
+      unlocked = true;
+      return openBytes(id, open);
+    }
+    // Readable, not editable. `materialise` turns this into a sentence rather
+    // than letting pdf-lib's own message reach the user.
+    stillEncrypted = true;
+  }
+
   doc = handle;
   bytes = next;
   return info(handle, next);
@@ -255,6 +293,8 @@ async function openBytes(
  */
 async function openChosen(id: number, input: Uint8Array): Promise<DocumentInfo> {
   repaired = false;
+  unlocked = false;
+  stillEncrypted = false;
   protection = null;
   permissions = undefined;
   locked = undefined;
@@ -304,6 +344,12 @@ async function materialise(
   annotations: Annotation[] = [],
 ): Promise<Uint8Array> {
   if (!bytes) throw new Error("no document is open");
+  if (stillEncrypted) {
+    throw new Error(
+      "This document is encrypted with a password that could not be removed here. " +
+        "It can be read and printed, but not edited.",
+    );
+  }
   const marked = annotations.length === 0 ? bytes : await annotate(bytes, annotations);
   throwIfCancelled(id);
   const identity = order.length === doc?.pageCount() && order.every((page, i) => page === i);
@@ -457,6 +503,8 @@ async function handle(request: WorkerRequest): Promise<void> {
       // A document built from images has no protection and no prior annotations.
       protection = null;
       repaired = false;
+      unlocked = false;
+      stillEncrypted = false;
       post({ id, kind: "document", info: await openBytes(id, built) });
       return;
     }
@@ -1178,6 +1226,8 @@ async function handle(request: WorkerRequest): Promise<void> {
       bytes = undefined;
       protection = null;
       repaired = false;
+      unlocked = false;
+      stillEncrypted = false;
       locked = undefined;
       past = [];
       future = [];
@@ -1210,7 +1260,17 @@ function serve(request: WorkerRequest): Promise<void> {
         return;
       }
       const error = err instanceof Error ? err : new Error(String(err));
-      post({ id: request.id, kind: "error", message: error.message, name: error.name });
+      // A wasm trap arrives as a RuntimeError whose message names whatever
+      // minified wrapper called into the module: "Unreachable code should not
+      // be executed (evaluating 'K(...se)')" is what the user is shown. Say
+      // which operation it was and that nothing was changed, and keep the
+      // original text at the end so a bug report still carries it.
+      const message =
+        error instanceof WebAssembly.RuntimeError
+          ? `The PDF engine could not ${request.kind} this document — it hit a state it ` +
+            `could not handle. Nothing was changed. (${error.message})`
+          : error.message;
+      post({ id: request.id, kind: "error", message, name: error.name });
     })
     .finally(() => cancelled.delete(request.id));
 }

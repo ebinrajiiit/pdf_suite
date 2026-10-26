@@ -2644,6 +2644,24 @@ export function App() {
               Password set
             </span>
           ) : null}
+          {info?.unlocked ? (
+            <span
+              className="badge"
+              data-testid="unlocked-badge"
+              title="This file was locked against changes. It can be edited here, and the copy you save will not be locked."
+            >
+              Lock removed
+            </span>
+          ) : null}
+          {info?.stillEncrypted ? (
+            <span
+              className="badge badge-lock"
+              data-testid="still-encrypted-badge"
+              title="This file is encrypted with a password that could not be removed here. It can be read and printed, but not edited."
+            >
+              Read only
+            </span>
+          ) : null}
         </div>
       </header>
 
@@ -3630,7 +3648,8 @@ export function App() {
             <span className="hfnote">
               What the document says about itself. The certificate chain has not been checked — this
               says who it claims signed it and what the signature covers, not that the cryptography
-              is sound.
+              is sound. Editing the document rewrites the file, so a signature already in it will no
+              longer verify afterwards.
             </span>
             <button type="button" className="action" onClick={() => setShowingSignatures(false)}>
               Close

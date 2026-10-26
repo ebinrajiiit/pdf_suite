@@ -21,6 +21,16 @@ export interface DocHandle {
   extractText(index: number): Promise<TextRun[]>;
   /** The document's bookmarks, empty when it has none. */
   outline(): Promise<OutlineItem[]>;
+  /**
+   * True when the file carries an /Encrypt dictionary even though it opened
+   * without a password — which is what a document locked only against changes
+   * looks like. Callers need it because pdf-lib cannot read an encrypted file
+   * at all, so such a document renders perfectly and then refuses every edit.
+   *
+   * Optional: only an adapter that can read the security handler answers. One
+   * that cannot leaves it out rather than claiming the file is not encrypted.
+   */
+  isEncrypted?(): boolean;
   close(): void;
 }
 
