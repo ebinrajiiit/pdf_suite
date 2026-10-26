@@ -316,12 +316,64 @@ describe("appearances for the kinds no viewer synthesises", () => {
     expect(ops).toContain("220 200 l");
   });
 
-  test("a signature with no strokes is refused", async () => {
+  test("a typed signature is set in a font every reader already has", async () => {
+    const out = await annotate(await blankPage(), [
+      { kind: "signature", page: 0, x: 100, y: 200, w: 160, h: 40, typed: "A. R. Nair" },
+    ]);
+    const [annot] = await annotsOf(out);
+    // The same Stamp a drawn one is, so anything that handles a signature
+    // handles both.
+    expect(annot?.get(PDFName.of("Subtype"))?.toString()).toBe("/Stamp");
+    // And it says who signed, for a reader that shows no appearance stream.
+    expect(annot?.lookup(PDFName.of("Contents"))?.toString()).toContain("A. R. Nair");
+
+    const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+      PDFName.of("N"),
+    ) as PDFRawStream;
+    const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+    expect(ops).toContain("(A. R. Nair) Tj");
+
+    // Times-Italic is one of the 14 standard fonts, so nothing is embedded: a
+    // bundled handwriting face would be bytes in every signed file and a
+    // licence question in docs/LICENSE-POLICY.md.
+    const resources = form.dict.lookup(PDFName.of("Resources")) as PDFDict;
+    const fonts = resources.lookup(PDFName.of("Font")) as PDFDict;
+    const font = fonts.lookup(PDFName.of("F1")) as PDFDict;
+    expect(font.get(PDFName.of("BaseFont"))?.toString()).toBe("/Times-Italic");
+    expect(font.get(PDFName.of("FontDescriptor"))).toBeUndefined();
+  });
+
+  test("a long typed name is shrunk to stay inside its box", async () => {
+    const size = async (typed: string) => {
+      const out = await annotate(await blankPage(), [
+        { kind: "signature", page: 0, x: 0, y: 0, w: 160, h: 40, typed },
+      ]);
+      const [annot] = await annotsOf(out);
+      const form = (annot?.lookup(PDFName.of("AP")) as PDFDict).lookup(
+        PDFName.of("N"),
+      ) as PDFRawStream;
+      const ops = new TextDecoder("latin1").decode(decodePDFRawStream(form).decode());
+      return Number(/\/F1 ([\d.]+) Tf/.exec(ops)?.[1]);
+    };
+    // A name that cannot fit at the box's height has to come down to its width,
+    // or it runs off the edge of the page instead of off the edge of the box.
+    expect(await size("Dr Padmanabhan Venkataraghavan Subrahmanyam")).toBeLessThan(
+      await size("A. Nair"),
+    );
+  });
+
+  test("a signature with neither strokes nor a name is refused", async () => {
     await expect(
       annotate(await blankPage(), [
         { kind: "signature", page: 0, x: 0, y: 0, w: 10, h: 10, strokes: [] },
       ]),
-    ).rejects.toThrow(/at least one stroke/);
+    ).rejects.toThrow(/strokes or a typed name/);
+    // A name of nothing but spaces is not a signature either.
+    await expect(
+      annotate(await blankPage(), [
+        { kind: "signature", page: 0, x: 0, y: 0, w: 10, h: 10, typed: "   " },
+      ]),
+    ).rejects.toThrow(/strokes or a typed name/);
   });
 });
 

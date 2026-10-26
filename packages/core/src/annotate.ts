@@ -139,9 +139,15 @@ export type Annotation =
       label?: string | undefined;
     })
   /**
-   * A drawn signature, placed as one object rather than as loose ink so it can
-   * be moved and resized. Strokes are in 0-1 of the box, so the same signature
-   * fits any size.
+   * A signature, placed as one object rather than as loose ink so it can be
+   * moved and resized.
+   *
+   * Drawn or typed, which are two of the three ways Acrobat Reader's Fill &
+   * Sign makes one; the third, a photographed or scanned signature, is a
+   * `picture` and needs nothing of its own. Either way this is an electronic
+   * signature — a mark on the page, proving exactly what a signature on a
+   * paper form proves. Certificate-based signing is a different feature
+   * (ADR 0006) and is not this.
    */
   | (Common & {
       kind: "signature";
@@ -149,7 +155,10 @@ export type Annotation =
       y: number;
       w: number;
       h: number;
-      strokes: InkPoint[][];
+      /** Drawn: strokes in 0-1 of the box, so one signature fits any size. */
+      strokes?: InkPoint[][] | undefined;
+      /** Typed: the name, set in Times Italic and fitted to the box. */
+      typed?: string | undefined;
     })
   | (Common & {
       kind: "text";
@@ -384,6 +393,26 @@ async function stampFont(doc: PDFDocument) {
   return entry;
 }
 const fonts = new WeakMap<
+  PDFDocument,
+  { font: Awaited<ReturnType<PDFDocument["embedFont"]>>; ref: PDFRef }
+>();
+
+/**
+ * Times-Italic, for a typed signature, embedded once per document.
+ *
+ * One of the 14 fonts every PDF reader already carries, so a typed signature
+ * adds no font bytes to the file and raises no licence question — which a
+ * bundled handwriting face would (docs/LICENSE-POLICY.md).
+ */
+async function typedFont(doc: PDFDocument) {
+  const cached = italics.get(doc);
+  if (cached) return cached;
+  const font = await doc.embedFont(StandardFonts.TimesRomanItalic);
+  const entry = { font, ref: font.ref };
+  italics.set(doc, entry);
+  return entry;
+}
+const italics = new WeakMap<
   PDFDocument,
   { font: Awaited<ReturnType<PDFDocument["embedFont"]>>; ref: PDFRef }
 >();
@@ -824,7 +853,11 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
     }
 
     if (annotation.kind === "signature") {
-      if (annotation.strokes.length === 0) throw new Error("a signature needs at least one stroke");
+      const typed = annotation.typed?.trim();
+      const strokes = annotation.strokes ?? [];
+      if (!typed && strokes.length === 0) {
+        throw new Error("a signature needs either strokes or a typed name");
+      }
       const colour = annotation.color ?? SIGNATURE_INK;
       const rect: [number, number, number, number] = [
         annotation.x,
@@ -834,20 +867,40 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
       ];
       const width = Math.max(1, Math.min(annotation.w, annotation.h) * 0.02);
       const [r, g, b] = colour;
-      // Strokes arrive in 0-1 of the box, so one drawn signature fits any size.
-      const paths = annotation.strokes
-        .filter((stroke) => stroke.length > 0)
-        .map((stroke) =>
-          stroke
-            .map((point, index) => {
-              const px = rect[0] + point.x * annotation.w;
-              const py = rect[1] + point.y * annotation.h;
-              return `${n(px)} ${n(py)} ${index === 0 ? "m" : "l"}`;
-            })
-            .join(" "),
-        )
-        .map((path) => `${path} S`)
-        .join("\n");
+
+      let marks: string;
+      let resources: Record<string, PDFRef> | undefined;
+      if (typed) {
+        const font = await typedFont(doc);
+        // Fitted to the box both ways: a long name in a small box has to stay
+        // inside it rather than run off the edge of the page. Measured at 100
+        // and scaled, so the width of one glyph string is enough to size it.
+        const per = font.font.widthOfTextAtSize(typed, 100) / 100;
+        const size = Math.min(annotation.h * 0.8, annotation.w / Math.max(per, 0.001));
+        marks =
+          `q\n${n(r)} ${n(g)} ${n(b)} rg\n` +
+          `BT /F1 ${n(size)} Tf ` +
+          `1 0 0 1 ${n(rect[0] + (annotation.w - per * size) / 2)} ` +
+          `${n(rect[1] + (annotation.h - size * 0.7) / 2)} Tm\n` +
+          `(${escape(typed)}) Tj ET\nQ\n`;
+        resources = { F1: font.ref };
+      } else {
+        // Strokes arrive in 0-1 of the box, so one drawn signature fits any size.
+        const paths = strokes
+          .filter((stroke) => stroke.length > 0)
+          .map((stroke) =>
+            stroke
+              .map((point, index) => {
+                const px = rect[0] + point.x * annotation.w;
+                const py = rect[1] + point.y * annotation.h;
+                return `${n(px)} ${n(py)} ${index === 0 ? "m" : "l"}`;
+              })
+              .join(" "),
+          )
+          .map((path) => `${path} S`)
+          .join("\n");
+        marks = `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(width)} w 1 J 1 j\n${paths}\nQ\n`;
+      }
 
       page.node.addAnnot(
         context.register(
@@ -856,16 +909,12 @@ export async function annotate(input: PdfBytes, annotations: Annotation[]): Prom
             Subtype: "Stamp",
             Rect: rect,
             Name: "Signature",
-            Contents: PDFString.of("Signature"),
+            // What a reader with no appearance stream shows, and what a
+            // screen reader reads out.
+            Contents: PDFString.of(typed ? `Signed: ${typed}` : "Signature"),
             C: colour,
             CA: 1,
-            AP: {
-              N: appearance(
-                doc,
-                rect,
-                `q\n${n(r)} ${n(g)} ${n(b)} RG ${n(width)} w 1 J 1 j\n${paths}\nQ\n`,
-              ),
-            },
+            AP: { N: appearance(doc, rect, marks, resources) },
           }),
         ),
       );

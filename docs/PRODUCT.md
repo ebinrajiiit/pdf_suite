@@ -128,10 +128,16 @@ width measured in the real font. Change a block's size and face from a format
 bar. Move, resize, replace, turn and downsample pictures in place.
 
 **Mark up.** Highlight, underline, strike-through, sticky note, free text, box,
-oval, freehand, line, arrow, polygon, cloud, polyline, callout, caret, stamps,
-picture stamps and a drawn signature — all written as real PDF annotations with
-generated appearance streams, so another viewer shows exactly what this one
-shows. Comment replies and review states as threads. XFDF import and export, so
+oval, freehand, line, arrow, polygon, cloud, polyline, callout, caret, stamps
+and picture stamps — all written as real PDF annotations with generated
+appearance streams, so another viewer shows exactly what this one shows.
+
+**Sign a form.** The three ways Acrobat Reader's Fill & Sign offers: draw your
+signature, type your name, or use a photo or scan of a real one. Made once,
+kept in this browser only, and placed on any page by a click or by dragging the
+size the form's line needs. This is an electronic signature — a mark on the
+page, proving what a signature on a paper form proves. Cryptographic signing is
+listed below as not yet built, and these are not a substitute for it. Comment replies and review states as threads. XFDF import and export, so
 a review needs no server. A marks panel that filters, searches and sorts.
 
 **Forms.** Fill and save AcroForms of every field kind, with flattening and

@@ -95,7 +95,7 @@ item. `[ ]` not started, or deliberately declined — the reason is in the item.
 **Gate:** live in 3 offices at IIIT Kottayam.
 
 ## Phase 3 — Sign and comply (months 5–6) → Release 3 (Institution edition)
-- [~] Visual signatures: drawn (drawn once, kept in this browser only, then placed on any page) and image (a scanned signature or office seal, placed as a picture stamp) are **done**. Typed is missing
+- [x] Visual signatures, all three of Acrobat Reader's Fill & Sign ways: drawn (made once, kept in this browser only, then placed on any page), typed (a name set in Times Italic — one of the 14 standard fonts, so nothing is embedded in the file and no font is bundled) and image (a scanned or photographed signature, placed as a picture stamp). Each goes on by a click at a default size or a drag at the size the form's line needs. These are **electronic** signatures: a mark on the page, proving what a signature on a paper form proves. Certificate-based signing is the three items below, and is not built
 - [ ] Digital signatures: Class 3 DSC via PKCS#11 (desktop)
 - [ ] PAdES with RFC 3161 timestamp (hash-only network call)
 - [ ] Aadhaar eSign (hash-only network call) — after ESP partnership
@@ -147,7 +147,7 @@ item. `[ ]` not started, or deliberately declined — the reason is in the item.
 - [x] Pictures that can be moved, resized and removed in place
 - [x] Find-and-redact by pattern: Aadhaar, PAN, phone, email and words, with per-character boxes so a match is removed without taking its line with it
 - [x] Remove hidden information: description, XMP, embedded files, scripts and actions, with comments and links optional
-- [x] Lines, arrows, stamps and a drawn signature, with generated `/AP` appearance streams — the thing that blocked all four
+- [x] Lines, arrows, stamps and a signature, drawn or typed, with generated `/AP` appearance streams — the thing that blocked all four
 - [x] Print, by handing the document to the platform's own PDF viewer rather than rasterising it
 - [x] Selectable, copyable text: a transparent text layer over the canvas, laid out from the extracted runs
 - [x] Document properties: title, author, subject, keywords

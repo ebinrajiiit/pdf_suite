@@ -2324,8 +2324,10 @@ test("a signature is drawn once and placed on the page", async ({ page }) => {
   await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
   await openFixture(page, "form.pdf", await textFixture([["Signed:"]]));
 
+  // Choosing the tool opens the pad: with no signature yet, that is the only
+  // thing that can happen next.
   await page.getByTestId("tool-signature").click();
-  await page.getByTestId("draw-signature").click();
+  await expect(page.getByTestId("signature-pad")).toBeVisible();
 
   const pad = (await page.getByTestId("signature-canvas").boundingBox())!;
   await page.mouse.move(pad.x + 30, pad.y + 110);
@@ -2335,7 +2337,7 @@ test("a signature is drawn once and placed on the page", async ({ page }) => {
   await page.mouse.move(pad.x + 320, pad.y + 50, { steps: 6 });
   await page.mouse.up();
   await page.getByTestId("signature-save").click();
-  await expect(page.getByTestId("status")).toContainText("Signature saved", { timeout: 30_000 });
+  await expect(page.getByTestId("status")).toContainText("Signature kept", { timeout: 30_000 });
 
   const area = (await page.getByTestId("annots-0").boundingBox())!;
   await page.mouse.click(area.x + 120, area.y + 120);
@@ -2343,6 +2345,81 @@ test("a signature is drawn once and placed on the page", async ({ page }) => {
   await expect(page.getByTestId("comment-0")).toContainText("Signature");
 
   // One Stamp annotation carrying the strokes, not a pile of loose ink.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Stamp"]);
+});
+
+test("a signature can be typed instead of drawn, and sized to the line", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "form.pdf", await textFixture([["Signature:"]]));
+
+  await page.getByTestId("tool-signature").click();
+  await expect(page.getByTestId("signature-pad")).toBeVisible();
+
+  // Drawing a signature with a mouse is most of why people give up on signing a
+  // PDF, and a desktop has no finger. Typing is the other way Acrobat Reader
+  // offers, and it was the one missing.
+  await page.getByTestId("sign-type").click();
+  await page.getByTestId("signature-name").fill("A. R. Nair");
+  await expect(page.getByTestId("signature-typed")).toHaveText("A. R. Nair");
+  await page.getByTestId("signature-save").click();
+  await expect(page.getByTestId("status")).toContainText("Signature kept", { timeout: 30_000 });
+
+  // Signing a form means fitting the line it gives you, so the box drawn on the
+  // page sets the size. 240x80 is the shape a typed signature already has, so
+  // it fills the box exactly; a box of another shape is fitted inside it.
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.move(area.x + 40, area.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(area.x + 280, area.y + 120, { steps: 8 });
+  await page.mouse.up();
+
+  const box = (await page.getByTestId("annot-0").boundingBox())!;
+  expect(box.width).toBeGreaterThan(220);
+  expect(box.width).toBeLessThan(260);
+  expect(box.width / box.height).toBeCloseTo(3, 1);
+  await expect(page.getByTestId("annot-0")).toHaveText("A. R. Nair");
+  // One signature, not one per gesture.
+  await expect(page.getByTestId("annot-1")).toHaveCount(0);
+
+  // In the file as a Stamp, like a drawn one, saying who signed it.
+  const saved = await saveAndRead(page, "Save");
+  expect((await annotationsOf(saved))[0]).toEqual(["/Stamp"]);
+  const doc = await PDFDocument.load(saved);
+  const annots = doc.getPages()[0]!.node.Annots()!;
+  expect(annots.lookup(0, PDFDict).get(PDFName.of("Contents"))?.toString()).toContain("A. R. Nair");
+});
+
+test("a signature kept from before typing existed is still there", async ({ page }) => {
+  await withoutFilePickers(page);
+  // What a user who already drew one has in this browser: a bare array of
+  // strokes, written before a signature could be typed. Reading it as anything
+  // other than a drawn signature would silently lose it.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "pdf-suite.signature",
+      JSON.stringify([
+        [
+          { x: 0, y: 0 },
+          { x: 0.5, y: 1 },
+          { x: 1, y: 0 },
+        ],
+      ]),
+    );
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "form.pdf", await textFixture([["Signature:"]]));
+
+  // No pad: there is already a signature, so the tool goes straight to placing.
+  await page.getByTestId("tool-signature").click();
+  await expect(page.getByTestId("signature-pad")).toBeHidden();
+  await expect(page.getByTestId("signature-ready")).toContainText("your drawn signature");
+
+  const area = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.mouse.click(area.x + 120, area.y + 120);
   const saved = await saveAndRead(page, "Save");
   expect((await annotationsOf(saved))[0]).toEqual(["/Stamp"]);
 });

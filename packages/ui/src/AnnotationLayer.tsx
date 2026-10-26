@@ -63,6 +63,7 @@ const BOX_TOOLS = new Set<AnnotationTool>([
   "field",
   "link",
   "picture",
+  "signature",
 ]);
 
 /** A CSS colour from an annotation's 0-1 RGB triple. */
@@ -154,10 +155,10 @@ export function AnnotationLayer({
     const top = Math.min(drag.y1, drag.y2);
     const bottom = Math.max(drag.y1, drag.y2);
     // A click rather than a drag: too small to be a deliberate box. A picture
-    // needs more slop than the rest — a click meant to drop one at the default
-    // size usually moves the pointer a pixel or two, and a 6-point-wide picture
-    // is never what anyone meant.
-    const slop = tool === "picture" ? 16 : 4;
+    // or a signature needs more slop than the rest — a click meant to drop one
+    // at the default size usually moves the pointer a pixel or two, and a
+    // 6-point-wide signature is never what anyone meant.
+    const slop = tool === "picture" || tool === "signature" ? 16 : 4;
     if (right - left < slop || bottom - top < slop) return;
     const topLeft = toPdf(left, top);
     const bottomRight = toPdf(right, bottom);
@@ -180,6 +181,11 @@ export function AnnotationLayer({
       data-testid={`annots-${page}`}
       onPointerDown={(event) => {
         const { x, y } = positionIn(event);
+        // Cleared here, not only by the click that follows a box: a drag whose
+        // pointer-up lands no click leaves the flag set, and it would then eat
+        // the first click of the *next* gesture. Reset per gesture, it can only
+        // ever suppress the click belonging to the drag that set it.
+        boxed.current = false;
         if (tool === "ink") {
           event.currentTarget.setPointerCapture(event.pointerId);
           setStroke([{ x, y }]);
@@ -507,6 +513,28 @@ export function AnnotationLayer({
 
         if (annotation.kind === "signature") {
           const colour = rgb(annotation.color);
+          const box = {
+            left: `${annotation.x * scale}px`,
+            top: `${top(annotation.y + annotation.h, 0)}px`,
+            width: `${annotation.w * scale}px`,
+            height: `${annotation.h * scale}px`,
+          };
+          // A typed signature, drawn here the way the writer draws it into the
+          // file: Times Italic, fitted to the box. Serif-italic rather than a
+          // handwriting face because that is one of the fonts every PDF reader
+          // already has, so the preview and the saved file agree.
+          if (annotation.typed) {
+            return (
+              <div
+                {...common}
+                className="annot annot-signature annot-signature-typed"
+                data-testid={`annot-${index}`}
+                style={{ ...box, color: colour, fontSize: `${annotation.h * scale * 0.56}px` }}
+              >
+                {annotation.typed}
+              </div>
+            );
+          }
           return (
             <svg
               {...common}
@@ -514,14 +542,9 @@ export function AnnotationLayer({
               data-testid={`annot-${index}`}
               viewBox="0 0 1 1"
               preserveAspectRatio="none"
-              style={{
-                left: `${annotation.x * scale}px`,
-                top: `${top(annotation.y + annotation.h, 0)}px`,
-                width: `${annotation.w * scale}px`,
-                height: `${annotation.h * scale}px`,
-              }}
+              style={box}
             >
-              {annotation.strokes.map((points, n) => (
+              {(annotation.strokes ?? []).map((points, n) => (
                 <polyline
                   key={n}
                   points={points.map((point) => `${point.x},${1 - point.y}`).join(" ")}

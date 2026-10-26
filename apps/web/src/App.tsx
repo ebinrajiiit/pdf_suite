@@ -21,6 +21,7 @@ import {
   removeAt,
   renameAt,
   SignaturePad,
+  type SavedSignature,
   type Command,
   type MenuItem,
   type TextEditCommit,
@@ -325,13 +326,12 @@ export function App() {
   /** Whose name a stamp carrying {name} should say. */
   const [stampName, setStampName] = useState("");
   /**
-   * The signature drawn once and kept for the next document. It lives in this
-   * browser only — localStorage, never the network — and holds strokes in 0-1 of
-   * its box, so the same signature fits wherever it is placed.
+   * The signature made once and kept for the next document — drawn, or a typed
+   * name. It lives in this browser only: localStorage, never the network. A
+   * drawn one holds its strokes in 0-1 of its box, so it fits wherever it is
+   * placed.
    */
-  const [signature, setSignature] = useState<{ x: number; y: number }[][] | null>(() =>
-    loadSignature(),
-  );
+  const [signature, setSignature] = useState<SavedSignature | null>(() => loadSignature());
   const [drawingSignature, setDrawingSignature] = useState(false);
 
   /** File ▸ Properties: what the document says about itself. */
@@ -1299,6 +1299,23 @@ export function App() {
           addAnnotation({ kind: tool, page, ...shape.rect, color: colour });
           return;
         }
+        if (tool === "signature") {
+          if (!signature) return;
+          // The drawn box says how big, keeping the signature's proportions
+          // inside it. Signing a form means fitting the line it gives you.
+          const want = signatureBox(signature);
+          const fit = Math.min(shape.rect.w / want.w, shape.rect.h / want.h);
+          const size = { w: want.w * fit, h: want.h * fit };
+          addAnnotation({
+            kind: "signature",
+            page,
+            x: shape.rect.x + (shape.rect.w - size.w) / 2,
+            y: shape.rect.y + (shape.rect.h - size.h) / 2,
+            ...size,
+            ...signatureMark(signature),
+          });
+          return;
+        }
         if (tool === "picture") {
           if (!seal) return;
           // The drawn box says how big. The picture keeps its proportions inside
@@ -1457,14 +1474,14 @@ export function App() {
           setDrawingSignature(true);
           return;
         }
+        const size = signatureBox(signature);
         addAnnotation({
           kind: "signature",
           page,
           x: shape.x,
-          y: shape.y - 36,
-          w: 160,
-          h: 48,
-          strokes: signature,
+          y: shape.y - size.h,
+          ...size,
+          ...signatureMark(signature),
         });
         return;
       }
@@ -2033,6 +2050,17 @@ export function App() {
         run: () => void handleSeal(),
       },
       {
+        id: "sign",
+        label: "Sign this document",
+        group: "Edit",
+        keywords: "signature esign e-sign fill and sign initials autograph",
+        disabled: !doc,
+        run: () => {
+          setTool("signature");
+          if (!signature) setDrawingSignature(true);
+        },
+      },
+      {
         id: "to-word",
         label: "Save as Word",
         group: "Export",
@@ -2339,6 +2367,7 @@ export function App() {
     handleMerge,
     handleOcr,
     handleSeal,
+    signature,
     handleOffice,
     handleOpen,
     handlePrint,
@@ -2393,6 +2422,7 @@ export function App() {
         // that opened the file dialog. Three clicks to choose a file is two too
         // many, so choosing the tool with no picture yet opens the dialog.
         if (which === "picture" && tool !== which && !seal) void handleSeal();
+        if (which === "signature" && tool !== which && !signature) setDrawingSignature(true);
       }}
     >
       <span className="tool-icon">
@@ -2803,13 +2833,24 @@ export function App() {
       {drawingSignature ? (
         <div className="prompt">
           <SignaturePad
+            {...(signature?.kind === "typed" ? { name: signature.name } : {})}
             onCancel={() => setDrawingSignature(false)}
-            onSave={(strokes) => {
-              setSignature(strokes);
-              saveSignature(strokes);
+            onUsePicture={() => {
+              // A photo or scan of a real signature is a picture, and the
+              // picture tool already places one; offering it here is about
+              // where people look for it, not a second way of doing it.
+              setDrawingSignature(false);
+              void handleSeal();
+            }}
+            onSave={(made) => {
+              setSignature(made);
+              saveSignature(made);
               setDrawingSignature(false);
               setTool("signature");
-              setSaved("Signature saved on this device — click a page to place it");
+              setSaved(
+                "Signature kept on this device — click a page to place it, " +
+                  "or drag the size you want",
+              );
             }}
           />
         </div>
@@ -4453,15 +4494,15 @@ export function App() {
               {tool === "signature" ? (
                 <div className="tool-options">
                   <span className="tool-options-label">Signature</span>
-                  {action(signature ? "Redraw…" : "Draw it…", () => setDrawingSignature(true), {
+                  {action(signature ? "Change it…" : "Make one…", () => setDrawingSignature(true), {
                     testId: "draw-signature",
-                    hint: "Draw your signature once; it is kept on this device only",
+                    hint: "Draw it, type your name, or use a picture of your signature. Kept on this device only",
                   })}
-                  {signature ? (
-                    <span className="tool-hint">Click a page to place it</span>
-                  ) : (
-                    <span className="tool-hint">Draw one first</span>
-                  )}
+                  <span className="tool-hint" data-testid="signature-ready">
+                    {signature
+                      ? `${signatureName(signature)} — click a page to place it, or drag the size you want`
+                      : "Make one first"}
+                  </span>
                 </div>
               ) : null}
               <div className="tool-options">
@@ -4978,7 +5019,7 @@ const TOOL_HINTS: Record<AnnotationTool, string> = {
   callout: "Click what you want to point at, then type",
   caret: "Click where something is missing, then type what belongs there",
   stamp: "Click a page to stamp it",
-  signature: "Click a page to sign it",
+  signature: "Click or drag where your signature should go",
   picture: "Click or drag where the picture should go",
   attachment: "Click where the file should be pinned",
   redact: "Drag over content to delete it permanently",
@@ -5072,24 +5113,62 @@ const GROUPS_KEY = "pdf-suite.groups";
 /** Named batch sequences, kept in this browser only. */
 const SEQUENCES_KEY = "pdf-suite.sequences";
 
-function loadSignature(): { x: number; y: number }[][] | null {
+function loadSignature(): SavedSignature | null {
   try {
     const stored = localStorage.getItem(SIGNATURE_KEY);
     if (!stored) return null;
     const parsed: unknown = JSON.parse(stored);
-    return Array.isArray(parsed) ? (parsed as { x: number; y: number }[][]) : null;
+    // A signature stored before typing existed was a bare array of strokes.
+    // Dropping it would silently lose the signature of everyone who already
+    // drew one, so it is read as the drawn kind it always was.
+    if (Array.isArray(parsed)) {
+      return { kind: "drawn", strokes: parsed as { x: number; y: number }[][] };
+    }
+    if (!parsed || typeof parsed !== "object") return null;
+    const value = parsed as { kind?: unknown; strokes?: unknown; name?: unknown };
+    if (value.kind === "drawn" && Array.isArray(value.strokes)) {
+      return { kind: "drawn", strokes: value.strokes as { x: number; y: number }[][] };
+    }
+    if (value.kind === "typed" && typeof value.name === "string" && value.name.trim() !== "") {
+      return { kind: "typed", name: value.name };
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-function saveSignature(strokes: { x: number; y: number }[][]): void {
+function saveSignature(signature: SavedSignature): void {
   try {
-    localStorage.setItem(SIGNATURE_KEY, JSON.stringify(strokes));
+    localStorage.setItem(SIGNATURE_KEY, JSON.stringify(signature));
   } catch {
     // A private window, or storage turned off. The signature still works for
     // this session; it just will not be there next time.
   }
+}
+
+/**
+ * The default box for a signature, in points.
+ *
+ * A drawn one keeps the pad's proportions. A typed one has to be wide enough
+ * for its letters: the writer fits Times Italic to whatever box it is given, so
+ * a fixed width would set a long name in something unreadably small.
+ */
+function signatureBox(signature: SavedSignature): { w: number; h: number } {
+  if (signature.kind === "drawn") return { w: 160, h: 48 };
+  return { w: Math.min(360, Math.max(120, signature.name.length * 11)), h: 40 };
+}
+
+/** The half of the annotation that says what kind of mark this signature is. */
+function signatureMark(
+  signature: SavedSignature,
+): { strokes: { x: number; y: number }[][] } | { typed: string } {
+  return signature.kind === "drawn" ? { strokes: signature.strokes } : { typed: signature.name };
+}
+
+/** What a signature is called where one is offered or reported. */
+function signatureName(signature: SavedSignature): string {
+  return signature.kind === "typed" ? `“${signature.name}”` : "your drawn signature";
 }
 
 /** What a header or footer box can hold besides the words you type. */

@@ -281,6 +281,12 @@ body {
 .action-go:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 85%, black);
 }
+/* The chosen one of a few alternatives, as the tool buttons mark theirs. */
+.action-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
 .action-danger:hover:not(:disabled) {
   border-color: var(--danger);
   color: var(--danger);
@@ -811,6 +817,19 @@ textarea:focus-visible,
   text-transform: uppercase;
   opacity: 0.85;
 }
+/* A typed signature: the same face the writer puts in the file, so what is on
+   screen is what is saved. Times, not a handwriting font — a bundled face would
+   be a licence question and extra bytes for one line of text. */
+.annot-signature-typed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  white-space: nowrap;
+  line-height: 1;
+}
 .annot-signature {
   overflow: visible;
 }
@@ -821,6 +840,39 @@ textarea:focus-visible,
   flex-direction: column;
   gap: 0.5rem;
   width: 100%;
+}
+.signpad-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.signpad-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.signpad-name input {
+  font-size: 1rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+/* The same face the writer sets a typed signature in, so the preview is honest
+   about what the saved file will look like. */
+.signpad-typed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 0.75rem;
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  font-size: 2.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
 }
 .signpad-box {
   position: relative;
