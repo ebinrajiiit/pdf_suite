@@ -3410,3 +3410,42 @@ test("a signed document locked against changes can still be edited", async ({ pa
   await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
   expect(await rotationsOf(await saveAndRead(page, "Save"))).toEqual([90]);
 });
+
+test("a drag still places its box when the pointer-up beats React's commit", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "lines.pdf", await textFixture([["A line to mark up"]]));
+  await expect(page.getByTestId("annots-0")).toBeVisible();
+
+  await page.getByTestId("tool-square").click();
+
+  // The whole gesture in one task, so React cannot commit a render between the
+  // moves and the pointer-up. page.mouse would await between events and hide
+  // this; a real drag on a loaded machine does not. Handlers that read the drag
+  // from their own render's closure saw a box that had not grown yet, called it
+  // a click, and placed nothing — silently, and only when the machine was busy.
+  await page.evaluate(() => {
+    const layer = document.querySelector('[data-testid="annots-0"]')!;
+    const box = layer.getBoundingClientRect();
+    const send = (type: string, x: number, y: number) =>
+      layer.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 1,
+          pointerType: "mouse",
+          clientX: box.left + x,
+          clientY: box.top + y,
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+        }),
+      );
+    send("pointerdown", 40, 100);
+    for (let i = 1; i <= 6; i++) send("pointermove", 40 + i * 25, 100 + i * 8);
+    send("pointerup", 190, 148);
+  });
+
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+  expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual(["/Square"]);
+});

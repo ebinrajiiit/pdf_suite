@@ -101,6 +101,29 @@ export interface AnnotationLayerProps {
 }
 
 /**
+ * Gesture state that the pointer handlers have to *read*, not only write.
+ *
+ * Pointer events can arrive faster than React commits a render, so a handler
+ * reading its own render's closure sees the gesture as it was one or more
+ * events ago. A pointer-up then measured a box that had not grown yet, decided
+ * it was a click rather than a drag, and placed nothing at all — which is what
+ * a drag on a busy machine did. The ref is what the handlers decide from; the
+ * state is the same value, kept so the preview re-renders.
+ */
+function useLive<T>(initial: T): [T, (next: T) => void, { readonly current: T }] {
+  const [shown, setShown] = useState(initial);
+  const live = useRef(initial);
+  return [
+    shown,
+    (next: T) => {
+      live.current = next;
+      setShown(next);
+    },
+    live,
+  ];
+}
+
+/**
  * Draws pending annotations over a page and turns pointer gestures into
  * geometry. Annotations are not written into the document until it is saved, so
  * what this draws is a preview of what the file will contain.
@@ -116,11 +139,16 @@ export function AnnotationLayer({
   onRemove,
 }: AnnotationLayerProps) {
   const layer = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [drag, showDrag, dragNow] = useLive<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  } | null>(null);
   /** Freehand points in CSS pixels while the pen is down. */
-  const [stroke, setStroke] = useState<{ x: number; y: number }[] | null>(null);
+  const [stroke, showStroke, strokeNow] = useLive<{ x: number; y: number }[] | null>(null);
   /** Points clicked so far for a polygon, cloud or polyline, in CSS pixels. */
-  const [path, setPath] = useState<{ x: number; y: number }[]>([]);
+  const [path, showPath, pathNow] = useLive<{ x: number; y: number }[]>([]);
   /** Where the pointer is while a path is being built, for the rubber band. */
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   /**
@@ -140,8 +168,9 @@ export function AnnotationLayer({
   const toPdf = (x: number, y: number) => ({ x: x / scale, y: pageHeight - y / scale });
 
   const finishDrag = () => {
+    const drag = dragNow.current;
     if (!drag) return;
-    setDrag(null);
+    showDrag(null);
     if (tool && VECTOR_TOOLS.has(tool)) {
       // Too short to be deliberate, in either direction.
       if (Math.hypot(drag.x2 - drag.x1, drag.y2 - drag.y1) < 6) return;
@@ -188,32 +217,33 @@ export function AnnotationLayer({
         boxed.current = false;
         if (tool === "ink") {
           event.currentTarget.setPointerCapture(event.pointerId);
-          setStroke([{ x, y }]);
+          showStroke([{ x, y }]);
           return;
         }
         if (!tool || !(BOX_TOOLS.has(tool) || VECTOR_TOOLS.has(tool))) return;
         event.currentTarget.setPointerCapture(event.pointerId);
-        setDrag({ x1: x, y1: y, x2: x, y2: y });
+        showDrag({ x1: x, y1: y, x2: x, y2: y });
       }}
       onPointerMove={(event) => {
         const { x, y } = positionIn(event);
-        if (path.length > 0) setHover({ x, y });
-        if (stroke) {
+        if (pathNow.current.length > 0) setHover({ x, y });
+        const drawing = strokeNow.current;
+        if (drawing) {
           // Drop points closer than a pixel: a pen emits far more than the shape
           // needs, and every one of them ends up in the PDF.
-          const last = stroke[stroke.length - 1];
+          const last = drawing[drawing.length - 1];
           if (!last || Math.hypot(x - last.x, y - last.y) >= 1.5) {
-            setStroke((current) => (current ? [...current, { x, y }] : current));
+            showStroke([...drawing, { x, y }]);
           }
           return;
         }
-        if (!drag) return;
-        setDrag((current) => (current ? { ...current, x2: x, y2: y } : null));
+        if (!dragNow.current) return;
+        showDrag({ ...dragNow.current, x2: x, y2: y });
       }}
       onPointerUp={() => {
-        if (stroke) {
-          const points = stroke;
-          setStroke(null);
+        const points = strokeNow.current;
+        if (points) {
+          showStroke(null);
           if (points.length >= 2) {
             onPlace?.(page, { kind: "stroke", points: points.map((p) => toPdf(p.x, p.y)) });
           }
@@ -222,8 +252,8 @@ export function AnnotationLayer({
         finishDrag();
       }}
       onPointerCancel={() => {
-        setDrag(null);
-        setStroke(null);
+        showDrag(null);
+        showStroke(null);
       }}
       onClick={(event) => {
         const box = layer.current?.getBoundingClientRect();
@@ -234,7 +264,7 @@ export function AnnotationLayer({
         if (tool && PATH_TOOLS.has(tool)) {
           // Each click adds a corner; the shape is finished by double-clicking,
           // which is how every drawing program does a polygon.
-          setPath((current) => [...current, at]);
+          showPath([...pathNow.current, at]);
           return;
         }
         if (boxed.current) {
@@ -245,9 +275,12 @@ export function AnnotationLayer({
         onPlace?.(page, { kind: "point", ...toPdf(at.x, at.y) });
       }}
       onDoubleClick={() => {
-        if (!tool || !PATH_TOOLS.has(tool) || path.length < 2) return;
-        const points = path.map((point) => toPdf(point.x, point.y));
-        setPath([]);
+        // The same reason as the drag: a double-click's third event can beat the
+        // commit of the second click, so the corners come from the ref.
+        const corners = pathNow.current;
+        if (!tool || !PATH_TOOLS.has(tool) || corners.length < 2) return;
+        const points = corners.map((point) => toPdf(point.x, point.y));
+        showPath([]);
         setHover(null);
         onPlace?.(page, { kind: "path", points });
       }}

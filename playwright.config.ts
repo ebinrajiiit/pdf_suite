@@ -10,7 +10,14 @@ export default defineConfig({
   // into a timeout, and a test that fails for want of CPU says nothing about
   // the code. A real hang still ends, just later.
   timeout: 120_000,
-  use: { baseURL: "http://localhost:4173" },
+  // On CI, write the HTML report the workflow uploads on failure, and keep the
+  // trace of a failed test. Without this the upload step found nothing and
+  // every CI-only failure had to be diagnosed from a stack trace alone.
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  use: {
+    baseURL: "http://localhost:4173",
+    ...(process.env.CI ? { trace: "retain-on-failure" as const } : {}),
+  },
   webServer: {
     command: "pnpm build && pnpm preview",
     url: "http://localhost:4173",
