@@ -164,6 +164,18 @@ export function useDocument() {
         info,
         order: info.pageSizes.map((_, i) => i),
         handle: file.handle,
+        // Marks placed on whatever was open before were never written into it,
+        // and they certainly are not marks on this document. Every operation
+        // below clears this too, but for the opposite reason: there the marks
+        // have just been written into the bytes, so keeping them would write
+        // them twice. Here they simply belong to a file we no longer have open.
+        annotations: [],
+        // Cleared rather than carried: `file.path` exists in the desktop shell
+        // and this has never read it, so Save there has never written back in
+        // place. Setting it here would switch that on untested, on the one path
+        // that overwrites the user's original file. Leaving it unset, though,
+        // left the *previous* document's path in place — stale, and worse.
+        path: undefined,
         needsPassword: undefined,
         error: undefined,
       }));
@@ -192,6 +204,8 @@ export function useDocument() {
         order: info.pageSizes.map((_, i) => i),
         needsPassword: undefined,
         error: undefined,
+        // Marks from the document open before this one, as in `open` above.
+        annotations: [],
         // A decrypted copy is a new document; it must not overwrite the original.
         handle: undefined,
         path: undefined,

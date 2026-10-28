@@ -3449,3 +3449,31 @@ test("a drag still places its box when the pointer-up beats React's commit", asy
   await expect(page.getByTestId("annot-0")).toBeVisible();
   expect((await annotationsOf(await saveAndRead(page, "Save")))[0]).toEqual(["/Square"]);
 });
+
+test("a mark placed on one document does not follow you into the next", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+
+  await openFixture(page, "first.pdf", await fixture([PORTRAIT]));
+  await expect(page.getByTestId("annots-0")).toBeVisible();
+  const box = (await page.getByTestId("annots-0").boundingBox())!;
+  await page.getByTestId("tool-square").click();
+  await page.mouse.move(box.x + 30, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 160, box.y + 130, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId("annot-0")).toBeVisible();
+
+  // A different document, opened over the top. The mark belonged to the last
+  // one and was never written into it, so it must not be here — and above all
+  // must not be written into this one on save.
+  await openFixture(page, "second.pdf", await fixture([LANDSCAPE]));
+  await expect(page.getByText("1 page")).toBeVisible();
+  await expect(page.getByTestId("annot-0")).toHaveCount(0);
+  await expect(page.getByTestId("clear-annotations")).toHaveCount(0);
+
+  const saved = await saveAndRead(page, "Save");
+  expect(await sizesOf(saved)).toEqual([LANDSCAPE]);
+  expect((await annotationsOf(saved))[0]).toEqual([]);
+});
