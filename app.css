@@ -1,0 +1,2090 @@
+/* Linked, not imported: Vite injects imported CSS as an inline <style>, which the
+   CSP in docs/PRIVACY.md forbids. */
+
+:root {
+  color-scheme: light dark;
+
+  /* One accent, one neutral ramp. Everything else is derived, so light and dark
+     stay consistent without a second palette to keep in step. */
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --danger: #b3261e;
+
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --sunken: #e9ebef;
+  --ink: #1b1d21;
+  --ink-soft: #5b6069;
+  --line: #d7dae0;
+  --shadow: 0 1px 2px rgb(16 20 28 / 8%), 0 4px 12px rgb(16 20 28 / 6%);
+
+  --radius: 7px;
+  --gap: 0.5rem;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171b;
+    --panel: #1d2026;
+    --sunken: #101216;
+    --ink: #e8eaed;
+    --ink-soft: #9aa1ad;
+    --line: #2e333c;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px rgb(0 0 0 / 30%);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* A column, not a grid: the prompts appear and disappear, so the number of
+   children varies and a fixed grid-template-rows would hand the 1fr row to the
+   wrong element — which stopped the viewer scrolling at all. */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  padding: 0.2rem 0.3rem;
+  margin-left: -0.3rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.brand:hover {
+  background: var(--sunken);
+}
+.brand-mark {
+  display: block;
+  flex: none;
+}
+.brand-mark img {
+  display: block;
+  width: 26px;
+  height: auto;
+}
+.brand-words {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.brand-name {
+  white-space: nowrap;
+}
+.brand-lab {
+  font-size: 0.62rem;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.topbar-file {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* ---------- about ---------- */
+
+/* The line that says what this is, before the headline says what it promises. */
+.empty-kicker {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.about {
+  /* .palette has no padding of its own; .keys adds its own and so must this. */
+  padding: 1rem 1.2rem;
+  max-width: 30rem;
+  text-align: left;
+}
+.about h2 {
+  margin: 0.75rem 0 0.1rem;
+}
+.about-mark img {
+  display: block;
+  width: 84px;
+  height: auto;
+}
+.about-version {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+/* On the trial build only, beside the lockup. */
+.brand-trial {
+  align-self: center;
+  margin-left: 0.15rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trial-actions {
+  margin: 0.2rem 0 0.9rem;
+}
+.trial-actions .action {
+  text-decoration: none;
+}
+
+.about-tagline {
+  margin: 0.1rem 0 0.3rem;
+  font-weight: 550;
+}
+.about-lab {
+  margin: 0 0 0.9rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+.about p {
+  margin: 0 0 0.7rem;
+  line-height: 1.45;
+}
+.about-parts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+  margin: 0 0 0.8rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+.about-parts > div {
+  display: contents;
+}
+.about-parts dt {
+  color: var(--ink-soft);
+}
+.about-parts dd {
+  margin: 0;
+  font-weight: 550;
+}
+.topbar-history {
+  display: flex;
+  gap: 0.1rem;
+}
+
+/* A hairline between groups of actions, so seven buttons read as three groups
+   rather than one undifferentiated row. */
+.topbar-divider {
+  width: 1px;
+  align-self: stretch;
+  margin-inline: 0.3rem;
+  background: var(--line);
+}
+
+.topbar-doc {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  min-width: 0;
+}
+.doc-name {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22rem;
+}
+.doc-meta {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* ---------- buttons ---------- */
+
+.icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.action:hover:not(:disabled) {
+  background: var(--sunken);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.action:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.action-go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.action-go:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+/* The chosen one of a few alternatives, as the tool buttons mark theirs. */
+.action-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.action-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* The one action in a group that a user most likely came for. Exactly one per
+   group, or it stops meaning anything. */
+.action-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 550;
+}
+.action-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+  border-color: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+/* Icon alone: no frame until it is pointed at, so a row of them reads as marks
+   rather than as more buttons. The label lives in aria-label and the tooltip. */
+.action-quiet {
+  padding: 0.35rem;
+  border-color: transparent;
+  background: none;
+  color: var(--ink-soft);
+}
+.action-quiet:hover:not(:disabled) {
+  background: var(--sunken);
+  border-color: transparent;
+  color: var(--ink);
+}
+.action-quiet[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--ink);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- search ---------- */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.3rem 0.15rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  min-width: 18rem;
+}
+.search-icon {
+  color: var(--ink-soft);
+}
+.search input {
+  font: inherit;
+  flex: 1 1 auto;
+  min-width: 4rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 0.25rem 0;
+}
+.search input:focus {
+  outline: none;
+}
+.search-go {
+  font: inherit;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+.search-go:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.search-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+}
+.search-nav button {
+  font: inherit;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.badge-lock::before {
+  content: "🔒 ";
+}
+
+/* ---------- prompts ---------- */
+
+.prompt {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  border-bottom: 1px solid var(--line);
+}
+.prompt label {
+  flex: 1 1 18rem;
+  line-height: 1.45;
+}
+.prompt input {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+
+/* Headers, footers and page numbers: Acrobat's six boxes, in a strip rather
+   than a modal, so the document stays visible behind it. */
+.hfpanel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+.hfgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.hfrow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hflabel {
+  flex: 0 0 4rem;
+  font-weight: 600;
+}
+.hfslot {
+  flex: 1 1 10rem;
+  min-width: 7rem;
+}
+.hfoptions label,
+.hftokens .action {
+  font-size: 0.85rem;
+}
+.hfoptions label {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  color: var(--ink-soft);
+}
+.hfoptions input {
+  width: 4.5rem;
+}
+.hfoptions select {
+  font: inherit;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.hfcheck {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.hfnote {
+  flex: 1 1 20rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+.hfnote code {
+  padding: 0 0.2rem;
+  border-radius: 3px;
+  background: var(--sunken);
+}
+
+/* ---------- workspace ---------- */
+
+.workspace {
+  display: grid;
+  grid-template-columns: 210px 1fr 248px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sidebar,
+.tools {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+}
+.sidebar {
+  border-right: 1px solid var(--line);
+}
+.tools {
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+  padding: 0.6rem;
+  gap: 0.9rem;
+}
+
+.sidebar-tabs {
+  display: flex;
+  /* Six tabs do not fit a sidebar on one line; without wrapping the last ones
+     overflow under the document, where they cannot be clicked at all. */
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+}
+.tab {
+  flex: 1 1 5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.5rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.tab-on {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.tab-count {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--sunken);
+  font-size: 0.72rem;
+}
+.sidebar-scroll {
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- tools panel ---------- */
+
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.tool-group > summary {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tool-group > summary::-webkit-details-marker {
+  display: none;
+}
+.tool-group > summary::before {
+  content: "▾ ";
+  display: inline-block;
+  width: 1em;
+}
+.tool-group:not([open]) > summary::before {
+  content: "▸ ";
+}
+.tool-group[open] {
+  padding-bottom: 0.2rem;
+}
+.tool-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.25rem;
+}
+.tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.35rem 0.1rem;
+  font: inherit;
+  font-size: 0.62rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.tool:hover:not(:disabled) {
+  background: var(--sunken);
+  color: var(--ink);
+}
+.tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tool-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.25rem;
+  color: var(--ink-soft);
+}
+.tool:hover:not(:disabled) .tool-icon,
+.tool-on .tool-icon {
+  color: var(--accent);
+}
+.tool-on .tool-icon {
+  color: var(--accent);
+}
+.tool-name {
+  text-align: center;
+  line-height: 1.1;
+}
+
+.tool-options {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.tool-options-label {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+.swatches {
+  display: flex;
+  gap: 0.25rem;
+}
+.swatch {
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+.swatch-on {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* A row of actions that wraps rather than squeezing. Six buttons in a 248px
+   panel used to shrink to "To W" and "Tabl", which is a button nobody can
+   find; each one now keeps its own label and the row wraps instead. A label
+   longer than the panel still takes a line of its own rather than overflowing. */
+/* A quiet heading inside a group, so a handful of related actions can carry
+   one-word labels and still say what they are. */
+.panel-subhead {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.action-row > * {
+  flex: 1 1 auto;
+  min-width: min(100%, max-content);
+}
+.action-row select {
+  font: inherit;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border-top: 1px solid var(--line);
+}
+.panel-actions > * {
+  flex: 1 1 auto;
+  min-width: min(100%, max-content);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.edit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+}
+.edit-toggle:hover:not(:disabled) {
+  background: var(--sunken);
+}
+.edit-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.edit-toggle-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.edit-toggle small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+/* Editable text sits over the page: a target per run, swapped for an input. */
+.editlayer {
+  position: absolute;
+  inset: 0;
+}
+.edittarget {
+  position: absolute;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  cursor: text;
+}
+.edittarget:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Invisible text over the canvas, so the page can be selected and copied. It
+   sits under the annotation layer: drawing a mark must still win. */
+.textlayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  user-select: text;
+}
+.textlayer span {
+  position: absolute;
+  color: transparent;
+  transform-origin: 0 0;
+  white-space: pre;
+  cursor: text;
+}
+.textlayer ::selection,
+.textlayer span::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Drawn marks the browser cannot express as a box: a line at any angle, a
+   stamp, a signature. */
+.annot-line {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+.annot-line line {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.annot-stamp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+/* A typed signature: the same face the writer puts in the file, so what is on
+   screen is what is saved. Times, not a handwriting font — a bundled face would
+   be a licence question and extra bytes for one line of text. */
+.annot-signature-typed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  white-space: nowrap;
+  line-height: 1;
+}
+.annot-signature {
+  overflow: visible;
+}
+
+/* Sign once, place anywhere. */
+.signpad {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+.signpad-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.signpad-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.signpad-name input {
+  font-size: 1rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+/* The same face the writer sets a typed signature in, so the preview is honest
+   about what the saved file will look like. */
+.signpad-typed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 0.75rem;
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  font-size: 2.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+.signpad-box {
+  position: relative;
+  height: 10rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: #16307a;
+  cursor: crosshair;
+  touch-action: none;
+}
+.signpad-box svg {
+  width: 100%;
+  height: 100%;
+}
+.signpad-hint {
+  position: absolute;
+  inset: auto 0 0.6rem 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.signpad-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Which page is being read, and the bookmark panel's own actions. */
+.pagebox {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.pagebox button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pagebox button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Full screen shows the document, so it gets the page's own background. */
+.main:fullscreen {
+  background: var(--sunken);
+}
+.outline-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.outline-page {
+  margin-left: 0.4rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8em;
+}
+.outline-actions {
+  display: flex;
+  gap: 0.1rem;
+  margin-left: auto;
+  opacity: 0;
+}
+.outline-row:hover .outline-actions,
+.outline-row:focus-within .outline-actions {
+  opacity: 1;
+}
+.outline-actions button {
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.outline-actions button:hover:not(:disabled) {
+  background: var(--sunken);
+  color: inherit;
+}
+.outline-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.outline-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+}
+
+/* Pictures on the page, while editing them. */
+.imagelayer {
+  position: absolute;
+  inset: 0;
+}
+.imagebox {
+  position: absolute;
+  border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  cursor: move;
+  touch-action: none;
+}
+.imagebox-on {
+  border-style: solid;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.imagebox-remove {
+  position: absolute;
+  top: -0.7rem;
+  right: -0.7rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--danger);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.imagebox-turn,
+.imagebox-replace {
+  position: absolute;
+  top: -0.7rem;
+  right: 0.9rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+/* Turn sits beside Replace, which sits beside Remove. */
+.imagebox-turn {
+  right: 2.5rem;
+}
+.imagebox-handle {
+  position: absolute;
+  right: -0.4rem;
+  bottom: -0.4rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid var(--panel);
+  border-radius: 2px;
+  background: var(--accent);
+  cursor: nwse-resize;
+}
+
+/* What a screen reader would make of the document. */
+.a11ylist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.a11ylist li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--line);
+}
+.a11ylist li span {
+  color: var(--ink-soft);
+  flex: 1 1 18rem;
+}
+.a11ylist li em {
+  color: var(--ink-soft);
+  font-size: 0.8em;
+}
+.a11y-fail {
+  border-left-color: var(--danger) !important;
+}
+.a11y-warn {
+  border-left-color: #c08a1e !important;
+}
+.a11y-ok {
+  border-left-color: #2a8a4a !important;
+}
+
+/* Working through a long list of marks. */
+.comment-filters {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.comment-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.comment-filters select {
+  font: inherit;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.comment-sort {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* The fields a form has, while building one. */
+.fieldlist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+}
+.fieldlist li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  background: var(--sunken);
+}
+.fieldlist-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.fieldlist-formula {
+  flex: 0 1 8rem;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+}
+.fieldlist-kind {
+  color: var(--ink-soft);
+}
+.fieldlist button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.fieldlist button:hover {
+  color: var(--danger);
+}
+
+/* What changed between two versions. */
+.difflist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  max-height: 11rem;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.difflist li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: baseline;
+}
+.diff-page {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.diff-removed,
+.diff-added {
+  padding: 0 0.25rem;
+  border-radius: 3px;
+}
+.diff-removed {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  text-decoration: line-through;
+}
+.diff-added {
+  background: color-mix(in srgb, #2a8a4a 18%, transparent);
+}
+
+/* Marks the document arrived with, as against ones placed here. */
+.comment-theirs {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.comment-author {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+/* A path being clicked out, and the caret that marks a gap. */
+.annot-path {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.annot-caret {
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+/* Replies and review states on a mark. */
+.comment-reply {
+  margin: 0.2rem 0 0 0.8rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--line);
+  font-size: 0.82rem;
+}
+.comment-state {
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.comment-answer {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+}
+.comment-answer input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+}
+.comment-answer button,
+.comment-answer select {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+/* A link in the document, as a reader meets it. */
+.linkbox {
+  position: absolute;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+.linkbox:hover,
+.linkbox:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* A calculated field, and what is wrong with a filled one. */
+.form-calculated {
+  color: var(--accent);
+  font-weight: 700;
+}
+.form-problem {
+  margin: 0.15rem 0 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+/* Every action by name, for when sixty buttons is too many to scan. */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgb(0 0 0 / 35%);
+}
+.palette {
+  width: min(34rem, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.palette-input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+}
+.palette-input:focus {
+  outline: none;
+}
+.palette-list {
+  margin: 0;
+  padding: 0.3rem;
+  overflow-y: auto;
+  list-style: none;
+}
+.palette-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.palette-item-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.palette-item-off {
+  opacity: 0.45;
+  cursor: default;
+}
+.palette-label {
+  flex: 1 1 auto;
+}
+.palette-group,
+.palette-key {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+.palette-key {
+  font-family: inherit;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.palette-none,
+.palette-hint {
+  padding: 0.6rem 1rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+.keys {
+  padding: 1rem 1.2rem;
+}
+.keys h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+.keys dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.8rem;
+  margin: 0;
+  overflow-y: auto;
+}
+.keys dl > div {
+  display: contents;
+}
+.keys dt {
+  text-align: right;
+}
+.keys kbd {
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--sunken);
+  white-space: nowrap;
+}
+.keys dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* ---------- right-click menu ---------- */
+
+.menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 12rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: var(--sunken);
+}
+.menu-item:disabled {
+  color: var(--ink-soft);
+  cursor: default;
+}
+.menu-item-danger:hover:not(:disabled),
+.menu-item-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+/* Labels for screen readers on controls whose meaning is visual. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The format bar over the block being edited: what Acrobat puts in its Format
+   panel, where the text actually is. */
+.editbar {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.editbar-swatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.editbar-field {
+  display: flex;
+  align-items: center;
+}
+/* The face and size are controls, not labels: they rebuild the block. */
+.editbar-face,
+.editbar-size {
+  padding: 0.05rem 0.2rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+.editbar-face:hover,
+.editbar-size:hover,
+.editbar-face:focus,
+.editbar-size:focus {
+  border-color: var(--line);
+  background: var(--sunken);
+}
+.editbar-size {
+  width: 3.4rem;
+  text-align: right;
+}
+.editbar-unit,
+.editbar-lines {
+  color: var(--ink-soft);
+}
+.editbar-unit {
+  margin-left: -0.35rem;
+}
+.editbar-keys {
+  padding-left: 0.4rem;
+  border-left: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+.editbox {
+  position: absolute;
+  padding: 0 1px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: #fff;
+  font-family: inherit;
+  /* A paragraph is edited as one block, so this is a textarea: no drag handle,
+     no scrollbar until the text really outgrows the block. */
+  resize: none;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+/* ---------- viewer ---------- */
+
+.main {
+  display: flex;
+  min-width: 0;
+  /* Without this the grid item grows to its content and the viewer never
+     scrolls. */
+  min-height: 0;
+  background: var(--sunken);
+}
+.viewer {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+.viewer-canvas,
+.thumbs-canvas {
+  position: relative;
+  min-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.viewer-page {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+}
+.viewer-page canvas {
+  display: block;
+  border-radius: 2px;
+}
+
+/* ---------- thumbnails ---------- */
+
+.thumbs {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 0 0.75rem 1.1rem;
+}
+.thumb {
+  position: absolute;
+}
+.thumb-select {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.thumb canvas {
+  display: block;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.thumb-dragging {
+  opacity: 0.4;
+}
+.thumb-selected canvas {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.thumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  height: 20px;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+.thumb-bar span {
+  flex: 1 1 auto;
+}
+.thumb-bar button {
+  font: inherit;
+  line-height: 1;
+  padding: 0 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.thumb-bar button:hover:not(:disabled) {
+  border-color: var(--line);
+}
+.thumb-bar button:disabled {
+  opacity: 0.3;
+}
+
+/* ---------- outline, comments, form ---------- */
+
+.outline {
+  overflow: auto;
+  padding: 0.5rem 0.4rem;
+  font-size: 0.82rem;
+}
+.outline-empty,
+.comments-empty,
+.form-empty,
+.form-note {
+  padding: 0.9rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.outline-branch {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.outline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.outline-twisty {
+  flex: 0 0 1.1rem;
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.outline-title {
+  flex: 1 1 auto;
+  font: inherit;
+  text-align: left;
+  padding: 0.2rem 0.3rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.outline-title:hover {
+  background: var(--sunken);
+}
+.outline-dead {
+  cursor: default;
+  color: var(--ink-soft);
+}
+
+.comments {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem;
+  font-size: 0.8rem;
+}
+.comment {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.45rem;
+  margin-bottom: 0.35rem;
+  background: var(--bg);
+}
+.comment-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.comment-kind {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+.comment-page,
+.comment-remove {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.comment-remove:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.comment-text {
+  margin: 0.3rem 0 0;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.form-panel {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+}
+.form-field {
+  margin-bottom: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.form-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+.form-label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.form-label-row label {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+}
+.form-go {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.form-field input[type="text"],
+.form-field textarea,
+.form-field select {
+  font: inherit;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+}
+.form-unfillable {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ---------- annotations on the page ---------- */
+
+.annots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.annots-highlight,
+.annots-underline,
+.annots-strike,
+.annots-square,
+.annots-circle,
+.annots-ink,
+.annots-line,
+.annots-arrow,
+.annots-polygon,
+.annots-cloud,
+.annots-polyline,
+.annots-measure,
+.annots-measurearea,
+.annots-redact,
+.annots-crop,
+.annots-field,
+.annots-link {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.annots-note,
+.annots-text,
+.annots-stamp,
+.annots-signature,
+.annots-callout,
+.annots-caret,
+.annots-picture,
+.annots-attachment {
+  pointer-events: auto;
+  cursor: copy;
+}
+/* A picture stamp before it is written in: shown from its own bytes. */
+.annot-picture {
+  object-fit: contain;
+}
+.annot {
+  position: absolute;
+  pointer-events: auto;
+}
+.annot-highlight {
+  background: rgb(255 214 0 / 40%);
+  mix-blend-mode: multiply;
+}
+.annot-underline {
+  border-bottom: 2px solid rgb(217 38 38);
+}
+.annot-strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 2px solid rgb(217 38 38);
+}
+.annot-square {
+  border: 2px solid;
+}
+.annot-circle {
+  border: 2px solid;
+  border-radius: 50%;
+}
+.annot-ink {
+  position: absolute;
+  overflow: visible;
+}
+.annot-dragging {
+  background: rgb(255 214 0 / 25%);
+  outline: 1px dashed #c08c00;
+  pointer-events: none;
+}
+.annot-dragging-ink {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.annot-redact {
+  background: #000;
+  outline: 1px solid #000;
+}
+.annot-note {
+  display: grid;
+  place-items: center;
+  color: #8a6d00;
+  background: rgb(255 209 64 / 90%);
+  border: 1px solid #8a6d00;
+  border-radius: 50% 50% 50% 2px;
+  font-size: 0.7rem;
+}
+.annot-note .annot-tip {
+  display: none;
+  position: absolute;
+  left: 110%;
+  top: 0;
+  width: max-content;
+  max-width: 18rem;
+  padding: 0.3rem 0.5rem;
+  background: #fffbe6;
+  border: 1px solid #8a6d00;
+  border-radius: 4px;
+  color: #3b2f00;
+  font-size: 0.75rem;
+  z-index: 2;
+}
+.annot-note:hover .annot-tip,
+.annot-note:focus-visible .annot-tip {
+  display: block;
+}
+.annot-text {
+  color: #111;
+  background: rgb(255 255 255 / 75%);
+  outline: 1px dashed var(--accent);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.highlight {
+  position: absolute;
+  background: rgb(255 214 0 / 35%);
+  outline: 1px solid rgb(192 140 0 / 60%);
+  pointer-events: none;
+}
+.highlight-active {
+  background: rgb(255 145 0 / 45%);
+  outline: 2px solid rgb(200 80 0 / 80%);
+}
+
+/* ---------- empty state ---------- */
+
+.empty {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.5rem;
+  background: var(--sunken);
+}
+.empty-card {
+  max-width: 34rem;
+  padding: 2rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.empty-mark {
+  display: block;
+  margin: 0 auto 1rem;
+}
+.empty-mark img {
+  display: block;
+  /* The span is full width, so centring has to happen on the image itself. */
+  margin-inline: auto;
+  width: 72px;
+  height: auto;
+}
+.empty-card h1 {
+  margin: 0 0 0.6rem;
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+}
+.empty-card p {
+  margin: 0 0 1.2rem;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+.empty-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.empty-hint {
+  margin: 1rem 0 0 !important;
+  font-size: 0.82rem;
+}
+.empty-hint kbd {
+  font-family: inherit;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--sunken);
+}
+
+/* ---------- status bar ---------- */
+
+.statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.3rem 0.75rem;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.zoom button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink-soft);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.zoom button:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--sunken);
+  color: var(--ink);
+}
+/* A view that is on is held down, the way a toolbar toggle is. */
+.zoom button.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+}
+.zoom button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.zoom-level {
+  min-width: 3.2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.status-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+/* A bar for the long operations, so a 500-page scan shows how far it has got. */
+.status-progress {
+  width: 7rem;
+  height: 0.4rem;
+  accent-color: var(--accent);
+}
+.status-stop {
+  padding: 0.05rem 0.4rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.2rem;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+.status-stop:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.dropzone {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 3px dashed var(--accent);
+  outline-offset: -14px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The tools panel hidden, by the button in the top bar. A narrow window starts
+   that way, since the panel used to vanish there with no way to bring it back. */
+.workspace-wide {
+  grid-template-columns: 210px 1fr;
+}
+.workspace-wide .tools {
+  display: none;
+}
+
+/* Narrow windows: the sidebar gives up what it can spare. */
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 170px 1fr 248px;
+  }
+  .workspace-wide {
+    grid-template-columns: 170px 1fr;
+  }
+}

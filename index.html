@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Privacy-preserving PDF editor from FACTS-H Lab, IIIT Kottayam. Your files never leave your computer."
+    />
+    <!-- Privacy invariant 5 (CLAUDE.md §1). Must stay byte-identical to the CSP
+         in docs/PRIVACY.md — apps/web/src/csp.test.ts fails if it drifts. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' blob: data:; worker-src 'self' blob:"
+    />
+    <title>Signet — FACTS-H Lab</title>
+    <link rel="icon" href="/pdf_suite/brand/icon-192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/pdf_suite/brand/icon-192.png" />
+    <!-- Linked, not imported: Vite would inject imported CSS as an inline <style>. -->
+    <link rel="stylesheet" href="/pdf_suite/app.css" />
+    <script type="module" crossorigin src="/pdf_suite/assets/index-DqKIcg69.js"></script>
+  <link rel="manifest" href="/pdf_suite/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/pdf_suite/registerSW.js"></script></head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

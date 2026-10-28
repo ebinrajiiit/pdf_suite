@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/pdf_suite/sw.js', { scope: '/pdf_suite/' })})}
