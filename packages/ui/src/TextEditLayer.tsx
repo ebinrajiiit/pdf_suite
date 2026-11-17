@@ -7,6 +7,8 @@ export interface TextEditCommit {
   text: string;
   fontSize?: number | undefined;
   fontName?: string | undefined;
+  /** Points, when the box was resized: the width the text is re-wrapped to. */
+  width?: number | undefined;
 }
 
 export interface TextEditLayerProps {
@@ -62,6 +64,12 @@ export const FACES: { name: string; label: string; css: string }[] = [
  * which is why the choice is limited to the PDF standard fonts: those draw
  * everywhere without embedding anything, and a font this machine has is not a
  * font the next reader has.
+ *
+ * Return starts a new line, as it does in any other box text is typed into, and
+ * the break is kept when the block is rewritten. Applying is ⌘/Ctrl-Return, or
+ * clicking away; Escape throws the draft away. The box can be dragged wider or
+ * narrower by its corner, and the text is re-wrapped to whatever width it was
+ * left at — the one thing about a block's shape that editing can change.
  */
 export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextEditLayerProps) {
   const [editing, setEditing] = useState<number | null>(null);
@@ -90,6 +98,8 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
   const top = (block: EditableText) => (pageHeight - block.y - block.h) * scale;
   /** Blocks are addressed by their first run, which is stable for these bytes. */
   const key = (block: EditableText) => block.indices[0] ?? -1;
+  /** The box is never thinner than this, however narrow the block is. */
+  const boxWidth = (block: EditableText) => Math.max(block.w * scale, 60);
   /** The format bar sits above the block, or below it at the top of a page. */
   const barTop = (block: EditableText) =>
     top(block) >= 30 ? top(block) - 30 : top(block) + block.h * scale + 4;
@@ -102,11 +112,20 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
   };
 
   const commit = (block: EditableText) => {
+    // The browser writes a resize straight onto the element, so the box itself
+    // is where the chosen width is — read it before this unmounts.
+    const dragged = input.current?.offsetWidth;
     setEditing(null);
     const sized = Math.round(size * 10) / 10;
+    // A couple of pixels of rounding is not a resize.
+    const resized =
+      dragged !== undefined && Math.abs(dragged - boxWidth(block)) > 3
+        ? Math.round((dragged / scale) * 10) / 10
+        : undefined;
     const changed =
       draft.trim() !== block.text.trim() ||
       face !== undefined ||
+      resized !== undefined ||
       Math.abs(sized - block.fontSize) > 0.05;
     if (!changed) return;
     onCommit(page, {
@@ -116,6 +135,7 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
       // format is untouched, and rebuilds the block when it is not.
       fontSize: Math.abs(sized - block.fontSize) > 0.05 ? sized : undefined,
       fontName: face,
+      width: resized,
     });
   };
 
@@ -132,7 +152,10 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
               if (!event.currentTarget.contains(event.relatedTarget)) commit(block);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              // Return is a line break, not a submit: this is a paragraph being
+              // typed, and a box that swallowed Return would be the only one on
+              // the machine that does.
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
                 commit(block);
               } else if (event.key === "Escape") {
@@ -189,7 +212,7 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
               <span className="editbar-lines">
                 {block.indices.length === 1 ? "1 line" : `${block.indices.length} lines`}
               </span>
-              <span className="editbar-keys">Enter to apply · Esc to cancel</span>
+              <span className="editbar-keys">⌘↩ to apply · Esc to cancel</span>
             </div>
             <textarea
               ref={input}
@@ -200,7 +223,7 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
               style={{
                 left: `${block.x * scale}px`,
                 top: `${top(block)}px`,
-                width: `${Math.max(block.w * scale, 60)}px`,
+                width: `${boxWidth(block)}px`,
                 height: `${Math.max(block.h * scale, size * scale * 1.4)}px`,
                 fontSize: `${size * scale}px`,
                 fontFamily: FACES.find((option) => option.name === face)?.css,

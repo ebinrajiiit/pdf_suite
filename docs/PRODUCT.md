@@ -124,8 +124,10 @@ styles, padding and ranges.
 
 **Edit.** Click a paragraph and type over it: the text changes in the document
 itself, keeping its font, size, colour and position, and re-wrapping to its own
-width measured in the real font. Change a block's size and face from a format
-bar. Move, resize, replace, turn and downsample pictures in place.
+width measured in the real font. Return starts a new line, and the break is kept
+on the page. Drag the box wider or narrower and the paragraph re-wraps to that
+width. Change a block's size and face from a format bar. Move, resize, replace,
+turn and downsample pictures in place.
 
 **Mark up.** Highlight, underline, strike-through, sticky note, free text, box,
 oval, freehand, line, arrow, polygon, cloud, polyline, callout, caret, stamps

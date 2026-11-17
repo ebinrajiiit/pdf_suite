@@ -1524,9 +1524,10 @@ textarea:focus-visible,
   border-radius: 2px;
   background: #fff;
   font-family: inherit;
-  /* A paragraph is edited as one block, so this is a textarea: no drag handle,
-     no scrollbar until the text really outgrows the block. */
-  resize: none;
+  /* A paragraph is edited as one block, so this is a textarea. The browser's own
+     corner handle resizes it, and the width it is left at is the width the text
+     is re-wrapped to. */
+  resize: both;
   overflow: auto;
   white-space: pre-wrap;
 }

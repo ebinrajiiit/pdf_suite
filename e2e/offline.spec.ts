@@ -2649,7 +2649,7 @@ test("undo puts back a deleted page, and a changed word", async ({ page }) => {
   await expect(firstPage.getByTestId("edittarget-0")).toBeVisible({ timeout: 30_000 });
   await firstPage.getByTestId("edittarget-0").click();
   await firstPage.getByTestId("editbox-0").fill("Dear Registrar");
-  await firstPage.getByTestId("editbox-0").press("Enter");
+  await firstPage.getByTestId("editbox-0").press("ControlOrMeta+Enter");
   await expect(page.getByTestId("status")).toHaveText(/Text changed/, { timeout: 30_000 });
 
   await page.getByTestId("search-input").fill("Registrar");
@@ -2721,7 +2721,7 @@ test("a longer paragraph re-wraps inside its own block", async ({ page }) => {
       "considerably more text than the paragraph started with, which has to go " +
       "somewhere other than off the edge of the page.",
   );
-  await box.press("Enter");
+  await box.press("ControlOrMeta+Enter");
 
   // Lines the block did not have are reported rather than left to be noticed.
   await expect(page.getByTestId("status")).toHaveText(/Text changed: \d+ new lines?/, {
@@ -2735,6 +2735,86 @@ test("a longer paragraph re-wraps inside its own block", async ({ page }) => {
 
   // The wrapped words are still the document's own text.
   await page.getByTestId("search-input").fill("off the edge");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
+test("Return starts a new line instead of closing the box", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(page, "memo.pdf", await textFixture([["Minutes of the meeting"]]));
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-text").click();
+  const target = page.getByTestId("edittarget-0");
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  const before = (await target.boundingBox())!;
+  await target.click();
+
+  const box = page.getByTestId("editbox-0");
+  await box.fill("Minutes of the");
+  await box.press("End");
+  await box.press("Enter");
+  await box.pressSequentially("meeting");
+
+  // The box is still open — Return typed into it, it did not submit it — and it
+  // now holds two lines.
+  await expect(box).toBeVisible();
+  await expect(box).toHaveValue("Minutes of the\nmeeting");
+
+  await box.press("ControlOrMeta+Enter");
+  // Both halves fit the block easily, so the extra line is the typed break
+  // reaching the page rather than wrapping.
+  await expect(page.getByTestId("status")).toHaveText(/Text changed: 1 new line\b/, {
+    timeout: 30_000,
+  });
+
+  // Two lines where there was one: taller, no wider — a break, not a re-wrap.
+  await expect(page.getByTestId("edittarget-0")).toBeVisible({ timeout: 30_000 });
+  const after = (await page.getByTestId("edittarget-0").boundingBox())!;
+  expect(after.height).toBeGreaterThan(before.height);
+  expect(after.width).toBeLessThanOrEqual(before.width + 2);
+
+  await page.getByTestId("search-input").fill("meeting");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
+});
+
+test("dragging the box narrower re-wraps the paragraph to that width", async ({ page }) => {
+  await withoutFilePickers(page);
+  await page.goto("/");
+  await expect(page.getByTestId("status")).toHaveText("Ready", { timeout: 30_000 });
+  await openFixture(
+    page,
+    "memo.pdf",
+    await textFixture([["Minutes of the meeting held on Tuesday"]]),
+  );
+  await expect(page.getByText("1 page")).toBeVisible();
+
+  await page.getByTestId("edit-text").click();
+  const target = page.getByTestId("edittarget-0");
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  const before = (await target.boundingBox())!;
+  await target.click();
+
+  // The browser's own resize handle, in the bottom-right corner of the box.
+  const box = (await page.getByTestId("editbox-0").boundingBox())!;
+  await page.mouse.move(box.x + box.width - 3, box.y + box.height - 3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height + 40, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByTestId("editbox-0").press("ControlOrMeta+Enter");
+  // Nothing was typed: the narrower box alone is the change, and it costs lines.
+  await expect(page.getByTestId("status")).toHaveText(/Text changed: \d+ new lines?/, {
+    timeout: 30_000,
+  });
+
+  // The paragraph now occupies the width it was dragged to, not its old one.
+  const after = (await page.getByTestId("edittarget-0").boundingBox())!;
+  expect(after.width).toBeLessThan(before.width * 0.75);
+  await page.getByTestId("search-input").fill("Tuesday");
   await page.getByRole("button", { name: "Find" }).click();
   await expect(page.getByTestId("hit-count")).toHaveText("1 of 1", { timeout: 30_000 });
 });
@@ -2759,7 +2839,7 @@ test("a font that cannot show the new text is substituted, and said so", async (
   await target.click();
   const box = page.getByTestId("editbox-0");
   await box.fill("Minutes of the meeting");
-  await box.press("Enter");
+  await box.press("ControlOrMeta+Enter");
 
   await expect(page.getByTestId("status")).toHaveText(/cannot show .*Helvetica was used/, {
     timeout: 30_000,
@@ -2790,7 +2870,7 @@ test("the format bar changes the size and the face, not just reports them", asyn
   await page.getByTestId("editface-0").selectOption("Times-Bold");
   // Picking from the bar must not count as leaving the box and committing.
   await expect(page.getByTestId("editbox-0")).toBeVisible();
-  await page.getByTestId("editbox-0").press("Enter");
+  await page.getByTestId("editbox-0").press("ControlOrMeta+Enter");
   await expect(page.getByTestId("status")).toHaveText(/Text changed/, { timeout: 30_000 });
 
   // Bigger type in the same block: taller, no wider, and the words survive.
@@ -2836,7 +2916,7 @@ test("edits the text in the document itself, not a note over it", async ({ page 
   const box = page.getByTestId("editbox-0");
   await expect(box).toBeVisible();
   await box.fill("Dear Registrar");
-  await box.press("Enter");
+  await box.press("ControlOrMeta+Enter");
   await expect(page.getByTestId("status")).toHaveText("Text changed", { timeout: 30_000 });
 
   // The new words are in the page's own text, which is what makes this editing

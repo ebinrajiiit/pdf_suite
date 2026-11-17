@@ -29,6 +29,10 @@ import type { WrappedPdfiumModule } from "@embedpdf/pdfium";
  *  * **A block that grows pushes nothing aside.** Extra lines are laid below the
  *    block and can overlap what follows; the result reports how many were added
  *    so the UI can warn. Acrobat behaves the same way.
+ *  * **A typed line break lives only until the block is reopened.** It is drawn
+ *    as a line of its own, but nothing in a PDF records whether a line ended
+ *    because the typist asked or because the words ran out of width, so the
+ *    block is offered as one flow again next time it is edited.
  */
 
 /** A detected paragraph: what the editor offers as one editable block. */
@@ -55,6 +59,13 @@ export interface TextEdit {
   text: string;
   /** Points. Omitted keeps the size the block already had. */
   fontSize?: number | undefined;
+  /**
+   * Points. The width the new text is wrapped to, which is what resizing the
+   * editing box changes. Omitted wraps to the block's own width, which is what
+   * it was before the box could be resized. Clamped to the page: a block wider
+   * than the page would wrap to lines nobody can see.
+   */
+  width?: number | undefined;
   /**
    * One of `STANDARD_FONTS`. Omitted keeps the document's own font, which is
    * usually the right answer: it may be a face no standard font resembles.
@@ -393,6 +404,14 @@ function measurer(m: WrappedPdfiumModule, heap: Heap, doc: number, font: number,
  * spacing decisions inside PDFium.
  */
 export function wrap(text: string, width: number, measure: (s: string) => number): string[] {
+  // A newline is a break the typist asked for, so it is kept and each piece
+  // wrapped on its own. Collapsing it into a space — which is what splitting on
+  // all whitespace at once does — silently throws away every Return pressed
+  // while editing.
+  return text.split("\n").flatMap((paragraph) => wrapOne(paragraph, width, measure));
+}
+
+function wrapOne(text: string, width: number, measure: (s: string) => number): string[] {
   const words = text.split(/\s+/).filter((word) => word !== "");
   if (words.length === 0) return [""];
 
@@ -483,7 +502,6 @@ export function applyTextEdits(
         }
 
         const left = Math.min(...block.map((run) => run.l));
-        const width = Math.max(...block.map((run) => run.r)) - left;
 
         const size = edit.fontSize ?? first.size;
         if (!(size >= SIZE_RANGE[0] && size <= SIZE_RANGE[1])) {
@@ -494,6 +512,11 @@ export function applyTextEdits(
           });
           continue;
         }
+
+        // The block's own width unless the editing box was resized, and never
+        // past the page's right edge, which would wrap to invisible lines.
+        const asked = edit.width ?? Math.max(...block.map((run) => run.r)) - left;
+        const width = Math.max(size, Math.min(asked, m.FPDF_GetPageWidthF(page) - left));
 
         // A deliberate change of face, as opposed to the substitution below.
         // The name is checked against the standard set rather than passed
@@ -570,7 +593,9 @@ export function applyTextEdits(
             : m.FPDFPageObj_CreateTextObj(doc, font, size);
           if (!object) continue;
 
-          const ptr = wideString(m, heap, text);
+          // A blank line between paragraphs: a space, because PDFium will not
+          // set empty text and the line still has to take up its height.
+          const ptr = wideString(m, heap, text === "" ? " " : text);
           try {
             if (!m.FPDFText_SetText(object, ptr)) {
               if (!reuse) m.FPDFPageObj_Destroy(object);

@@ -4391,8 +4391,9 @@ export function App() {
               </button>
               {editingText ? (
                 <p className="tool-hint" data-testid="edit-caveat">
-                  Changes the words in the document itself. A paragraph re-wraps to its own width; a
-                  character the embedded font lacks is set in Helvetica instead.
+                  Changes the words in the document itself. Return starts a new line and the box can
+                  be dragged wider; the paragraph re-wraps to the width you leave it at. A character
+                  the embedded font lacks is set in Helvetica instead.
                 </p>
               ) : null}
 

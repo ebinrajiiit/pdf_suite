@@ -60,6 +60,14 @@ test("wrap breaks on the measured width, never mid-word", () => {
   expect(wrap("   ", 10, measure)).toEqual([""]);
 });
 
+test("wrap keeps the line breaks that were typed", () => {
+  const measure = (s: string) => s.length;
+  // A Return is a break the typist asked for, not whitespace to collapse.
+  expect(wrap("one\ntwo", 100, measure)).toEqual(["one", "two"]);
+  // A blank line stays a blank line, and each piece still wraps on its own.
+  expect(wrap("a b c\n\nd", 3, measure)).toEqual(["a b", "c", "", "d"]);
+});
+
 test("blocks group lines that line up, and split where they do not", () => {
   const line = (l: number, baseline: number, size = 10) => ({
     l,
@@ -108,6 +116,47 @@ test("longer text re-wraps inside the paragraph's own width", async () => {
 
   // And it is the document's own text, in order, not a note over it.
   expect(await textOf(result.bytes)).toBe(long);
+});
+
+test("a line break that was typed is a line on the page", async () => {
+  const bytes = await fixture(["A single line of text"]);
+  const [block] = await engine.editableText(bytes, 0);
+
+  // Both halves fit the block's width easily, so the only reason for two lines
+  // is the break that was asked for.
+  const result = await engine.editText(bytes, [
+    { page: 0, indices: block!.indices, text: "First half\nSecond half" },
+  ]);
+  expect(result.applied).toBe(1);
+  expect(result.rejected).toEqual([]);
+  expect(result.addedLines).toBe(1);
+
+  const after = await engine.editableText(result.bytes, 0);
+  expect(after.flatMap((b) => b.indices)).toHaveLength(2);
+  expect(after[0]?.h).toBeGreaterThan(block!.h);
+  expect(await textOf(result.bytes)).toBe("First half Second half");
+});
+
+test("a resized box wraps the text to the width it was left at", async () => {
+  const bytes = await fixture(["A single line of text"]);
+  const [block] = await engine.editableText(bytes, 0);
+  const text = "One two three four five six";
+
+  // The same text, wrapped to the block and then to half of it.
+  const whole = await engine.editText(bytes, [{ page: 0, indices: block!.indices, text }]);
+  const narrow = await engine.editText(bytes, [
+    { page: 0, indices: block!.indices, text, width: block!.w / 2 },
+  ]);
+  expect(narrow.rejected).toEqual([]);
+
+  const linesOf = async (result: { bytes: Uint8Array }) =>
+    (await engine.editableText(result.bytes, 0)).flatMap((b) => b.indices).length;
+  expect(await linesOf(narrow)).toBeGreaterThan(await linesOf(whole));
+  for (const line of await engine.editableText(narrow.bytes, 0)) {
+    expect(line.w).toBeLessThanOrEqual(block!.w / 2 + 1);
+  }
+  // Narrower, not shorter: every word is still there.
+  expect(await textOf(narrow.bytes)).toBe(text);
 });
 
 test("shorter text gives back the lines it no longer needs", async () => {
