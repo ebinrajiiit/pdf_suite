@@ -1525,11 +1525,23 @@ textarea:focus-visible,
   background: #fff;
   font-family: inherit;
   /* A paragraph is edited as one block, so this is a textarea. The browser's own
-     corner handle resizes it, and the width it is left at is the width the text
-     is re-wrapped to. */
-  resize: both;
+     corner handle is turned off in favour of .editbox-handle below: in a box one
+     line tall it is a few pixels of hit area nobody finds, and a drag on it
+     would not reach the width the edit is committed with. */
+  resize: none;
   overflow: auto;
   white-space: pre-wrap;
+}
+/* The grip that sets how wide the paragraph is, drawn like a picture's. */
+.editbox-handle {
+  position: absolute;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 1px solid var(--panel);
+  border-radius: 2px;
+  background: var(--accent);
+  cursor: nwse-resize;
+  touch-action: none;
 }
 
 /* ---------- viewer ---------- */

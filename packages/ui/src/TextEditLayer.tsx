@@ -67,9 +67,10 @@ export const FACES: { name: string; label: string; css: string }[] = [
  *
  * Return starts a new line, as it does in any other box text is typed into, and
  * the break is kept when the block is rewritten. Applying is ⌘/Ctrl-Return, or
- * clicking away; Escape throws the draft away. The box can be dragged wider or
- * narrower by its corner, and the text is re-wrapped to whatever width it was
- * left at — the one thing about a block's shape that editing can change.
+ * clicking away; Escape throws the draft away. A grip in the bottom-right
+ * corner drags the box wider or narrower, and the text is re-wrapped to
+ * whatever width it was left at — the one thing about a block's shape that
+ * editing can change.
  */
 export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextEditLayerProps) {
   const [editing, setEditing] = useState<number | null>(null);
@@ -77,6 +78,9 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
   /** Format chosen in the bar, or undefined to keep the document's own. */
   const [face, setFace] = useState<string | undefined>(undefined);
   const [size, setSize] = useState(0);
+  /** The box after it was dragged, in CSS pixels, or null at its own size. */
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const from = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
 
   // A new page, or a reopened document, invalidates the block indices.
@@ -98,8 +102,12 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
   const top = (block: EditableText) => (pageHeight - block.y - block.h) * scale;
   /** Blocks are addressed by their first run, which is stable for these bytes. */
   const key = (block: EditableText) => block.indices[0] ?? -1;
-  /** The box is never thinner than this, however narrow the block is. */
-  const boxWidth = (block: EditableText) => Math.max(block.w * scale, 60);
+  /** The box at the block's own size: never thinner than this, however narrow. */
+  const ownWidth = (block: EditableText) => Math.max(block.w * scale, 60);
+  const ownHeight = (block: EditableText) => Math.max(block.h * scale, size * scale * 1.4);
+  /** The box as it is on screen, which is the dragged size once it was dragged. */
+  const boxWidth = (block: EditableText) => box?.w ?? ownWidth(block);
+  const boxHeight = (block: EditableText) => box?.h ?? ownHeight(block);
   /** The format bar sits above the block, or below it at the top of a page. */
   const barTop = (block: EditableText) =>
     top(block) >= 30 ? top(block) - 30 : top(block) + block.h * scale + 4;
@@ -108,19 +116,17 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
     setDraft(block.text);
     setFace(undefined);
     setSize(block.fontSize);
+    setBox(null);
     setEditing(key(block));
   };
 
   const commit = (block: EditableText) => {
-    // The browser writes a resize straight onto the element, so the box itself
-    // is where the chosen width is — read it before this unmounts.
-    const dragged = input.current?.offsetWidth;
     setEditing(null);
     const sized = Math.round(size * 10) / 10;
-    // A couple of pixels of rounding is not a resize.
+    // A couple of pixels of it is a slip of the hand, not a resize.
     const resized =
-      dragged !== undefined && Math.abs(dragged - boxWidth(block)) > 3
-        ? Math.round((dragged / scale) * 10) / 10
+      box && Math.abs(box.w - ownWidth(block)) > 3
+        ? Math.round((box.w / scale) * 10) / 10
         : undefined;
     const changed =
       draft.trim() !== block.text.trim() ||
@@ -224,7 +230,7 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
                 left: `${block.x * scale}px`,
                 top: `${top(block)}px`,
                 width: `${boxWidth(block)}px`,
-                height: `${Math.max(block.h * scale, size * scale * 1.4)}px`,
+                height: `${boxHeight(block)}px`,
                 fontSize: `${size * scale}px`,
                 fontFamily: FACES.find((option) => option.name === face)?.css,
                 fontWeight: face?.includes("Bold") ? 700 : undefined,
@@ -233,6 +239,50 @@ export function TextEditLayer({ page, pageHeight, scale, runs, onCommit }: TextE
                 color: `rgb(${block.colour.map((c) => Math.round(c * 255)).join(" ")})`,
               }}
               onChange={(event) => setDraft(event.target.value)}
+            />
+            {/* The same corner grip a picture has, for the same reason: the
+                browser's own textarea handle is three pixels of hit area in a
+                one-line box, which is not something anybody finds. Dragging it
+                sets the width the paragraph is re-wrapped to on apply. */}
+            <span
+              className="editbox-handle"
+              data-testid={`editresize-${key(block)}`}
+              title="Drag to set how wide this paragraph is"
+              style={{
+                left: `${block.x * scale + boxWidth(block) - 6}px`,
+                top: `${top(block) + boxHeight(block) - 6}px`,
+              }}
+              onPointerDown={(event) => {
+                // Both halves matter: the default action of a pointerdown on
+                // something unfocusable moves focus off the textarea, and that
+                // would read as leaving the box and commit it mid-drag.
+                event.preventDefault();
+                event.stopPropagation();
+                try {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                  /* Without capture a drag that leaves the grip simply ends. */
+                }
+                from.current = {
+                  x: event.clientX,
+                  y: event.clientY,
+                  w: boxWidth(block),
+                  h: boxHeight(block),
+                };
+              }}
+              onPointerMove={(event) => {
+                const start = from.current;
+                if (!start) return;
+                setBox({
+                  // Narrower than this is a column no word fits in; shorter
+                  // than a line of type is a box its own text cannot be seen in.
+                  w: Math.max(40, start.w + event.clientX - start.x),
+                  h: Math.max(size * scale, start.h + event.clientY - start.y),
+                });
+              }}
+              onPointerUp={() => {
+                from.current = null;
+              }}
             />
           </div>
         ) : (

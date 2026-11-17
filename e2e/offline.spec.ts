@@ -2798,14 +2798,22 @@ test("dragging the box narrower re-wraps the paragraph to that width", async ({ 
   const before = (await target.boundingBox())!;
   await target.click();
 
-  // The browser's own resize handle, in the bottom-right corner of the box.
+  // The grip in the bottom-right corner of the box, which is a thing on the
+  // page rather than the browser's own few pixels of textarea edge.
   const box = (await page.getByTestId("editbox-0").boundingBox())!;
-  await page.mouse.move(box.x + box.width - 3, box.y + box.height - 3);
+  const grip = (await page.getByTestId("editresize-0").boundingBox())!;
+  expect(grip.width).toBeGreaterThan(8);
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height + 40, { steps: 8 });
   await page.mouse.up();
 
-  await page.getByTestId("editbox-0").press("ControlOrMeta+Enter");
+  // Dragging the grip must not have counted as leaving the box.
+  const dragged = page.getByTestId("editbox-0");
+  await expect(dragged).toBeVisible();
+  expect((await dragged.boundingBox())!.width).toBeLessThan(box.width * 0.75);
+
+  await dragged.press("ControlOrMeta+Enter");
   // Nothing was typed: the narrower box alone is the change, and it costs lines.
   await expect(page.getByTestId("status")).toHaveText(/Text changed: \d+ new lines?/, {
     timeout: 30_000,
